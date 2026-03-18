@@ -1,0 +1,68 @@
+{
+  "trial_19": {
+    "trial_number": 19,
+    "stage2_score": 5.055410534673223,
+    "best_val_loss": 1.0136377811431885,
+    "n_epochs_ran": 60,
+    "train_time_sec": 985.7089040279388,
+    "params": {
+      "n_tv_mix": 3,
+      "w_sr": 0.9662561060596178,
+      "w_tv": 0.9088283910592649,
+      "w_phi_r": 1.2231404729128008,
+      "w_phi_v": 0.9896023067542146,
+      "w_xy": 0.002433896411025358,
+      "lambda_phi": 0.015267945817474638,
+      "lambda_phi_r": 0.03893991750503517,
+      "lambda_sigma": 0.0019623680898822465,
+      "sigma_target": -2.6431677803251072,
+      "lr": 0.00018353928530367
+    },
+    "weights_path": null,
+    "history_path": "optuna_stage3_results/trial_19_history.json"
+  },
+  "trial_18": {
+    "trial_number": 18,
+    "stage2_score": 6.005084823308258,
+    "best_val_loss": 0.9790046811103821,
+    "n_epochs_ran": 60,
+    "train_time_sec": 1497.2213258743286,
+    "params": {
+      "n_tv_mix": 3,
+      "w_sr": 1.0151176959512838,
+      "w_tv": 0.9074209781829206,
+      "w_phi_r": 1.2785125103483859,
+      "w_phi_v": 1.0203236609558588,
+      "w_xy": 0.002407538069873784,
+      "lambda_phi": 0.021431439531189776,
+      "lambda_phi_r": 0.037184214368370376,
+      "lambda_sigma": 0.002009780042081902,
+      "sigma_target": -2.639612185613028,
+      "lr": 0.00026555616967587927
+    },
+    "weights_path": null,
+    "history_path": "optuna_stage3_results/trial_18_history.json"
+  },
+  "trial_16": {
+    "trial_number": 16,
+    "stage2_score": 6.12814907532227,
+    "best_val_loss": 0.9814697504043579,
+    "n_epochs_ran": 60,
+    "train_time_sec": 2089.5067613124847,
+    "params": {
+      "n_tv_mix": 3,
+      "w_sr": 1.046048125425038,
+      "w_tv": 1.0143891493508541,
+      "w_phi_r": 1.2691724110718672,
+      "w_phi_v": 1.0413556656707645,
+      "w_xy": 0.0031413169353816076,
+      "lambda_phi": 0.026026247036443375,
+      "lambda_phi_r": 0.034788569166817426,
+      "lambda_sigma": 0.0021559639209023248,
+      "sigma_target": -2.6020240611678718,
+      "lr": 0.00013666692086094828
+    },
+    "weights_path": null,
+    "history_path": "optuna_stage3_results/trial_16_history.json"
+  }
+}
