@@ -12,7 +12,40 @@ from .training import (
     fit_model,
     train_single_run,
 )
-from .utils import plot_history
+
+from .utils import (
+        plot_history,
+        plot_dist,
+        plot_dist_by_class,
+        plot_correlation_matrix,
+        plot_covariance_matrix,
+        plot_pairwise_sample,
+        plot_pairgrid_physics,
+        print_model_structure,
+)
+
+from .data import (
+    load_detector_table,
+    report_basic_table_checks,
+    build_physical_features,
+    build_datasets,
+    print_physical_summary,
+    build_energy_bins,
+    build_feature_dataframe,
+    report_feature_dataframe,
+    filter_particle_types_and_discretize_uv,
+    report_discretized_features,
+    split_feature_data,
+    report_split_summary,
+    scale_continuous_features,
+    report_scaled_features,
+    to_one_hot,
+    build_conditioning_and_weights,
+    report_conditioning,
+    build_tf_datasets,
+    report_tf_datasets,
+    report_energy_binning_diagnostics,
+)
 
 
 def setup(seed=42, cpu_only=True, quiet=True, show_info=False):

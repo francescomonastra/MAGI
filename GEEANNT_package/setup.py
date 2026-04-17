@@ -33,6 +33,7 @@ setup(
         "optuna",
         "astropy",
         "h5py",
+        "seaborn",
     ],
     extras_require={
         "dev": [

@@ -12,24 +12,34 @@ GEEANNT/
 │   ├── model.py
 │   ├── losses.py
 │   ├── geometry.py
-│   ├── defaults.py
+│   ├── defaults.py # TODO
 │
 ├── training/
 │   ├── __init__.py
 │   ├── train.py
-│   ├── optuna_phase1.py
-│   ├── optuna_phase2.py
-│   ├── optuna_phase3.py
+│   ├── optuna_phase1.py # TODO
+│   ├── optuna_phase2.py # TODO
+│   ├── optuna_phase3.py # TODO
 │
 ├── data/
 │   ├── __init__.py
+│   ├── io.py
 │   ├── preprocessing.py
-│   ├── transforms.py
+│   ├── dataset.py
 │
 ├── utils/
 │   ├── __init__.py
 │   ├── plotting.py
-│   ├── physics.py
+│
+├── generation/
+│   ├── __init__.py
+│   ├── sampling.py
+│   └── reconstruction.py
+│
+├── validation/
+│   ├── __init__.py
+│   ├── metrics.py
+│   └── compare.py
 │
 └── config.py
 
