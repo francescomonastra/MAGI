@@ -138,6 +138,8 @@ def build_physical_features(
             "sphi_r": sphi_r,
             "cphi_v": cphi_v,
             "sphi_v": sphi_v,
+            "phi_r": phi_r,
+            "phi_v": phi_v,
             "logE": logE,
         },
     }

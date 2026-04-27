@@ -12,8 +12,13 @@ from .plotting import (
     plot_pairgrid_physics,
 )
 
-from .model_inspection import print_model_structure
+from .model_inspection import (
+    print_model_structure,
+    print_trainable_status,
+    print_model_tree_with_params,
+    print_duplicate_trainable_variables
 
+)
 __all__ = [
     "plot_history",
     "plot_dist",
@@ -23,4 +28,7 @@ __all__ = [
     "plot_pairwise_sample",
     "plot_pairgrid_physics",
     "print_model_structure",
+    "print_trainable_status",
+    "print_model_tree_with_params",
+    "print_duplicate_trainable_variables",
 ]

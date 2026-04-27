@@ -3,7 +3,7 @@ GEEANNT
 Geant4 Efficiency Enhancing Artificial Neural Network Toolkit
 """
 
-__version__ = "0.6.0"
+__version__ = "0.6.1"
 
 # ==========================================================
 # Environment / configuration helpers
@@ -17,12 +17,23 @@ configure_tensorflow = initialize_environment
 # ==========================================================
 # Core public API
 # ==========================================================
-from .core import CVAE_CatEnergy_CatUV
+from .core import (
+    CVAE_CatEnergy_CatUV,
+    CVAE_CatEnergy_CatUV_TaskAdaptive,
+)
 from .training import (
     build_default_callbacks,
     compile_model,
     fit_model,
     train_single_run,
+    TaskAdaptiveLossScheduler,
+    TaskAdaptiveTrainingMonitor,
+    ValidationEnergyDistributionMonitor,
+    save_training_checkpoint,
+    save_final_trained_model,
+    extract_callback_metadata,
+    load_json,
+    load_metadata,
 )
 
 # ==========================================================
@@ -62,6 +73,9 @@ from .utils import (
     plot_pairwise_sample,
     plot_pairgrid_physics,
     print_model_structure,
+    print_trainable_status,
+    print_model_tree_with_params,
+    print_duplicate_trainable_variables,
 )
 
 # ==========================================================
@@ -94,14 +108,26 @@ __all__ = [
     "set_seed",
     "configure_tensorflow",
     "CVAE_CatEnergy_CatUV",
+    "CVAE_CatEnergy_CatUV_TaskAdaptive",
     "build_default_callbacks",
     "compile_model",
     "fit_model",
     "train_single_run",
+    "TaskAdaptiveLossScheduler",
+    "TaskAdaptiveTrainingMonitor",
+    "ValidationEnergyDistributionMonitor",
+    "save_training_checkpoint",
+    "save_final_trained_model",
+    "extract_callback_metadata",
+    "load_json",
+    "load_metadata",
     "load_detector_table",
     "report_basic_table_checks",
     "build_physical_features",
     "print_physical_summary",
+    "print_model_structure",
+    "print_trainable_status",
+    "print_model_tree_with_params",
     "plot_history",
     "plot_dist",
     "plot_dist_by_class",

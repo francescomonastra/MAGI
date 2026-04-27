@@ -5,7 +5,7 @@ This module provides a simpler interface for notebook users.
 """
 
 from .config import initialize_environment, print_tf_info
-from .core import CVAE_CatEnergy_CatUV
+from .core import CVAE_CatEnergy_CatUV, CVAE_CatEnergy_CatUV_TaskAdaptive
 from .training import (
     build_default_callbacks,
     compile_model,
@@ -73,6 +73,13 @@ def build_model(**kwargs):
     Convenience wrapper around the main CVAE model constructor.
     """
     return CVAE_CatEnergy_CatUV(**kwargs)
+
+
+def build_task_adaptive_model(**kwargs):
+    """
+    Convenience wrapper around the task-adaptive CVAE model constructor.
+    """
+    return CVAE_CatEnergy_CatUV_TaskAdaptive(**kwargs)
 
 
 def train_model(

@@ -3,6 +3,8 @@ Training utilities for GEEANNT.
 """
 
 from tensorflow import keras
+import tensorflow as tf
+import numpy as np
 
 
 def build_default_callbacks(
