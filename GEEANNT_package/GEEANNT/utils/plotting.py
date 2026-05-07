@@ -3,21 +3,56 @@ Plotting utilities for GEEANNT.
 """
 
 import numpy as np
+import matplotlib as mpl
 import matplotlib.pyplot as plt
+
+
+def set_plot_theme(theme="light"):
+    """
+    Set global plotting theme.
+
+    Parameters
+    ----------
+    theme : str
+        "light" or "dark"
+    """
+
+    if theme == "dark":
+        plt.style.use("dark_background")
+
+        mpl.rcParams.update({
+            "figure.facecolor": "#121212",
+            "axes.facecolor": "#121212",
+            "savefig.facecolor": "#121212",
+
+            "axes.edgecolor": "white",
+            "axes.labelcolor": "white",
+            "axes.titlecolor": "white",
+
+            "xtick.color": "white",
+            "ytick.color": "white",
+
+            "text.color": "white",
+
+            "grid.color": "#444444",
+
+            "legend.facecolor": "#1e1e1e",
+            "legend.edgecolor": "white",
+
+            "lines.linewidth": 2,
+        })
+
+    elif theme == "light":
+        plt.style.use("default")
+        mpl.rcParams.update(mpl.rcParamsDefault)
+
+    else:
+        raise ValueError("theme must be either 'light' or 'dark'")
 
 
 def plot_history(history, keys=None, show_available=True):
     """
     Plot selected metrics from a Keras History object.
-
-    Parameters
-    ----------
-    history : keras.callbacks.History
-        Training history returned by model.fit().
-    keys : list[str] or None
-        Metrics to plot. If None, a default list for the CVAE model is used.
-    show_available : bool
-        If True, print all available history keys before plotting.
     """
     h = history.history
 
@@ -51,56 +86,54 @@ def plot_history(history, keys=None, show_available=True):
         n_ep = len(next(iter(h.values())))
 
     epochs = np.arange(1, n_ep + 1)
-    has_lr = ("learning_rate" in h)
+    has_lr = "learning_rate" in h
 
     for k in keys:
         if k not in h:
             continue
 
-        plt.figure(figsize=(7, 4))
+        fig, ax1 = plt.subplots(figsize=(7, 4))
 
-        plt.plot(
-            epochs,
-            h[k],
-            label=k,
-            linewidth=2
-        )
+        ax1.plot(epochs, h[k], label=k, linewidth=2)
 
         val_k = "val_" + k
         if val_k in h:
-            plt.plot(
-                epochs,
-                h[val_k],
-                label=val_k,
-                linewidth=2
-            )
+            ax1.plot(epochs, h[val_k], label=val_k, linewidth=2)
+
+        ax1.set_xlabel("epoch")
+        ax1.set_ylabel(k)
+        ax1.set_title(k)
+        ax1.grid(True, alpha=0.3)
 
         if k == "loss" and has_lr:
-            ax1 = plt.gca()
             ax2 = ax1.twinx()
 
             ax2.plot(
                 epochs,
                 h["learning_rate"],
                 linestyle="--",
-                label="learning_rate"
+                label="learning_rate",
+                color="tab:orange",
             )
 
             ax2.set_ylabel("learning_rate")
             ax2.legend(loc="upper right")
 
-        plt.xlabel("epoch")
-        plt.ylabel(k)
-        plt.title(k)
-        plt.legend()
-        plt.grid(True, alpha=0.3)
-        plt.tight_layout()
+        ax1.legend(loc="best")
+        fig.tight_layout()
         plt.show()
 
 
 def plot_dist(data, name, bins=200, range_=None, density=True, figsize=(7, 4)):
     plt.figure(figsize=figsize)
-    plt.hist(data, bins=bins, range=range_, density=density, histtype="step")
+    plt.hist(
+        data,
+        bins=bins,
+        range=range_,
+        density=density,
+        histtype="step",
+        linewidth=2,
+    )
     plt.xlabel(name)
     plt.ylabel("density")
     plt.title(name)
@@ -109,8 +142,16 @@ def plot_dist(data, name, bins=200, range_=None, density=True, figsize=(7, 4)):
     plt.show()
 
 
-def plot_dist_by_class(df, value_col, class_col="ParticleName", selected_class=None,
-                       bins=200, range_=None, density=True, figsize=(7, 4)):
+def plot_dist_by_class(
+    df,
+    value_col,
+    class_col="ParticleName",
+    selected_class=None,
+    bins=200,
+    range_=None,
+    density=True,
+    figsize=(7, 4),
+):
     if selected_class is None:
         data = df[value_col].to_numpy()
         title = value_col
@@ -119,13 +160,21 @@ def plot_dist_by_class(df, value_col, class_col="ParticleName", selected_class=N
         title = f"{value_col} ({selected_class})"
 
     plt.figure(figsize=figsize)
-    plt.hist(data, bins=bins, range=range_, density=density, histtype="step")
+    plt.hist(
+        data,
+        bins=bins,
+        range=range_,
+        density=density,
+        histtype="step",
+        linewidth=2,
+    )
     plt.xlabel(value_col)
     plt.ylabel("density")
     plt.title(title)
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
     plt.show()
+
 
 def plot_correlation_matrix(df, cols, method="pearson", figsize=(8, 6), cmap="coolwarm"):
     corr = df[cols].corr(method=method)
@@ -141,6 +190,7 @@ def plot_correlation_matrix(df, cols, method="pearson", figsize=(8, 6), cmap="co
 
     return corr
 
+
 def plot_covariance_matrix(df, cols, figsize=(8, 6), cmap="viridis"):
     cov = df[cols].cov()
 
@@ -155,10 +205,23 @@ def plot_covariance_matrix(df, cols, figsize=(8, 6), cmap="viridis"):
 
     return cov
 
-def plot_pairwise_sample(df, cols, class_col=None, sample_size=5000, diag_kind="hist"):
+
+def plot_pairwise_sample(
+    df,
+    cols,
+    class_col=None,
+    sample_size=5000,
+    diag_kind="hist",
+    theme=None,
+    palette="deep",
+):
     import seaborn as sns
 
+    if theme is not None:
+        set_plot_theme(theme)
+
     data = df.copy()
+
     if sample_size is not None and len(data) > sample_size:
         data = data.sample(sample_size, random_state=0)
 
@@ -169,11 +232,27 @@ def plot_pairwise_sample(df, cols, class_col=None, sample_size=5000, diag_kind="
     g = sns.pairplot(
         data[use_cols],
         hue=class_col,
+        palette=palette,
         diag_kind=diag_kind,
         corner=False,
         plot_kws={"alpha": 0.35, "s": 20},
     )
+
+    g.fig.patch.set_facecolor(plt.rcParams["figure.facecolor"])
+
+    for ax in g.axes.flatten():
+        if ax is None:
+            continue
+        ax.set_facecolor(plt.rcParams["axes.facecolor"])
+        ax.tick_params(colors=plt.rcParams["xtick.color"])
+        ax.xaxis.label.set_color(plt.rcParams["axes.labelcolor"])
+        ax.yaxis.label.set_color(plt.rcParams["axes.labelcolor"])
+
+        for spine in ax.spines.values():
+            spine.set_color(plt.rcParams["axes.edgecolor"])
+
     return g
+
 
 def plot_pairgrid_physics(
     df,
@@ -188,72 +267,62 @@ def plot_pairgrid_physics(
     alpha_scatter=0.25,
     scatter_size=12,
     cmap="viridis",
+    corr_cmap="coolwarm",
+    palette="deep",
+    contour_color=None,
+    background_color=None,
+    figure_color=None,
+    grid_color=None,
+    text_color=None,
+    axis_color=None,
     corr_methods=("pearson", "spearman", "kendall"),
     show_legend=True,
     random_state=0,
+    theme=None,
 ):
     """
     General pair-grid plot for physics feature inspection.
 
-    Features:
-    - diagonal: 1D histograms
-    - lower triangle: scatter / contour / scatter+contour / hist2d
-    - upper triangle: correlation summary (Pearson, Spearman, Kendall)
+    Useful dark settings:
 
-    Parameters
-    ----------
-    df : pd.DataFrame
-        Input dataframe.
-    cols : list[str]
-        Variables to include in the grid.
-    class_col : str or None
-        Optional column used as hue/class.
-    sample_size : int or None
-        Optional random sample size for plotting.
-    lower_mode : str
-        One of:
-        - "scatter"
-        - "contour"
-        - "scatter_contour"
-        - "hist2d"
-    diag_mode : str
-        Currently supports:
-        - "hist"
-    bins : int
-        Histogram / hist2d bin count.
-    contour_levels : int or array-like
-        Number of contour levels or explicit levels.
-    figsize_scale : float
-        Per-panel size scaling. Total figure size scales with len(cols).
-    alpha_scatter : float
-        Scatter transparency.
-    scatter_size : float
-        Scatter marker size.
-    cmap : str
-        Colormap for density-based panels.
-    corr_methods : tuple[str]
-        Correlation methods to display in upper panels.
-        Supported: "pearson", "spearman", "kendall"
-    show_legend : bool
-        Whether to show legend when class_col is provided.
-    random_state : int
-        Random seed used for sampling.
-
-    Returns
-    -------
-    seaborn.axisgrid.PairGrid
-        The created PairGrid.
+    plot_pairgrid_physics(
+        df,
+        cols,
+        class_col="ParticleName",
+        theme="dark",
+        palette="mako",
+        cmap="magma",
+        corr_cmap="coolwarm",
+        background_color="#0b0f19",
+        figure_color="#0b0f19",
+        grid_color="#2a2f3a",
+        contour_color="white",
+    )
     """
-    import numpy as np
-    import pandas as pd
     import seaborn as sns
-    import matplotlib.pyplot as plt
-    import matplotlib as mpl
     from matplotlib.patches import Ellipse
 
-    # ------------------------------------------------------
-    # Input checks
-    # ------------------------------------------------------
+    if theme is not None:
+        set_plot_theme(theme)
+
+    if text_color is None:
+        text_color = plt.rcParams["text.color"]
+
+    if contour_color is None:
+        contour_color = text_color
+
+    if background_color is None:
+        background_color = plt.rcParams["axes.facecolor"]
+
+    if figure_color is None:
+        figure_color = plt.rcParams["figure.facecolor"]
+
+    if grid_color is None:
+        grid_color = plt.rcParams["grid.color"]
+
+    if axis_color is None:
+        axis_color = plt.rcParams["axes.edgecolor"]
+
     data = df.copy()
 
     use_cols = list(cols)
@@ -268,23 +337,18 @@ def plot_pairgrid_physics(
     n_vars = len(cols)
     fig_side = max(6, figsize_scale * n_vars)
 
-    # ------------------------------------------------------
-    # Correlation matrices
-    # ------------------------------------------------------
     corr_dict = {}
     for method in corr_methods:
         if method not in ("pearson", "spearman", "kendall"):
             raise ValueError(f"Unsupported correlation method: {method}")
         corr_dict[method] = data[cols].corr(method=method)
 
-    # ------------------------------------------------------
-    # Plot helpers
-    # ------------------------------------------------------
+    grid_alpha = 0.25
+
     def _diag_hist(x, color=None, **kwargs):
         ax = plt.gca()
         x = np.asarray(x)
-        finite = np.isfinite(x)
-        x = x[finite]
+        x = x[np.isfinite(x)]
 
         if len(x) == 0:
             return
@@ -297,28 +361,35 @@ def plot_pairgrid_physics(
             alpha=0.35,
             color=color,
         )
-        ax.grid(True, alpha=0.2)
+
+        ax.grid(True, alpha=grid_alpha, color=grid_color)
 
     def _lower_scatter(x, y, color=None, **kwargs):
         ax = plt.gca()
+
         ax.scatter(
-            x, y,
+            x,
+            y,
             s=scatter_size,
             alpha=alpha_scatter,
             color=color,
             linewidths=0,
         )
-        ax.grid(True, alpha=0.2)
+
+        ax.grid(True, alpha=grid_alpha, color=grid_color)
 
     def _lower_hist2d(x, y, color=None, **kwargs):
         ax = plt.gca()
-        h = ax.hist2d(
-            x, y,
+
+        ax.hist2d(
+            x,
+            y,
             bins=bins,
             density=True,
             cmap=cmap,
         )
-        ax.grid(True, alpha=0.2)
+
+        ax.grid(True, alpha=grid_alpha, color=grid_color)
 
     def _lower_contour(x, y, color=None, **kwargs):
         ax = plt.gca()
@@ -334,9 +405,10 @@ def plot_pairgrid_physics(
             return
 
         H, xedges, yedges = np.histogram2d(
-            x, y,
+            x,
+            y,
             bins=bins,
-            density=True
+            density=True,
         )
 
         xc = 0.5 * (xedges[:-1] + xedges[1:])
@@ -344,12 +416,19 @@ def plot_pairgrid_physics(
         X, Y = np.meshgrid(xc, yc, indexing="xy")
         Z = H.T
 
-        # avoid contour warnings on empty histograms
         if np.all(Z <= 0):
             return
 
-        ax.contour(X, Y, Z, levels=contour_levels, colors="black", linewidths=0.8)
-        ax.grid(True, alpha=0.2)
+        ax.contour(
+            X,
+            Y,
+            Z,
+            levels=contour_levels,
+            colors=contour_color,
+            linewidths=0.8,
+        )
+
+        ax.grid(True, alpha=grid_alpha, color=grid_color)
 
     def _lower_scatter_contour(x, y, color=None, **kwargs):
         ax = plt.gca()
@@ -365,7 +444,8 @@ def plot_pairgrid_physics(
             return
 
         ax.scatter(
-            x, y,
+            x,
+            y,
             s=scatter_size,
             alpha=alpha_scatter,
             color=color,
@@ -374,19 +454,28 @@ def plot_pairgrid_physics(
 
         if len(x) >= 10:
             H, xedges, yedges = np.histogram2d(
-                x, y,
+                x,
+                y,
                 bins=bins,
-                density=True
+                density=True,
             )
+
             xc = 0.5 * (xedges[:-1] + xedges[1:])
             yc = 0.5 * (yedges[:-1] + yedges[1:])
             X, Y = np.meshgrid(xc, yc, indexing="xy")
             Z = H.T
 
             if np.any(Z > 0):
-                ax.contour(X, Y, Z, levels=contour_levels, colors="black", linewidths=0.8)
+                ax.contour(
+                    X,
+                    Y,
+                    Z,
+                    levels=contour_levels,
+                    colors=contour_color,
+                    linewidths=0.8,
+                )
 
-        ax.grid(True, alpha=0.2)
+        ax.grid(True, alpha=grid_alpha, color=grid_color)
 
     def _upper_corr(x, y, color=None, **kwargs):
         ax = plt.gca()
@@ -412,7 +501,7 @@ def plot_pairgrid_physics(
             rk = corr_dict["kendall"].loc[col_x, col_y]
             lines.append(f"K {rk:.2f}")
 
-        cmap_obj = mpl.colormaps["coolwarm"]
+        cmap_obj = mpl.colormaps[corr_cmap]
         norm = mpl.colors.Normalize(vmin=-1, vmax=1)
         facecolor = cmap_obj(norm(color_value))
 
@@ -423,13 +512,14 @@ def plot_pairgrid_physics(
             transform=ax.transAxes,
             facecolor=facecolor,
             edgecolor="none",
-            alpha=0.45,
-            zorder=1
+            alpha=0.55,
+            zorder=1,
         )
         ax.add_patch(ellipse)
 
         y0 = 0.62
         dy = 0.14
+
         for i, txt in enumerate(lines):
             ax.text(
                 0.5,
@@ -439,30 +529,28 @@ def plot_pairgrid_physics(
                 va="center",
                 transform=ax.transAxes,
                 fontsize=11,
-                color="black",
+                color=text_color,
                 zorder=2,
             )
 
-    # ------------------------------------------------------
-    # Build grid
-    # ------------------------------------------------------
-    with sns.axes_style("ticks"), sns.plotting_context("notebook", font_scale=1.0):
+    context = sns.plotting_context("notebook", font_scale=1.0)
+
+    with plt.rc_context(context):
         g = sns.PairGrid(
             data[use_cols],
             vars=cols,
             hue=class_col,
+            palette=palette,
             diag_sharey=False,
             height=figsize_scale,
             aspect=1.0,
         )
 
-        # diagonal
         if diag_mode == "hist":
             g.map_diag(_diag_hist)
         else:
             raise ValueError(f"Unsupported diag_mode: {diag_mode}")
 
-        # lower triangle
         if lower_mode == "scatter":
             g.map_lower(_lower_scatter)
         elif lower_mode == "contour":
@@ -474,17 +562,41 @@ def plot_pairgrid_physics(
         else:
             raise ValueError(f"Unsupported lower_mode: {lower_mode}")
 
-        # upper triangle
         g.map_upper(_upper_corr)
 
-        # formatting
+        g.fig.patch.set_facecolor(figure_color)
+
         for ax in g.axes.flatten():
             if ax is None:
                 continue
-            ax.tick_params(axis="both", labelsize=9)
+
+            ax.set_facecolor(background_color)
+
+            ax.tick_params(
+                axis="both",
+                labelsize=9,
+                colors=text_color,
+            )
+
+            ax.xaxis.label.set_color(text_color)
+            ax.yaxis.label.set_color(text_color)
+            ax.title.set_color(text_color)
+
+            for spine in ax.spines.values():
+                spine.set_color(axis_color)
 
         if class_col is not None and show_legend:
             g.add_legend()
+
+            if g.legend is not None:
+                g.legend.get_frame().set_facecolor(plt.rcParams["legend.facecolor"])
+                g.legend.get_frame().set_edgecolor(plt.rcParams["legend.edgecolor"])
+
+                for txt in g.legend.texts:
+                    txt.set_color(text_color)
+
+                if g.legend.get_title() is not None:
+                    g.legend.get_title().set_color(text_color)
 
         g.fig.set_size_inches(fig_side, fig_side)
         g.fig.tight_layout()

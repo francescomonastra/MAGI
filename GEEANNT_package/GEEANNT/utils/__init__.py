@@ -10,6 +10,7 @@ from .plotting import (
     plot_covariance_matrix,
     plot_pairwise_sample,
     plot_pairgrid_physics,
+    set_plot_theme,
 )
 
 from .model_inspection import (
@@ -20,6 +21,7 @@ from .model_inspection import (
 
 )
 __all__ = [
+    "set_plot_theme",
     "plot_history",
     "plot_dist",
     "plot_dist_by_class",

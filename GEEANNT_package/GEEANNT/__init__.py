@@ -65,6 +65,7 @@ from .data import (
 # Plotting / utilities
 # ==========================================================
 from .utils import (
+    set_plot_theme,
     plot_history,
     plot_dist,
     plot_dist_by_class,
@@ -128,6 +129,7 @@ __all__ = [
     "print_model_structure",
     "print_trainable_status",
     "print_model_tree_with_params",
+    "set_plot_theme",
     "plot_history",
     "plot_dist",
     "plot_dist_by_class",
