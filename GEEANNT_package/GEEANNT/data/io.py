@@ -73,3 +73,105 @@ def report_basic_table_checks(df, numeric_cols=None):
             bad = ~np.isfinite(df[c].to_numpy(dtype=float))
             if bad.any():
                 print(f"Warning: {bad.sum()} non-finite values in {c}")
+
+
+def save_detector_table(
+    df,
+    filepath,
+    include_event_id=False,
+    sep="\t",
+    float_format="%.8e",
+):
+    """
+    Save generated detector events in GEEANNT detector-table format.
+
+    Output schema (default):
+        ParticleName Energy X Y Z Vx Vy Vz
+
+    Optional:
+        EventId ParticleName Energy X Y Z Vx Vy Vz
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Input dataframe containing generated physical events.
+
+        Accepted column naming:
+            lowercase:
+                x, y, z, vx, vy, vz
+            uppercase:
+                X, Y, Z, Vx, Vy, Vz
+
+        Required:
+            ParticleName
+            Energy
+            coordinates
+            direction cosines
+
+    filepath : str
+        Output path.
+
+    include_event_id : bool
+        If True, prepend sequential EventId column.
+
+    sep : str
+        Output separator.
+
+    float_format : str
+        Floating-point formatting passed to pandas.to_csv().
+    """
+    required_base = ["ParticleName", "Energy"]
+
+    for col in required_base:
+        if col not in df.columns:
+            raise ValueError(f"Missing required column: {col}")
+
+    colmap = {}
+
+    # coordinates
+    if all(c in df.columns for c in ["x", "y", "z"]):
+        colmap.update({
+            "x": "X",
+            "y": "Y",
+            "z": "Z",
+        })
+    elif not all(c in df.columns for c in ["X", "Y", "Z"]):
+        raise ValueError("Missing position columns (x,y,z) or (X,Y,Z)")
+
+    # directions
+    if all(c in df.columns for c in ["vx", "vy", "vz"]):
+        colmap.update({
+            "vx": "Vx",
+            "vy": "Vy",
+            "vz": "Vz",
+        })
+    elif not all(c in df.columns for c in ["Vx", "Vy", "Vz"]):
+        raise ValueError("Missing direction columns (vx,vy,vz) or (Vx,Vy,Vz)")
+
+    out = df.copy().rename(columns=colmap)
+
+    ordered_cols = [
+        "ParticleName",
+        "Energy",
+        "X",
+        "Y",
+        "Z",
+        "Vx",
+        "Vy",
+        "Vz",
+    ]
+
+    out = out[ordered_cols]
+
+    if include_event_id:
+        out.insert(0, "EventId", np.arange(len(out), dtype=int))
+
+    out.to_csv(
+        filepath,
+        sep=sep,
+        header=False,
+        index=False,
+        float_format=float_format,
+    )
+
+    print(f"Saved detector table to: {filepath}")

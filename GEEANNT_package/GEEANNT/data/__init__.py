@@ -1,4 +1,9 @@
-from .io import load_detector_table, report_basic_table_checks
+from .io import (
+    load_detector_table, 
+    report_basic_table_checks,
+    save_detector_table,
+)
+
 from .preprocessing import (
     build_physical_features,
     print_physical_summary,
@@ -23,6 +28,7 @@ from .dataset import (
 
 __all__ = [
     "load_detector_table",
+    "save_detector_table",
     "report_basic_table_checks",
     "build_physical_features",
     "print_physical_summary",

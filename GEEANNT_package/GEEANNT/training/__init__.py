@@ -22,6 +22,7 @@ from .checkpointing import (
     extract_callback_metadata,
     load_metadata,
     load_json,
+    load_task_adaptive_model_for_generation,
 )
 
 __all__ = [
@@ -35,6 +36,7 @@ __all__ = [
     "build_model_metadata",
     "load_json",
     "load_metadata",
+    "load_task_adaptive_model_for_generation",
     "save_training_checkpoint",
     "save_final_trained_model",
     "extract_callback_metadata",

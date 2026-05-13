@@ -34,12 +34,14 @@ from .training import (
     extract_callback_metadata,
     load_json,
     load_metadata,
+    load_task_adaptive_model_for_generation,
 )
 
 # ==========================================================
 # Data API
 # ==========================================================
 from .data import (
+    save_detector_table,
     load_detector_table,
     report_basic_table_checks,
     build_physical_features,
@@ -122,7 +124,9 @@ __all__ = [
     "extract_callback_metadata",
     "load_json",
     "load_metadata",
+    "load_task_adaptive_model_for_generation",
     "load_detector_table",
+    "save_detector_table",
     "report_basic_table_checks",
     "build_physical_features",
     "print_physical_summary",

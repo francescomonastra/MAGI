@@ -250,7 +250,7 @@ def plot_pairwise_sample(
 
         for spine in ax.spines.values():
             spine.set_color(plt.rcParams["axes.edgecolor"])
-
+    plt.show()
     return g
 
 
@@ -589,8 +589,17 @@ def plot_pairgrid_physics(
             g.add_legend()
 
             if g.legend is not None:
-                g.legend.get_frame().set_facecolor(plt.rcParams["legend.facecolor"])
-                g.legend.get_frame().set_edgecolor(plt.rcParams["legend.edgecolor"])
+                legend_facecolor = plt.rcParams["legend.facecolor"]
+                legend_edgecolor = plt.rcParams["legend.edgecolor"]
+
+                if legend_facecolor == "inherit":
+                    legend_facecolor = figure_color
+
+                if legend_edgecolor == "inherit":
+                    legend_edgecolor = axis_color
+
+                g.legend.get_frame().set_facecolor(legend_facecolor)
+                g.legend.get_frame().set_edgecolor(legend_edgecolor)
 
                 for txt in g.legend.texts:
                     txt.set_color(text_color)
@@ -600,5 +609,5 @@ def plot_pairgrid_physics(
 
         g.fig.set_size_inches(fig_side, fig_side)
         g.fig.tight_layout()
-
+    plt.show()
     return g

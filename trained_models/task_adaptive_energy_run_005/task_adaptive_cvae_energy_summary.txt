@@ -1,0 +1,16 @@
+GEEANNT trained model summary
+=============================
+
+Model name: task_adaptive_cvae_energy
+Model class: CVAE_CatEnergy_CatUV_TaskAdaptive
+Created at unix: 1778246277.1569269
+
+Weights: trained_models/task_adaptive_energy_run_005/task_adaptive_cvae_energy.weights.h5
+Config: trained_models/task_adaptive_energy_run_005/task_adaptive_cvae_energy_config.json
+Metadata: trained_models/task_adaptive_energy_run_005/task_adaptive_cvae_energy_metadata.json
+History: trained_models/task_adaptive_energy_run_005/task_adaptive_cvae_energy_history.json
+Task weights: trained_models/task_adaptive_energy_run_005/task_adaptive_cvae_energy_task_weights.json
+Callbacks: saved in metadata
+
+Notes:
+Final model. Energy task adaptively down-weighted using validation energy distribution metric.
