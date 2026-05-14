@@ -4,6 +4,7 @@ Input/output utilities for GEEANNT datasets.
 
 import numpy as np
 import pandas as pd
+import os
 
 
 DEFAULT_COLUMNS_DET = [
@@ -76,79 +77,77 @@ def report_basic_table_checks(df, numeric_cols=None):
 
 
 def save_detector_table(
-    df,
+    data,
     filepath,
     include_event_id=False,
     sep="\t",
     float_format="%.8e",
 ):
     """
-    Save generated detector events in GEEANNT detector-table format.
+    Save generated particles in detector input format.
 
-    Output schema (default):
+    Expected output:
         ParticleName Energy X Y Z Vx Vy Vz
 
-    Optional:
-        EventId ParticleName Energy X Y Z Vx Vy Vz
-
-    Parameters
-    ----------
-    df : pd.DataFrame
-        Input dataframe containing generated physical events.
-
-        Accepted column naming:
-            lowercase:
-                x, y, z, vx, vy, vz
-            uppercase:
-                X, Y, Z, Vx, Vy, Vz
-
-        Required:
-            ParticleName
-            Energy
-            coordinates
-            direction cosines
-
-    filepath : str
-        Output path.
-
-    include_event_id : bool
-        If True, prepend sequential EventId column.
-
-    sep : str
-        Output separator.
-
-    float_format : str
-        Floating-point formatting passed to pandas.to_csv().
+    Compatible with gen_phys returned by reconstruct_generated_physics().
     """
-    required_base = ["ParticleName", "Energy"]
+    import os
+    import numpy as np
+    import pandas as pd
 
-    for col in required_base:
-        if col not in df.columns:
-            raise ValueError(f"Missing required column: {col}")
+    if isinstance(data, pd.DataFrame):
+        df = data.copy()
 
-    colmap = {}
+    elif isinstance(data, dict):
+        required = {
+            "ParticleName": ["ParticleName", "particle_name", "particle", "type"],
+            "Energy": ["Energy", "E_gen", "energy"],
+            "X": ["X", "x_gen", "x"],
+            "Y": ["Y", "y_gen", "y"],
+            "Z": ["Z", "z_gen", "z"],
+            "Vx": ["Vx", "vx_gen", "vx"],
+            "Vy": ["Vy", "vy_gen", "vy"],
+            "Vz": ["Vz", "vz_gen", "vz"],
+        }
 
-    # coordinates
-    if all(c in df.columns for c in ["x", "y", "z"]):
-        colmap.update({
-            "x": "X",
-            "y": "Y",
-            "z": "Z",
-        })
-    elif not all(c in df.columns for c in ["X", "Y", "Z"]):
-        raise ValueError("Missing position columns (x,y,z) or (X,Y,Z)")
+        out_dict = {}
 
-    # directions
-    if all(c in df.columns for c in ["vx", "vy", "vz"]):
-        colmap.update({
-            "vx": "Vx",
-            "vy": "Vy",
-            "vz": "Vz",
-        })
-    elif not all(c in df.columns for c in ["Vx", "Vy", "Vz"]):
-        raise ValueError("Missing direction columns (vx,vy,vz) or (Vx,Vy,Vz)")
+        for out_name, candidates in required.items():
+            found = None
+            for key in candidates:
+                if key in data:
+                    found = key
+                    break
 
-    out = df.copy().rename(columns=colmap)
+            if found is None:
+                raise ValueError(
+                    f"Missing required quantity '{out_name}'. "
+                    f"Accepted keys: {candidates}. "
+                    f"Available keys: {list(data.keys())}"
+                )
+
+            arr = data[found]
+
+            if hasattr(arr, "numpy"):
+                arr = arr.numpy()
+
+            arr = np.asarray(arr)
+            arr = np.squeeze(arr)
+
+            if arr.ndim != 1:
+                raise ValueError(
+                    f"Quantity '{found}' for output column '{out_name}' "
+                    f"must be 1D after squeeze, but has shape {arr.shape}."
+                )
+
+            out_dict[out_name] = arr
+
+        df = pd.DataFrame(out_dict)
+
+    else:
+        raise TypeError(
+            "save_detector_table expects a pandas DataFrame or a dict."
+        )
 
     ordered_cols = [
         "ParticleName",
@@ -161,10 +160,14 @@ def save_detector_table(
         "Vz",
     ]
 
-    out = out[ordered_cols]
+    out = df[ordered_cols].copy()
 
     if include_event_id:
         out.insert(0, "EventId", np.arange(len(out), dtype=int))
+
+    outdir = os.path.dirname(filepath)
+    if outdir:
+        os.makedirs(outdir, exist_ok=True)
 
     out.to_csv(
         filepath,
@@ -175,3 +178,7 @@ def save_detector_table(
     )
 
     print(f"Saved detector table to: {filepath}")
+    print("Rows saved:", len(out))
+    print("Columns:", list(out.columns))
+
+    return out

@@ -50,6 +50,12 @@ def reconstruct_generated_features(
     u_v_gen = gen_pack["uv_value_gen"].copy()
     u_v_gen = np.clip(u_v_gen, u_v_bins[0], u_v_bins[-1])
 
+    particle_names_gen = None
+    if "gen_type_idx" in gen_pack and "idx_to_type" in gen_pack:
+        particle_names_gen = np.array(
+            [gen_pack["idx_to_type"][int(i)] for i in gen_pack["gen_type_idx"]]
+        )
+
     return {
         **gen_pack,
         "y_cont_gen": y_cont_gen,
@@ -61,6 +67,7 @@ def reconstruct_generated_features(
         "E_gen": E_gen,
         "logE_gen": logE_gen,
         "u_v_gen": u_v_gen,
+        "ParticleName": particle_names_gen,
     }
 
 

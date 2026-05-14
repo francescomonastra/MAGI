@@ -59,6 +59,7 @@ def generate_latent_outputs(
     }
 
     if idx_to_type is not None:
+        out["idx_to_type"] = idx_to_type
         unique, counts = np.unique(gen_type_idx, return_counts=True)
         out["generated_type_counts"] = {
             idx_to_type[u]: int(c) for u, c in zip(unique, counts)
