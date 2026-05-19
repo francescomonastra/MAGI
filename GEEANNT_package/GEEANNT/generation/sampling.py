@@ -41,7 +41,45 @@ def generate_latent_outputs(
     rng=None,
 ):
     """
-    Sample particle types, build conditioning, and generate raw model outputs.
+    Sample particle types, build conditioning vectors,
+    and generate raw model outputs.
+
+    Parameters
+    ----------
+    model : keras.Model
+        Trained generative model.
+
+    n_samples : int
+        Number of particles to generate.
+
+    type_probs : array-like
+        Probability distribution for particle classes.
+
+    n_types : int
+        Number of particle classes.
+
+    idx_to_type : dict or list, optional
+        Mapping from integer class index to particle name.
+
+    rng : np.random.Generator, optional
+        Random generator for reproducible sampling.
+
+    Returns
+    -------
+    dict
+        Raw generated outputs including:
+            gen_type_idx
+            gen_cond
+            energy_idx_gen
+            uv_idx_gen
+            uv_value_gen
+            y_cont_gen_s
+            params
+
+        If idx_to_type is provided:
+            idx_to_type
+            ParticleName
+            generated_type_counts
     """
     gen_type_idx = sample_types(n_samples, type_probs, rng=rng)
     gen_cond = one_hot_from_idx(gen_type_idx, n_types)
@@ -60,9 +98,17 @@ def generate_latent_outputs(
 
     if idx_to_type is not None:
         out["idx_to_type"] = idx_to_type
+
+        out["ParticleName"] = np.array(
+            [idx_to_type[i] for i in gen_type_idx],
+            dtype=object,
+        )
+
         unique, counts = np.unique(gen_type_idx, return_counts=True)
+
         out["generated_type_counts"] = {
-            idx_to_type[u]: int(c) for u, c in zip(unique, counts)
+            idx_to_type[u]: int(c)
+            for u, c in zip(unique, counts)
         }
 
     return out

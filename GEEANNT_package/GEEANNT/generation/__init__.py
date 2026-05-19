@@ -6,6 +6,10 @@ from .reconstruction import (
     reconstruct_generated_physics,
     reconstruct_real_test_physics,
 )
+from .export import (
+    generated_physics_to_detector_dataframe,
+    generate_detector_table_to_file,
+)
 
 __all__ = [
     "sample_types",
@@ -17,4 +21,6 @@ __all__ = [
     "reconstruct_generated_features",
     "reconstruct_generated_physics",
     "reconstruct_real_test_physics",
+    "generated_physics_to_detector_dataframe",
+    "generate_detector_table_to_file",
 ]
