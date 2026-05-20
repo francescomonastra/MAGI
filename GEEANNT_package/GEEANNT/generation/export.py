@@ -274,3 +274,72 @@ def generate_detector_table_to_file(
         print(f"[GEEANNT] Saved generated detector table to {filepath}")
 
     return filepath
+
+def generate_detector_input_file(
+    *,
+    save_dir,
+    model_name,
+    model_config,
+    energy_bins,
+    u_v_bins,
+    n_types,
+    type_weights,
+    type_probs,
+    idx_to_type,
+    s_r_mean,
+    s_r_std,
+    output_file,
+    n_events,
+    radius,
+    center=(0.0, 0.0, -507.66),
+    seed=42,
+    chunk_size=100_000,
+    energy_mode="uniform",
+    verbose=1,
+):
+    """
+    High-level utility to generate a Geant4-ready particle input file.
+
+    This function:
+      1. loads a trained task-adaptive GEEANNT model
+      2. generates particles in chunks
+      3. reconstructs physical coordinates and directions
+      4. writes a detector-table text file directly to disk
+
+    Use this when starting from a saved trained model.
+    """
+
+    from GEEANNT.training.checkpointing import load_task_adaptive_model_for_generation
+
+    model = load_task_adaptive_model_for_generation(
+        save_dir=save_dir,
+        model_name=model_name,
+        model_config=model_config,
+        energy_bins=energy_bins,
+        u_v_bins=u_v_bins,
+        n_types=n_types,
+        type_weights=type_weights,
+        radius=radius,
+        compile_model_fn=None,
+        verbose=verbose,
+    )
+
+    return generate_detector_table_to_file(
+        model=model,
+        filepath=output_file,
+        n_events=n_events,
+        type_probs=type_probs,
+        n_types=n_types,
+        idx_to_type=idx_to_type,
+        s_r_mean=s_r_mean,
+        s_r_std=s_r_std,
+        energy_bins=energy_bins,
+        u_v_bins=u_v_bins,
+        center=center,
+        radius=radius,
+        energy_mode=energy_mode,
+        chunk_size=chunk_size,
+        seed=seed,
+        include_event_id=False,
+        verbose=verbose,
+    )

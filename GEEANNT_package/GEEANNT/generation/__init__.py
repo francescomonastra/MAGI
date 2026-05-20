@@ -9,6 +9,7 @@ from .reconstruction import (
 from .export import (
     generated_physics_to_detector_dataframe,
     generate_detector_table_to_file,
+    generate_detector_input_file,
 )
 
 __all__ = [
@@ -23,4 +24,5 @@ __all__ = [
     "reconstruct_real_test_physics",
     "generated_physics_to_detector_dataframe",
     "generate_detector_table_to_file",
+    "generate_detector_input_file",
 ]

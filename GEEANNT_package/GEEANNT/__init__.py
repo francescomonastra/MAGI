@@ -96,6 +96,7 @@ from .generation import (
     reconstruct_real_test_physics,
     generated_physics_to_detector_dataframe,
     generate_detector_table_to_file,
+    generate_detector_input_file,
 )
 from .validation import (
     compute_wasserstein_scores,
@@ -168,7 +169,8 @@ __all__ = [
     "reconstruct_generated_physics",
     "reconstruct_real_test_physics",
     "generated_physics_to_detector_dataframe",
-    "generate_detector_table_to_file",  
+    "generate_detector_table_to_file",
+    "generate_detector_input_file", 
     "compute_wasserstein_scores",
     "report_generated_constraints",
     "compare_hist_with_residuals",

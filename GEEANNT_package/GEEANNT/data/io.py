@@ -21,28 +21,32 @@ def load_detector_table(
     """
     Load a detector event table.
 
-    Parameters
-    ----------
-    filepath : str
-        Path to the input text table.
-    columns : list[str] or None
-        Column names. If None, use the default detector layout.
-    drop_event_id : bool
-        If True, drop the EventId column after loading.
-    sep : str or None
-        Separator passed to pandas.read_table. If None, pandas infers whitespace.
-
-    Returns
-    -------
-    pd.DataFrame
-        Loaded event table.
+    Supports both formats:
+        EventId ParticleName Energy X Y Z Vx Vy Vz
+    and:
+        ParticleName Energy X Y Z Vx Vy Vz
     """
     if columns is None:
-        columns = DEFAULT_COLUMNS_DET
+        if drop_event_id:
+            columns = [
+                "EventId", "ParticleName", "Energy",
+                "X", "Y", "Z", "Vx", "Vy", "Vz"
+            ]
+        else:
+            columns = [
+                "ParticleName", "Energy",
+                "X", "Y", "Z", "Vx", "Vy", "Vz"
+            ]
 
-    dtype_map = {name: float for name in columns}
-    if "ParticleName" in columns:
-        dtype_map["ParticleName"] = str
+    dtype_map = {}
+
+    for name in columns:
+        if name == "ParticleName":
+            dtype_map[name] = str
+        elif name == "EventId":
+            dtype_map[name] = int
+        else:
+            dtype_map[name] = float
 
     df = pd.read_table(
         filepath,
