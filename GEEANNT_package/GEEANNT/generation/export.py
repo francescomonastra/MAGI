@@ -4,17 +4,63 @@ Export utilities for generated GEEANNT particle events.
 These functions allow:
 1. conversion of generated physics dictionaries into detector-like tables
 2. chunked generation directly to disk for very large event samples
+3. export to either text or compact binary Geant4-ready format
 """
 
 import os
 import numpy as np
 import pandas as pd
+import struct
 
 from .sampling import generate_latent_outputs
 from .reconstruction import (
     reconstruct_generated_features,
     reconstruct_generated_physics,
 )
+
+
+GEEANNT_BINARY_MAGIC = b"GNTBIN1\0"
+GEEANNT_BINARY_VERSION = 1
+
+PARTICLE_TO_PDG = {
+    "gamma": 22,
+    "e-": 11,
+    "e+": -11,
+    "proton": 2212,
+    "neutron": 2112,
+    "alpha": 1000020040,
+    "mu-": 13,
+    "mu+": -13,
+}
+
+
+def _ensure_parent_dir(filepath):
+    parent = os.path.dirname(filepath)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+
+
+def _normalize_output_format(output_format):
+    output_format = str(output_format).lower()
+
+    if output_format == "txt":
+        return "text"
+
+    if output_format == "bin":
+        return "binary"
+
+    if output_format not in ["text", "binary"]:
+        raise ValueError(
+            "output_format must be one of: 'text', 'txt', 'binary', 'bin'"
+        )
+
+    return output_format
+
+
+def _normalize_idx_to_type(idx_to_type):
+    if isinstance(idx_to_type, dict):
+        return {int(k): v for k, v in idx_to_type.items()}
+    return idx_to_type
 
 
 def generated_physics_to_detector_dataframe(
@@ -31,38 +77,6 @@ def generated_physics_to_detector_dataframe(
 
     Optionally:
         EventId ParticleName Energy X Y Z Vx Vy Vz
-
-    Parameters
-    ----------
-    generated_data : dict
-        Dictionary produced by reconstruct_generated_physics().
-
-        Required keys:
-            E_gen
-            x_gen
-            y_gen
-            z_gen
-            vx_gen
-            vy_gen
-            vz_gen
-            gen_type_idx
-
-    idx_to_type : dict or list, optional
-        Mapping from integer type index to particle name.
-
-        Example:
-            {0: "gamma", 1: "e-", 2: "proton"}
-
-    include_event_id : bool
-        If True, prepend sequential EventId column.
-
-    event_id_offset : int
-        Starting index for EventId numbering.
-
-    Returns
-    -------
-    pd.DataFrame
-        Detector-compatible dataframe.
     """
     required = [
         "E_gen",
@@ -82,8 +96,10 @@ def generated_physics_to_detector_dataframe(
     if idx_to_type is None:
         raise ValueError("idx_to_type mapping is required to recover particle names.")
 
+    idx_to_type = _normalize_idx_to_type(idx_to_type)
+
     particle_names = np.array(
-        [idx_to_type[i] for i in generated_data["gen_type_idx"]],
+        [idx_to_type[int(i)] for i in generated_data["gen_type_idx"]],
         dtype=object,
     )
 
@@ -112,6 +128,96 @@ def generated_physics_to_detector_dataframe(
     return df
 
 
+def _write_binary_header(filepath, n_events):
+    with open(filepath, "wb") as f:
+        f.write(
+            struct.pack(
+                "<8siQ",
+                GEEANNT_BINARY_MAGIC,
+                GEEANNT_BINARY_VERSION,
+                int(n_events),
+            )
+        )
+
+
+def _append_detector_binary_chunk(df, filepath):
+    """
+    Append one detector dataframe chunk to an existing GEEANNT binary file.
+    """
+    required_cols = ["ParticleName", "Energy", "X", "Y", "Z", "Vx", "Vy", "Vz"]
+
+    for col in required_cols:
+        if col not in df.columns:
+            raise ValueError(f"Missing required column for binary export: {col}")
+
+    try:
+        pdg = np.array(
+            [PARTICLE_TO_PDG[str(p)] for p in df["ParticleName"]],
+            dtype="<i4",
+        )
+    except KeyError as exc:
+        raise ValueError(
+            f"Unsupported particle name for binary export: {exc}. "
+            f"Supported names are: {sorted(PARTICLE_TO_PDG.keys())}"
+        )
+
+    record_dtype = np.dtype([
+        ("pdg", "<i4"),
+        ("energy", "<f4"),
+        ("x", "<f4"),
+        ("y", "<f4"),
+        ("z", "<f4"),
+        ("vx", "<f4"),
+        ("vy", "<f4"),
+        ("vz", "<f4"),
+    ])
+
+    records = np.empty(len(df), dtype=record_dtype)
+    records["pdg"] = pdg
+    records["energy"] = df["Energy"].to_numpy(dtype=np.float32)
+    records["x"] = df["X"].to_numpy(dtype=np.float32)
+    records["y"] = df["Y"].to_numpy(dtype=np.float32)
+    records["z"] = df["Z"].to_numpy(dtype=np.float32)
+    records["vx"] = df["Vx"].to_numpy(dtype=np.float32)
+    records["vy"] = df["Vy"].to_numpy(dtype=np.float32)
+    records["vz"] = df["Vz"].to_numpy(dtype=np.float32)
+
+    with open(filepath, "ab") as f:
+        records.tofile(f)
+
+
+def save_detector_binary(data, filepath):
+    """
+    Save generated detector events in compact binary format.
+
+    Header:
+        magic      8 bytes   b"GNTBIN1\\0"
+        version    int32
+        n_events   uint64
+
+    Records:
+        pdg        int32
+        energy     float32   [MeV]
+        x          float32   [mm]
+        y          float32   [mm]
+        z          float32   [mm]
+        vx         float32
+        vy         float32
+        vz         float32
+    """
+    _ensure_parent_dir(filepath)
+
+    if isinstance(data, dict):
+        df = generated_physics_to_detector_dataframe(data)
+    else:
+        df = data.copy()
+
+    _write_binary_header(filepath, len(df))
+    _append_detector_binary_chunk(df, filepath)
+
+    print(f"Saved binary detector file: {filepath}")
+
+
 def generate_detector_table_to_file(
     *,
     model,
@@ -131,90 +237,31 @@ def generate_detector_table_to_file(
     seed=42,
     include_event_id=False,
     float_format="%.8e",
+    output_format="text",
     verbose=1,
 ):
     """
     Generate a large synthetic particle dataset directly to disk in chunks.
 
-    This avoids exhausting RAM when generating millions of particles.
+    Supported formats:
+      - text / txt:
+          ParticleName Energy X Y Z Vx Vy Vz
 
-    Pipeline:
-        latent sampling
-        -> feature reconstruction
-        -> physical reconstruction
-        -> detector table export
-
-    Parameters
-    ----------
-    model : keras.Model
-        Trained GEEANNT generative model.
-
-    filepath : str
-        Output text file path.
-
-    n_events : int
-        Total number of events to generate.
-
-    type_probs : array-like
-        Sampling probabilities for particle classes.
-
-    n_types : int
-        Number of particle classes.
-
-    idx_to_type : dict or list
-        Mapping integer class index -> particle name.
-
-    s_r_mean : float
-        Mean used during preprocessing normalization.
-
-    s_r_std : float
-        Std used during preprocessing normalization.
-
-    energy_bins : np.ndarray
-        Energy bin edges.
-
-    u_v_bins : np.ndarray
-        Direction cosine bin edges.
-
-    center : tuple
-        Emission sphere center.
-
-    radius : float
-        Emission sphere radius.
-
-    energy_mode : str
-        Energy reconstruction mode.
-
-        Options:
-            "uniform"
-            "bin_center"
-
-    chunk_size : int
-        Number of events generated per chunk.
-
-    seed : int
-        RNG seed.
-
-    include_event_id : bool
-        Whether to include EventId column.
-
-    float_format : str
-        Formatting for saved floating-point numbers.
-
-    verbose : int
-        Print progress if >0.
-
-    Returns
-    -------
-    str
-        Output filepath.
+      - binary / bin:
+          compact GEEANNT binary format
     """
-    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    output_format = _normalize_output_format(output_format)
+    idx_to_type = _normalize_idx_to_type(idx_to_type)
+
+    _ensure_parent_dir(filepath)
 
     rng = np.random.default_rng(seed)
 
-    # reset output file
-    open(filepath, "w").close()
+    if output_format == "text":
+        open(filepath, "w").close()
+
+    elif output_format == "binary":
+        _write_binary_header(filepath, n_events)
 
     n_done = 0
 
@@ -259,21 +306,28 @@ def generate_detector_table_to_file(
             event_id_offset=n_done,
         )
 
-        df_chunk.to_csv(
-            filepath,
-            mode="a",
-            sep="\t",
-            header=False,
-            index=False,
-            float_format=float_format,
-        )
+        if output_format == "text":
+            df_chunk.to_csv(
+                filepath,
+                mode="a",
+                sep="\t",
+                header=False,
+                index=False,
+                float_format=float_format,
+            )
+
+        elif output_format == "binary":
+            _append_detector_binary_chunk(df_chunk, filepath)
 
         n_done += n_chunk
 
     if verbose:
-        print(f"[GEEANNT] Saved generated detector table to {filepath}")
+        print(
+            f"[GEEANNT] Saved generated detector {output_format} file to {filepath}"
+        )
 
     return filepath
+
 
 def generate_detector_input_file(
     *,
@@ -295,21 +349,16 @@ def generate_detector_input_file(
     seed=42,
     chunk_size=100_000,
     energy_mode="uniform",
+    output_format="text",
     verbose=1,
 ):
     """
-    High-level utility to generate a Geant4-ready particle input file.
-
-    This function:
-      1. loads a trained task-adaptive GEEANNT model
-      2. generates particles in chunks
-      3. reconstructs physical coordinates and directions
-      4. writes a detector-table text file directly to disk
-
-    Use this when starting from a saved trained model.
+    Generate a Geant4-ready particle input file from a trained GEEANNT model.
     """
-
     from GEEANNT.training.checkpointing import load_task_adaptive_model_for_generation
+
+    output_format = _normalize_output_format(output_format)
+    idx_to_type = _normalize_idx_to_type(idx_to_type)
 
     model = load_task_adaptive_model_for_generation(
         save_dir=save_dir,
@@ -340,6 +389,7 @@ def generate_detector_input_file(
         energy_mode=energy_mode,
         chunk_size=chunk_size,
         seed=seed,
+        output_format=output_format,
         include_event_id=False,
         verbose=verbose,
     )

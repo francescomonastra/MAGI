@@ -24,6 +24,7 @@ def main():
     parser.add_argument("--n-events", type=int, required=True)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--chunk-size", type=int, default=100000)
+    parser.add_argument("--format", choices=["text", "binary"], default="binary")
 
     args = parser.parse_args()
 
@@ -54,6 +55,7 @@ def main():
         center=(0.0, 0.0, -507.66),
         seed=args.seed,
         chunk_size=args.chunk_size,
+        output_format=args.format,
         verbose=1,
     )
 
