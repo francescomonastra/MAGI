@@ -5,6 +5,7 @@ These functions allow:
 1. conversion of generated physics dictionaries into detector-like tables
 2. chunked generation directly to disk for very large event samples
 3. export to either text or compact binary Geant4-ready format
+4. filtering of non-transport particles, e.g. neutrinos
 """
 
 import os
@@ -26,11 +27,22 @@ PARTICLE_TO_PDG = {
     "gamma": 22,
     "e-": 11,
     "e+": -11,
-    "proton": 2212,
-    "neutron": 2112,
-    "alpha": 1000020040,
     "mu-": 13,
     "mu+": -13,
+    "proton": 2212,
+    "anti_proton": -2212,
+    "neutron": 2112,
+    "anti_neutron": -2112,
+    "alpha": 1000020040,
+}
+
+NON_TRANSPORT_PARTICLES = {
+    "nu_e",
+    "anti_nu_e",
+    "nu_mu",
+    "anti_nu_mu",
+    "nu_tau",
+    "anti_nu_tau",
 }
 
 
@@ -61,6 +73,25 @@ def _normalize_idx_to_type(idx_to_type):
     if isinstance(idx_to_type, dict):
         return {int(k): v for k, v in idx_to_type.items()}
     return idx_to_type
+
+
+def _filter_non_transport_particles(df, excluded_particle_names=None):
+    """
+    Remove particles that should not be transported in Geant4 source files.
+
+    By default, neutrinos are removed because they do not contribute to detector
+    background in this use case and may not be supported by the current binary
+    PDG export table.
+    """
+    if excluded_particle_names is None:
+        excluded_particle_names = NON_TRANSPORT_PARTICLES
+
+    excluded_particle_names = set(excluded_particle_names)
+
+    if len(excluded_particle_names) == 0:
+        return df
+
+    return df[~df["ParticleName"].isin(excluded_particle_names)].copy()
 
 
 def generated_physics_to_detector_dataframe(
@@ -129,6 +160,11 @@ def generated_physics_to_detector_dataframe(
 
 
 def _write_binary_header(filepath, n_events):
+    """
+    Create a binary file and write its header.
+
+    This opens the file in 'wb' mode and therefore resets any existing file.
+    """
     with open(filepath, "wb") as f:
         f.write(
             struct.pack(
@@ -140,9 +176,37 @@ def _write_binary_header(filepath, n_events):
         )
 
 
-def _append_detector_binary_chunk(df, filepath):
+def _rewrite_binary_header(filepath, n_events):
+    """
+    Rewrite only the binary header without deleting the payload.
+
+    Used after chunked writing when the final number of written particles is
+    known only after filtering non-transport particles.
+    """
+    with open(filepath, "r+b") as f:
+        f.seek(0)
+        f.write(
+            struct.pack(
+                "<8siQ",
+                GEEANNT_BINARY_MAGIC,
+                GEEANNT_BINARY_VERSION,
+                int(n_events),
+            )
+        )
+
+
+def _append_detector_binary_chunk(
+    df,
+    filepath,
+    excluded_particle_names=None,
+):
     """
     Append one detector dataframe chunk to an existing GEEANNT binary file.
+
+    Returns
+    -------
+    int
+        Number of records actually written.
     """
     required_cols = ["ParticleName", "Energy", "X", "Y", "Z", "Vx", "Vy", "Vz"]
 
@@ -150,16 +214,26 @@ def _append_detector_binary_chunk(df, filepath):
         if col not in df.columns:
             raise ValueError(f"Missing required column for binary export: {col}")
 
-    try:
-        pdg = np.array(
-            [PARTICLE_TO_PDG[str(p)] for p in df["ParticleName"]],
-            dtype="<i4",
-        )
-    except KeyError as exc:
+    df = _filter_non_transport_particles(
+        df,
+        excluded_particle_names=excluded_particle_names,
+    )
+
+    if len(df) == 0:
+        return 0
+
+    unsupported = sorted(set(df["ParticleName"].astype(str)) - set(PARTICLE_TO_PDG))
+    if unsupported:
         raise ValueError(
-            f"Unsupported particle name for binary export: {exc}. "
-            f"Supported names are: {sorted(PARTICLE_TO_PDG.keys())}"
+            f"Unsupported particle names for binary export: {unsupported}. "
+            f"Supported names are: {sorted(PARTICLE_TO_PDG.keys())}. "
+            f"Filtered non-transport particles are: {sorted(NON_TRANSPORT_PARTICLES)}."
         )
+
+    pdg = np.array(
+        [PARTICLE_TO_PDG[str(p)] for p in df["ParticleName"]],
+        dtype="<i4",
+    )
 
     record_dtype = np.dtype([
         ("pdg", "<i4"),
@@ -185,8 +259,14 @@ def _append_detector_binary_chunk(df, filepath):
     with open(filepath, "ab") as f:
         records.tofile(f)
 
+    return len(records)
 
-def save_detector_binary(data, filepath):
+
+def save_detector_binary(
+    data,
+    filepath,
+    excluded_particle_names=None,
+):
     """
     Save generated detector events in compact binary format.
 
@@ -212,10 +292,18 @@ def save_detector_binary(data, filepath):
     else:
         df = data.copy()
 
-    _write_binary_header(filepath, len(df))
-    _append_detector_binary_chunk(df, filepath)
+    _write_binary_header(filepath, 0)
+    n_written = _append_detector_binary_chunk(
+        df,
+        filepath,
+        excluded_particle_names=excluded_particle_names,
+    )
+    _rewrite_binary_header(filepath, n_written)
 
     print(f"Saved binary detector file: {filepath}")
+    print(f"Written binary particles: {n_written}")
+
+    return filepath
 
 
 def generate_detector_table_to_file(
@@ -238,6 +326,9 @@ def generate_detector_table_to_file(
     include_event_id=False,
     float_format="%.8e",
     output_format="text",
+    excluded_particle_names=None,
+    generate_until_n_written=True,
+    max_empty_chunks=100,
     verbose=1,
 ):
     """
@@ -249,9 +340,30 @@ def generate_detector_table_to_file(
 
       - binary / bin:
           compact GEEANNT binary format
+
+    Parameters
+    ----------
+    excluded_particle_names : set/list or None
+        Particle names removed before writing. By default this removes neutrinos.
+
+    generate_until_n_written : bool
+        If True, keep generating until n_events transported particles are written.
+        This is recommended when filtering neutrinos, so Geant4 receives exactly
+        n_events usable source particles.
+
+        If False, generate exactly n_events raw model samples, then write fewer
+        particles if some are filtered out.
+
+    max_empty_chunks : int
+        Safety stop if filtering removes entire chunks repeatedly.
     """
     output_format = _normalize_output_format(output_format)
     idx_to_type = _normalize_idx_to_type(idx_to_type)
+
+    if excluded_particle_names is None:
+        excluded_particle_names = NON_TRANSPORT_PARTICLES
+    else:
+        excluded_particle_names = set(excluded_particle_names)
 
     _ensure_parent_dir(filepath)
 
@@ -261,17 +373,26 @@ def generate_detector_table_to_file(
         open(filepath, "w").close()
 
     elif output_format == "binary":
-        _write_binary_header(filepath, n_events)
+        _write_binary_header(filepath, 0)
 
-    n_done = 0
+    n_attempted = 0
+    n_written = 0
+    n_empty_chunks = 0
 
-    while n_done < n_events:
-        n_chunk = min(chunk_size, n_events - n_done)
+    while True:
+        if generate_until_n_written:
+            if n_written >= n_events:
+                break
+            n_chunk = min(chunk_size, n_events - n_written)
+        else:
+            if n_attempted >= n_events:
+                break
+            n_chunk = min(chunk_size, n_events - n_attempted)
 
         if verbose:
             print(
                 f"[GEEANNT] Generating chunk "
-                f"{n_done} -> {n_done + n_chunk} / {n_events}"
+                f"attempted={n_attempted} written={n_written} / target={n_events}"
             )
 
         gen_raw = generate_latent_outputs(
@@ -303,8 +424,29 @@ def generate_detector_table_to_file(
             gen_phys,
             idx_to_type=idx_to_type,
             include_event_id=include_event_id,
-            event_id_offset=n_done,
+            event_id_offset=n_written,
         )
+
+        df_chunk = _filter_non_transport_particles(
+            df_chunk,
+            excluded_particle_names=excluded_particle_names,
+        )
+
+        n_attempted += n_chunk
+
+        if len(df_chunk) == 0:
+            n_empty_chunks += 1
+            if n_empty_chunks >= max_empty_chunks:
+                raise RuntimeError(
+                    "Too many empty chunks after particle filtering. "
+                    "Check type_probs / idx_to_type / excluded_particle_names."
+                )
+            continue
+
+        n_empty_chunks = 0
+
+        if generate_until_n_written and len(df_chunk) > (n_events - n_written):
+            df_chunk = df_chunk.iloc[:(n_events - n_written)].copy()
 
         if output_format == "text":
             df_chunk.to_csv(
@@ -315,16 +457,25 @@ def generate_detector_table_to_file(
                 index=False,
                 float_format=float_format,
             )
+            n_written += len(df_chunk)
 
         elif output_format == "binary":
-            _append_detector_binary_chunk(df_chunk, filepath)
+            n_written_chunk = _append_detector_binary_chunk(
+                df_chunk,
+                filepath,
+                excluded_particle_names=set(),
+            )
+            n_written += n_written_chunk
 
-        n_done += n_chunk
+    if output_format == "binary":
+        _rewrite_binary_header(filepath, n_written)
 
     if verbose:
         print(
             f"[GEEANNT] Saved generated detector {output_format} file to {filepath}"
         )
+        print(f"[GEEANNT] Raw generated samples attempted: {n_attempted}")
+        print(f"[GEEANNT] Transport particles written: {n_written}")
 
     return filepath
 
@@ -350,6 +501,8 @@ def generate_detector_input_file(
     chunk_size=100_000,
     energy_mode="uniform",
     output_format="text",
+    excluded_particle_names=None,
+    generate_until_n_written=True,
     verbose=1,
 ):
     """
@@ -390,6 +543,8 @@ def generate_detector_input_file(
         chunk_size=chunk_size,
         seed=seed,
         output_format=output_format,
+        excluded_particle_names=excluded_particle_names,
+        generate_until_n_written=generate_until_n_written,
         include_event_id=False,
         verbose=verbose,
     )

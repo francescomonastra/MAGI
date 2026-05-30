@@ -17,9 +17,12 @@ GEEANNT/data/dataset.py
 GEEANNT/data/io.py
 GEEANNT/data/preprocessing.py
 GEEANNT/generation/__init__.py
+GEEANNT/generation/export.py
 GEEANNT/generation/reconstruction.py
 GEEANNT/generation/sampling.py
 GEEANNT/training/__init__.py
+GEEANNT/training/adaptive_callbacks.py
+GEEANNT/training/checkpointing.py
 GEEANNT/training/train.py
 GEEANNT/utils/__init__.py
 GEEANNT/utils/model_inspection.py

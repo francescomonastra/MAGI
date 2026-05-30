@@ -124,7 +124,7 @@ def plot_history(history, keys=None, show_available=True):
         plt.show()
 
 
-def plot_dist(data, name, bins=200, range_=None, density=True, figsize=(7, 4)):
+def plot_dist(data, name, bins=200, range_=None, density=True, figsize=(7, 4), xscale="linear", yscale="linear"):
     plt.figure(figsize=figsize)
     plt.hist(
         data,
@@ -137,6 +137,8 @@ def plot_dist(data, name, bins=200, range_=None, density=True, figsize=(7, 4)):
     plt.xlabel(name)
     plt.ylabel("density")
     plt.title(name)
+    plt.xscale(xscale)
+    plt.yscale(yscale)
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
     plt.show()

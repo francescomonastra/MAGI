@@ -1,0 +1,24 @@
+{
+  "model_class": "CVAE_CatEnergy_CatUV_TaskAdaptive",
+  "n_types": 6,
+  "n_energy_bins": 256,
+  "n_uv_bins": 128,
+  "latent_dim": 8,
+  "hidden": [
+    128,
+    128,
+    64,
+    64,
+    64
+  ],
+  "beta": 0.1,
+  "w_energy": 0.8,
+  "w_sr": 1.1,
+  "w_uv": 1.1,
+  "w_phi_r": 1.4,
+  "w_phi_v": 1.1,
+  "w_xy": 0.005,
+  "w_vxy": 0.025,
+  "w_ur": 0.01,
+  "sphere_R": 100.0
+}
