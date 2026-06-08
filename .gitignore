@@ -1,0 +1,11 @@
+TrainingData/
+generated/
+checkpoints/generated_particles/
+*.dat
+*.txt
+*.gntbin
+*.root
+*.npy
+*.npz
+*.h5
+*.hdf5
