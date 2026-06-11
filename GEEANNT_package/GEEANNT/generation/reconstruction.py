@@ -14,30 +14,49 @@ def u_from_s(s):
     return np.tanh(s)
 
 
+def _inverse_quantile(transformer, x):
+    x = np.asarray(x, dtype=np.float64).reshape(-1, 1)
+    return transformer.inverse_transform(x).reshape(-1)
+
+
 def reconstruct_generated_features(
     gen_pack,
-    s_r_mean,
-    s_r_std,
     energy_bins,
-    u_v_bins,
     energy_mode="uniform",
     rng=None,
+
+    # v0.6 legacy
+    s_r_mean=None,
+    s_r_std=None,
+    u_v_bins=None,
+
+    # v0.7 quantile geometry
+    qt_u_r=None,
+    qt_u_v=None,
+    geometry_mode=None,
 ):
     """
     Convert raw generated model outputs into physical feature arrays.
+
+    Supports:
+      - v0.6 legacy:
+          y_cont = [s_r_scaled, cphi_r, sphi_r, cphi_v, sphi_v]
+          u_v from generated categorical bin
+
+      - v0.7 continuous geometry:
+          y_cont = [u_r_q, u_v_q, cphi_r, sphi_r, cphi_v, sphi_v]
+          u_r/u_v recovered through QuantileTransformer inverse_transform
     """
     from .sampling import energy_from_idx
 
     y_cont_gen_s = gen_pack["y_cont_gen_s"]
-
     y_cont_gen = y_cont_gen_s.copy()
-    y_cont_gen[:, 0] = y_cont_gen_s[:, 0] * s_r_std + s_r_mean
 
-    s_r_gen = y_cont_gen[:, 0]
-    cphi_r_gen = y_cont_gen[:, 1]
-    sphi_r_gen = y_cont_gen[:, 2]
-    cphi_v_gen = y_cont_gen[:, 3]
-    sphi_v_gen = y_cont_gen[:, 4]
+    if geometry_mode is None:
+        if qt_u_r is not None and qt_u_v is not None:
+            geometry_mode = "quantile_u_r_u_v"
+        else:
+            geometry_mode = "legacy_sr_discrete_uv"
 
     E_gen = energy_from_idx(
         gen_pack["energy_idx_gen"],
@@ -47,8 +66,66 @@ def reconstruct_generated_features(
     )
 
     logE_gen = np.log10(E_gen)
-    u_v_gen = gen_pack["uv_value_gen"].copy()
-    u_v_gen = np.clip(u_v_gen, u_v_bins[0], u_v_bins[-1])
+
+    # ======================================================
+    # v0.7 quantile geometry
+    # ======================================================
+    if geometry_mode in ["quantile_u_r_u_v", "continuous_geometry"]:
+
+        if qt_u_r is None or qt_u_v is None:
+            raise ValueError(
+                "qt_u_r and qt_u_v are required for quantile geometry reconstruction."
+            )
+
+        u_r_q_gen = y_cont_gen[:, 0]
+        u_v_q_gen = y_cont_gen[:, 1]
+
+        u_r_gen = _inverse_quantile(qt_u_r, u_r_q_gen)
+        u_v_gen = _inverse_quantile(qt_u_v, u_v_q_gen)
+
+        u_r_gen = np.clip(u_r_gen, -1.0 + 1e-6, 1.0 - 1e-6)
+        u_v_gen = np.clip(u_v_gen, -1.0 + 1e-6, 1.0 - 1e-6)
+
+        cphi_r_gen = y_cont_gen[:, 2]
+        sphi_r_gen = y_cont_gen[:, 3]
+        cphi_v_gen = y_cont_gen[:, 4]
+        sphi_v_gen = y_cont_gen[:, 5]
+
+        s_r_gen = np.arctanh(u_r_gen)
+
+    # ======================================================
+    # v0.6 legacy geometry
+    # ======================================================
+    elif geometry_mode in ["legacy_sr_discrete_uv", "legacy"]:
+
+        if s_r_mean is None or s_r_std is None:
+            raise ValueError(
+                "s_r_mean and s_r_std are required for legacy reconstruction."
+            )
+
+        if u_v_bins is None:
+            raise ValueError(
+                "u_v_bins is required for legacy reconstruction."
+            )
+
+        y_cont_gen[:, 0] = y_cont_gen_s[:, 0] * s_r_std + s_r_mean
+
+        s_r_gen = y_cont_gen[:, 0]
+        u_r_gen = np.tanh(s_r_gen)
+
+        cphi_r_gen = y_cont_gen[:, 1]
+        sphi_r_gen = y_cont_gen[:, 2]
+        cphi_v_gen = y_cont_gen[:, 3]
+        sphi_v_gen = y_cont_gen[:, 4]
+
+        u_v_gen = gen_pack["uv_value_gen"].copy()
+        u_v_gen = np.clip(u_v_gen, u_v_bins[0], u_v_bins[-1])
+
+        u_r_q_gen = None
+        u_v_q_gen = None
+
+    else:
+        raise ValueError(f"Unknown geometry_mode: {geometry_mode}")
 
     particle_names_gen = None
     if "gen_type_idx" in gen_pack and "idx_to_type" in gen_pack:
@@ -58,15 +135,24 @@ def reconstruct_generated_features(
 
     return {
         **gen_pack,
+        "geometry_mode": geometry_mode,
+
         "y_cont_gen": y_cont_gen,
+
+        "u_r_q_gen": u_r_q_gen if geometry_mode != "legacy_sr_discrete_uv" else None,
+        "u_v_q_gen": u_v_q_gen if geometry_mode != "legacy_sr_discrete_uv" else None,
+
         "s_r_gen": s_r_gen,
+        "u_r_gen": u_r_gen,
+        "u_v_gen": u_v_gen,
+
         "cphi_r_gen": cphi_r_gen,
         "sphi_r_gen": sphi_r_gen,
         "cphi_v_gen": cphi_v_gen,
         "sphi_v_gen": sphi_v_gen,
+
         "E_gen": E_gen,
         "logE_gen": logE_gen,
-        "u_v_gen": u_v_gen,
         "ParticleName": particle_names_gen,
     }
 
@@ -83,14 +169,13 @@ def reconstruct_generated_physics(
     C = np.asarray(center, dtype=np.float64)
     R = float(radius)
 
-    s_r_gen = reco_pack["s_r_gen"]
+    u_r_gen = np.clip(reco_pack["u_r_gen"], -1.0 + eps, 1.0 - eps)
+    u_v_gen = np.clip(reco_pack["u_v_gen"], -1.0 + eps, 1.0 - eps)
+
     cphi_r_gen = reco_pack["cphi_r_gen"]
     sphi_r_gen = reco_pack["sphi_r_gen"]
     cphi_v_gen = reco_pack["cphi_v_gen"]
     sphi_v_gen = reco_pack["sphi_v_gen"]
-    u_v_gen = np.clip(reco_pack["u_v_gen"], -1.0 + eps, 1.0 - eps)
-
-    u_r_gen = u_from_s(s_r_gen)
 
     cpr_gen, spr_gen = renorm_cos_sin(cphi_r_gen, sphi_r_gen)
     sin_tr_gen = np.sqrt(np.maximum(0.0, 1.0 - u_r_gen * u_r_gen))
@@ -116,7 +201,6 @@ def reconstruct_generated_physics(
 
     return {
         **reco_pack,
-        "u_r_gen": u_r_gen,
         "x_gen": x_gen,
         "y_gen": y_gen,
         "z_gen": z_gen,
@@ -132,27 +216,104 @@ def reconstruct_generated_physics(
 def reconstruct_real_test_physics(
     X_cont_test,
     E_test_raw,
-    u_v_test_raw,
-    u_v_bins,
     center=(0.0, 0.0, -507.66),
     radius=100.0,
     eps=1e-6,
+
+    # v0.6 legacy
+    u_v_test_raw=None,
+    u_v_bins=None,
+
+    # v0.7 quantile geometry
+    qt_u_r=None,
+    qt_u_v=None,
+    geometry_mode=None,
 ):
     """
     Reconstruct physical quantities from real test-set features.
+
+    Supports:
+      - v0.6:
+          X_cont_test = [s_r, cphi_r, sphi_r, cphi_v, sphi_v]
+
+      - v0.7:
+          X_cont_test = [u_r_q, u_v_q, cphi_r, sphi_r, cphi_v, sphi_v]
     """
     C = np.asarray(center, dtype=np.float64)
     R = float(radius)
 
+    if geometry_mode is None:
+        if qt_u_r is not None and qt_u_v is not None:
+            geometry_mode = "quantile_u_r_u_v"
+        else:
+            geometry_mode = "legacy_sr_discrete_uv"
+
     E_real = E_test_raw.copy()
     logE_real = np.log10(E_real)
 
-    s_r_real = X_cont_test[:, 0]
-    u_r_real = np.tanh(s_r_real)
+    # ======================================================
+    # v0.7 quantile geometry
+    # ======================================================
+    if geometry_mode in ["quantile_u_r_u_v", "continuous_geometry"]:
 
-    cphi_r_real = X_cont_test[:, 1].copy()
-    sphi_r_real = X_cont_test[:, 2].copy()
+        if qt_u_r is None or qt_u_v is None:
+            raise ValueError(
+                "qt_u_r and qt_u_v are required for quantile real reconstruction."
+            )
+
+        u_r_q_real = X_cont_test[:, 0]
+        u_v_q_real = X_cont_test[:, 1]
+
+        u_r_real = _inverse_quantile(qt_u_r, u_r_q_real)
+        u_v_real = _inverse_quantile(qt_u_v, u_v_q_real)
+
+        u_r_real = np.clip(u_r_real, -1.0 + eps, 1.0 - eps)
+        u_v_real = np.clip(u_v_real, -1.0 + eps, 1.0 - eps)
+
+        s_r_real = np.arctanh(u_r_real)
+
+        cphi_r_real = X_cont_test[:, 2].copy()
+        sphi_r_real = X_cont_test[:, 3].copy()
+        cphi_v_real = X_cont_test[:, 4].copy()
+        sphi_v_real = X_cont_test[:, 5].copy()
+
+    # ======================================================
+    # v0.6 legacy geometry
+    # ======================================================
+    elif geometry_mode in ["legacy_sr_discrete_uv", "legacy"]:
+
+        if u_v_test_raw is None:
+            raise ValueError(
+                "u_v_test_raw is required for legacy real reconstruction."
+            )
+
+        if u_v_bins is None:
+            raise ValueError(
+                "u_v_bins is required for legacy real reconstruction."
+            )
+
+        s_r_real = X_cont_test[:, 0]
+        u_r_real = np.tanh(s_r_real)
+
+        cphi_r_real = X_cont_test[:, 1].copy()
+        sphi_r_real = X_cont_test[:, 2].copy()
+        cphi_v_real = X_cont_test[:, 3].copy()
+        sphi_v_real = X_cont_test[:, 4].copy()
+
+        u_v_real = np.clip(
+            u_v_test_raw.copy(),
+            u_v_bins[0] + eps,
+            u_v_bins[-1] - eps,
+        )
+
+        u_r_q_real = None
+        u_v_q_real = None
+
+    else:
+        raise ValueError(f"Unknown geometry_mode: {geometry_mode}")
+
     cphi_r_real, sphi_r_real = renorm_cos_sin(cphi_r_real, sphi_r_real)
+    cphi_v_real, sphi_v_real = renorm_cos_sin(cphi_v_real, sphi_v_real)
 
     sin_tr_real = np.sqrt(np.maximum(0.0, 1.0 - u_r_real**2))
 
@@ -160,31 +321,39 @@ def reconstruct_real_test_physics(
     y_real = C[1] + R * sin_tr_real * sphi_r_real
     z_real = C[2] + R * u_r_real
 
-    u_v_real = np.clip(u_v_test_raw.copy(), u_v_bins[0] + eps, u_v_bins[-1] - eps)
-
-    cphi_v_real = X_cont_test[:, 3].copy()
-    sphi_v_real = X_cont_test[:, 4].copy()
-    cphi_v_real, sphi_v_real = renorm_cos_sin(cphi_v_real, sphi_v_real)
-
     sin_tv_real = np.sqrt(np.maximum(0.0, 1.0 - u_v_real**2))
 
     vx_real = sin_tv_real * cphi_v_real
     vy_real = sin_tv_real * sphi_v_real
     vz_real = u_v_real
 
+    vnorm = np.sqrt(vx_real**2 + vy_real**2 + vz_real**2) + 1e-12
+    vx_real /= vnorm
+    vy_real /= vnorm
+    vz_real /= vnorm
+
     return {
+        "geometry_mode": geometry_mode,
+
         "E_real": E_real,
         "logE_real": logE_real,
+
+        "u_r_q_real": u_r_q_real if geometry_mode != "legacy_sr_discrete_uv" else None,
+        "u_v_q_real": u_v_q_real if geometry_mode != "legacy_sr_discrete_uv" else None,
+
         "s_r_real": s_r_real,
         "u_r_real": u_r_real,
         "u_v_real": u_v_real,
+
         "cphi_r_real": cphi_r_real,
         "sphi_r_real": sphi_r_real,
         "cphi_v_real": cphi_v_real,
         "sphi_v_real": sphi_v_real,
+
         "x_real": x_real,
         "y_real": y_real,
         "z_real": z_real,
+
         "vx_real": vx_real,
         "vy_real": vy_real,
         "vz_real": vz_real,

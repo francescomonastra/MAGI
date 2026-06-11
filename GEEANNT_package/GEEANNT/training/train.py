@@ -3,8 +3,6 @@ Training utilities for GEEANNT.
 """
 
 from tensorflow import keras
-import tensorflow as tf
-import numpy as np
 
 
 def build_default_callbacks(
@@ -17,6 +15,10 @@ def build_default_callbacks(
 ):
     """
     Build the default callback list used during training.
+
+    Compatible with both:
+      - v0.6 discrete-u_v models
+      - v0.7 continuous-geometry models
     """
     return [
         keras.callbacks.EarlyStopping(
@@ -35,13 +37,50 @@ def build_default_callbacks(
     ]
 
 
-def compile_model(model, learning_rate=2e-4):
+def compile_model(
+    model,
+    learning_rate=2e-4,
+    optimizer="adam",
+    clipnorm=None,
+):
     """
-    Compile the model with the default Adam optimizer.
+    Compile the model.
+
+    Parameters
+    ----------
+    model : keras.Model
+        GEEANNT model instance.
+
+    learning_rate : float
+        Optimizer learning rate.
+
+    optimizer : str
+        Supported:
+          - "adam"
+          - "adamw"
+
+    clipnorm : float or None
+        Optional gradient clipping norm.
     """
-    model.compile(
-        optimizer=keras.optimizers.Adam(learning_rate)
-    )
+    optimizer = str(optimizer).lower()
+
+    if optimizer == "adam":
+        opt = keras.optimizers.Adam(
+            learning_rate=learning_rate,
+            clipnorm=clipnorm,
+        )
+
+    elif optimizer == "adamw":
+        opt = keras.optimizers.AdamW(
+            learning_rate=learning_rate,
+            clipnorm=clipnorm,
+        )
+
+    else:
+        raise ValueError("optimizer must be one of: 'adam', 'adamw'")
+
+    model.compile(optimizer=opt)
+
     return model
 
 
@@ -63,6 +102,7 @@ def fit_model(
         callbacks=callbacks,
         verbose=verbose,
     )
+
     return history
 
 
@@ -74,11 +114,18 @@ def train_single_run(
     epochs=60,
     callbacks=None,
     verbose=1,
+    optimizer="adam",
+    clipnorm=None,
 ):
     """
     Convenience wrapper for compile + fit.
     """
-    compile_model(model, learning_rate=learning_rate)
+    compile_model(
+        model,
+        learning_rate=learning_rate,
+        optimizer=optimizer,
+        clipnorm=clipnorm,
+    )
 
     if callbacks is None:
         callbacks = build_default_callbacks()
@@ -91,4 +138,5 @@ def train_single_run(
         callbacks=callbacks,
         verbose=verbose,
     )
+
     return history

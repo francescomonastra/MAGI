@@ -44,42 +44,23 @@ def generate_latent_outputs(
     Sample particle types, build conditioning vectors,
     and generate raw model outputs.
 
-    Parameters
-    ----------
-    model : keras.Model
-        Trained generative model.
-
-    n_samples : int
-        Number of particles to generate.
-
-    type_probs : array-like
-        Probability distribution for particle classes.
-
-    n_types : int
-        Number of particle classes.
-
-    idx_to_type : dict or list, optional
-        Mapping from integer class index to particle name.
-
-    rng : np.random.Generator, optional
-        Random generator for reproducible sampling.
+    Supports:
+      - v0.6 legacy models with categorical u_v
+      - v0.7 continuous-geometry models with u_r_q/u_v_q
 
     Returns
     -------
     dict
-        Raw generated outputs including:
+        Common keys:
             gen_type_idx
             gen_cond
             energy_idx_gen
-            uv_idx_gen
-            uv_value_gen
             y_cont_gen_s
             params
 
-        If idx_to_type is provided:
-            idx_to_type
-            ParticleName
-            generated_type_counts
+        v0.6-only keys, if produced by model.generate():
+            uv_idx_gen
+            uv_value_gen
     """
     gen_type_idx = sample_types(n_samples, type_probs, rng=rng)
     gen_cond = one_hot_from_idx(gen_type_idx, n_types)
@@ -90,24 +71,39 @@ def generate_latent_outputs(
         "gen_type_idx": gen_type_idx,
         "gen_cond": gen_cond,
         "energy_idx_gen": gen_out["energy_idx"].numpy().astype(np.int32),
-        "uv_idx_gen": gen_out["uv_idx"].numpy().astype(np.int32),
-        "uv_value_gen": gen_out["uv_value"].numpy().astype(np.float32).reshape(-1),
         "y_cont_gen_s": gen_out["y_cont"].numpy().astype(np.float32),
         "params": gen_out.get("params", None),
     }
 
+    # Legacy v0.6 categorical u_v output
+    if "uv_idx" in gen_out:
+        out["uv_idx_gen"] = gen_out["uv_idx"].numpy().astype(np.int32)
+
+    if "uv_value" in gen_out:
+        out["uv_value_gen"] = (
+            gen_out["uv_value"]
+            .numpy()
+            .astype(np.float32)
+            .reshape(-1)
+        )
+
     if idx_to_type is not None:
+        idx_to_type = {
+            int(k): v
+            for k, v in idx_to_type.items()
+        } if isinstance(idx_to_type, dict) else idx_to_type
+
         out["idx_to_type"] = idx_to_type
 
         out["ParticleName"] = np.array(
-            [idx_to_type[i] for i in gen_type_idx],
+            [idx_to_type[int(i)] for i in gen_type_idx],
             dtype=object,
         )
 
         unique, counts = np.unique(gen_type_idx, return_counts=True)
 
         out["generated_type_counts"] = {
-            idx_to_type[u]: int(c)
+            idx_to_type[int(u)]: int(c)
             for u, c in zip(unique, counts)
         }
 

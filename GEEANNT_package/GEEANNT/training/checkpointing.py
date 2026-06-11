@@ -448,8 +448,8 @@ def load_task_adaptive_model_for_generation(
     model_name,
     model_config,
     energy_bins,
-    u_v_bins,
-    n_types,
+    u_v_bins=None,
+    n_types=None,
     type_weights=None,
     radius=100.0,
     compile_model_fn=None,
@@ -457,113 +457,196 @@ def load_task_adaptive_model_for_generation(
     verbose=1,
 ):
     """
-    Load a saved task-adaptive CVAE model for generation.
+    Load a saved task-adaptive GEEANNT model for generation.
 
-    This assumes preprocessing variables are already available in the notebook.
-    It:
-      - rebuilds the model architecture
-      - dummy-builds the decoder
-      - loads saved weights
-      - restores saved adaptive task weights if available
-      - optionally compiles the model
+    Supports:
+      - CVAE_CatEnergy_CatUV_TaskAdaptive          v0.6
+      - CVAE_CatEnergy_ContGeom_TaskAdaptive      v0.7
     """
     import os
     import json
     import numpy as np
     import tensorflow as tf
 
-    from GEEANNT.core import CVAE_CatEnergy_CatUV_TaskAdaptive
+    from GEEANNT.core import (
+        CVAE_CatEnergy_CatUV_TaskAdaptive,
+        CVAE_CatEnergy_ContGeom_TaskAdaptive,
+    )
 
     weights_path = os.path.join(save_dir, f"{model_name}.weights.h5")
     task_weights_path = os.path.join(save_dir, f"{model_name}_task_weights.json")
 
     n_energy_bins = len(energy_bins) - 1
-    n_uv_bins = len(u_v_bins) - 1
 
-    model = CVAE_CatEnergy_CatUV_TaskAdaptive(
-        n_types=int(n_types),
-        n_energy_bins=int(n_energy_bins),
-        n_uv_bins=int(n_uv_bins),
-        uv_bin_edges=np.asarray(u_v_bins, dtype=np.float32),
-
-        latent_dim=model_config["latent_dim"],
-        hidden=tuple(model_config["hidden"]),
-        beta=model_config["beta"],
-        type_weights=type_weights,
-
-        min_log_sigma=model_config.get("min_log_sigma", -6.0),
-        max_log_sigma=model_config.get("max_log_sigma", 1.5),
-
-        lambda_sigma=model_config.get("lambda_sigma", 2e-3),
-        sigma_target=model_config.get("sigma_target", -2.5),
-        lambda_phi=model_config.get("lambda_phi", 2e-2),
-        lambda_phi_r=model_config.get("lambda_phi_r", 2e-2),
-
-        w_energy=model_config["w_energy"],
-        w_sr=model_config["w_sr"],
-        w_uv=model_config["w_uv"],
-        w_phi_r=model_config["w_phi_r"],
-        w_phi_v=model_config["w_phi_v"],
-        w_ur=model_config["w_ur"],
-        w_xy=model_config["w_xy"],
-        w_vxy=model_config["w_vxy"],
-
-        phi_v_ang_weight=model_config.get("phi_v_ang_weight", 1.0),
-        phi_v_mse_weight=model_config.get("phi_v_mse_weight", 0.6),
-
-        sphere_R=model_config.get("sphere_R", radius),
-        sample_uv_uniform_inside_bin=model_config.get(
-            "sample_uv_uniform_inside_bin",
-            True,
-        ),
+    model_class = model_config.get(
+        "model_class",
+        model_config.get("class_name", "CVAE_CatEnergy_CatUV_TaskAdaptive"),
     )
 
-   # ----------------------------------------------------------
-    # Build all trainable submodules before loading weights
-    # ----------------------------------------------------------
-    dummy_y_cont = tf.zeros((1, 5), dtype=tf.float32)
-    dummy_E = tf.zeros((1,), dtype=tf.int32)
-    dummy_uv = tf.zeros((1,), dtype=tf.int32)
-    dummy_cond = tf.zeros((1, int(n_types)), dtype=tf.float32)
+    if model_class == "CVAE_CatEnergy_CatUV_TaskAdaptive":
+        if u_v_bins is None:
+            raise ValueError(
+                "u_v_bins is required to load CVAE_CatEnergy_CatUV_TaskAdaptive."
+            )
 
-    dummy_E_onehot = tf.one_hot(dummy_E, depth=int(n_energy_bins), dtype=tf.float32)
-    dummy_uv_onehot = tf.one_hot(dummy_uv, depth=int(n_uv_bins), dtype=tf.float32)
+        n_uv_bins = len(u_v_bins) - 1
 
-    dummy_encoder_input = tf.concat(
-        [dummy_y_cont, dummy_E_onehot, dummy_uv_onehot, dummy_cond],
-        axis=1,
-    )
+        model = CVAE_CatEnergy_CatUV_TaskAdaptive(
+            n_types=int(n_types),
+            n_energy_bins=int(n_energy_bins),
+            n_uv_bins=int(n_uv_bins),
+            uv_bin_edges=np.asarray(u_v_bins, dtype=np.float32),
 
-    # Build encoder
-    z_mean, z_logvar = model.encoder(dummy_encoder_input, training=False)
+            latent_dim=model_config["latent_dim"],
+            hidden=tuple(model_config["hidden"]),
+            beta=model_config["beta"],
+            type_weights=type_weights,
 
-    # Build decoder/backbone/heads
-    dummy_z = tf.zeros((1, model.latent_dim), dtype=tf.float32)
-    _ = model.decode(dummy_z, dummy_cond)
+            min_log_sigma=model_config.get("min_log_sigma", -6.0),
+            max_log_sigma=model_config.get("max_log_sigma", 1.5),
 
-    # For subclassed Keras models without call(), mark as built for save/load_weights
+            lambda_sigma=model_config.get("lambda_sigma", 2e-3),
+            sigma_target=model_config.get("sigma_target", -2.5),
+            lambda_phi=model_config.get("lambda_phi", 2e-2),
+            lambda_phi_r=model_config.get("lambda_phi_r", 2e-2),
+
+            w_energy=model_config["w_energy"],
+            w_sr=model_config["w_sr"],
+            w_uv=model_config["w_uv"],
+            w_phi_r=model_config["w_phi_r"],
+            w_phi_v=model_config["w_phi_v"],
+            w_ur=model_config.get("w_ur", 0.01),
+            w_xy=model_config.get("w_xy", 0.0),
+            w_vxy=model_config.get("w_vxy", 0.05),
+
+            phi_v_ang_weight=model_config.get("phi_v_ang_weight", 1.0),
+            phi_v_mse_weight=model_config.get("phi_v_mse_weight", 0.6),
+
+            sphere_R=model_config.get("sphere_R", radius),
+            sample_uv_uniform_inside_bin=model_config.get(
+                "sample_uv_uniform_inside_bin",
+                True,
+            ),
+        )
+
+        dummy_y_cont = tf.zeros((1, 5), dtype=tf.float32)
+        dummy_E = tf.zeros((1,), dtype=tf.int32)
+        dummy_uv = tf.zeros((1,), dtype=tf.int32)
+        dummy_cond = tf.zeros((1, int(n_types)), dtype=tf.float32)
+
+        dummy_E_onehot = tf.one_hot(
+            dummy_E,
+            depth=int(n_energy_bins),
+            dtype=tf.float32,
+        )
+        dummy_uv_onehot = tf.one_hot(
+            dummy_uv,
+            depth=int(n_uv_bins),
+            dtype=tf.float32,
+        )
+
+        dummy_encoder_input = tf.concat(
+            [dummy_y_cont, dummy_E_onehot, dummy_uv_onehot, dummy_cond],
+            axis=1,
+        )
+
+        _ = model.encoder(dummy_encoder_input, training=False)
+
+        dummy_z = tf.zeros((1, model.latent_dim), dtype=tf.float32)
+        _ = model.decode(dummy_z, dummy_cond)
+
+    elif model_class == "CVAE_CatEnergy_ContGeom_TaskAdaptive":
+        y_cont_dim = int(model_config.get("y_cont_dim", 6))
+
+        model = CVAE_CatEnergy_ContGeom_TaskAdaptive(
+            n_types=int(n_types),
+            n_energy_bins=int(n_energy_bins),
+            y_cont_dim=y_cont_dim,
+
+            latent_dim=model_config["latent_dim"],
+            hidden=tuple(model_config["hidden"]),
+            beta=model_config["beta"],
+            type_weights=type_weights,
+
+            min_log_sigma=model_config.get("min_log_sigma", -6.0),
+            max_log_sigma=model_config.get("max_log_sigma", 1.5),
+
+            lambda_sigma=model_config.get("lambda_sigma", 2e-3),
+            sigma_target=model_config.get("sigma_target", -2.5),
+            lambda_phi=model_config.get("lambda_phi", 2e-2),
+            lambda_phi_r=model_config.get("lambda_phi_r", 2e-2),
+
+            w_energy=model_config.get("w_energy", 1.0),
+            w_ur=model_config.get("w_ur", 1.0),
+            w_uv=model_config.get("w_uv", 1.0),
+            w_phi_r=model_config.get("w_phi_r", 1.0),
+            w_phi_v=model_config.get("w_phi_v", 1.0),
+
+            energy_sampling_temperature=model_config.get(
+                "energy_sampling_temperature",
+                1.0,
+            ),
+
+            phi_v_ang_weight=model_config.get("phi_v_ang_weight", 1.2),
+            phi_v_mse_weight=model_config.get("phi_v_mse_weight", 0.5),
+
+            stem_width=model_config.get("stem_width", 64),
+            deep_decoder_hidden=tuple(
+                model_config.get("deep_decoder_hidden", (128, 128, 64))
+            ),
+            energy_branch_hidden=tuple(
+                model_config.get("energy_branch_hidden", (48, 48))
+            ),
+        )
+
+        dummy_y_cont = tf.zeros((1, y_cont_dim), dtype=tf.float32)
+        dummy_E = tf.zeros((1,), dtype=tf.int32)
+        dummy_cond = tf.zeros((1, int(n_types)), dtype=tf.float32)
+
+        dummy_E_onehot = tf.one_hot(
+            dummy_E,
+            depth=int(n_energy_bins),
+            dtype=tf.float32,
+        )
+
+        dummy_encoder_input = tf.concat(
+            [dummy_y_cont, dummy_E_onehot, dummy_cond],
+            axis=1,
+        )
+
+        _ = model.encoder(dummy_encoder_input, training=False)
+
+        dummy_z = tf.zeros((1, model.latent_dim), dtype=tf.float32)
+        _ = model.decode(dummy_z, dummy_cond)
+
+    else:
+        raise ValueError(f"Unsupported model_class: {model_class}")
+
     model.built = True
-
     model.load_weights(weights_path)
 
-    # Restore adaptive task weights
     if os.path.exists(task_weights_path) and hasattr(model, "task_weights"):
         with open(task_weights_path, "r") as f:
             saved_task_weights = json.load(f)
 
         for k, v in saved_task_weights.items():
-            model.task_weights[k] = float(v)
+            if k in model.task_weights:
+                model.set_task_weight(k, float(v))
+            else:
+                model.task_weights[k] = float(v)
 
-    # Optional compile, only needed if you want to continue training/evaluate via fit/evaluate
     if compile_model_fn is not None:
         lr = 2e-4 if learning_rate is None else learning_rate
         compile_model_fn(model, learning_rate=lr)
 
     if verbose:
         print("Loaded task-adaptive model.")
+        print("Model class:", model_class)
         print("Weights:", weights_path)
+
         if os.path.exists(task_weights_path):
             print("Task weights:", task_weights_path)
+
         if hasattr(model, "task_weights"):
             print("Current task weights:", model.task_weights)
 

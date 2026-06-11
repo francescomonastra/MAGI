@@ -61,6 +61,13 @@ class TaskAdaptiveLossScheduler(keras.callbacks.Callback):
                 st["wait"] += 1
 
             if (current <= threshold) and (st["wait"] >= patience) and (st["cooldown_counter"] == 0):
+                if not hasattr(self.model, "task_weights") or task_name not in self.model.task_weights:
+                    if self.verbose:
+                        print(
+                            f"\n[TaskAdaptiveLossScheduler] Skipping task='{task_name}' "
+                            f"because it is not present in model.task_weights."
+                        )
+                    continue
                 old_w, new_w = self.model.decay_task_weight(
                     task_name,
                     factor=decay_factor,
@@ -105,16 +112,44 @@ class TaskAdaptiveTrainingMonitor(keras.callbacks.Callback):
         self.metrics_to_show = metrics_to_show or [
             "loss",
             "val_loss",
+            "rec",
+            "val_rec",
+            "kl",
+            "val_kl",
+            "nll",
+            "val_nll",
+
+            # energy, shared
             "energy_ce",
             "val_energy_ce",
+
+            # v0.6
+            "sr_nll",
+            "val_sr_nll",
             "uv_ce",
             "val_uv_ce",
-            "phi_v_loss",
-            "val_phi_v_loss",
             "xy_mse",
             "val_xy_mse",
             "vxy_mse",
             "val_vxy_mse",
+            "u_r_mse",
+            "val_u_r_mse",
+
+            # v0.7
+            "ur_nll",
+            "val_ur_nll",
+            "uv_nll",
+            "val_uv_nll",
+
+            # shared angular terms
+            "phi_r_mse",
+            "val_phi_r_mse",
+            "phi_v_mse",
+            "val_phi_v_mse",
+            "phi_v_ang",
+            "val_phi_v_ang",
+            "phi_v_loss",
+            "val_phi_v_loss",
         ]
         self.show_task_weights = show_task_weights
         self.show_scheduler_state = show_scheduler_state

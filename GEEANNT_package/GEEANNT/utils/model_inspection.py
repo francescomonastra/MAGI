@@ -10,7 +10,11 @@ def print_model_structure(model):
     print(f"latent_dim    = {model.latent_dim}")
     print(f"n_types       = {model.n_types}")
     print(f"n_energy_bins = {model.n_energy_bins}")
-    print(f"n_uv_bins     = {model.n_uv_bins}")
+    if hasattr(model, "n_uv_bins"):
+        print(f"n_uv_bins     = {model.n_uv_bins}")
+
+    if hasattr(model, "y_cont_dim"):
+        print(f"y_cont_dim    = {model.y_cont_dim}")
 
     print("\n--- Encoder ---")
     model.encoder.summary()
@@ -63,6 +67,26 @@ def print_model_structure(model):
     if hasattr(model, "phi_v_head"):
         print("\n--- phi_v head ---")
         model.phi_v_head.summary()
+
+    if hasattr(model, "ur_head"):
+        print("\n--- u_r_q head ---")
+        model.ur_head.summary()
+
+    if hasattr(model, "ur_mu_head"):
+        print("\n--- ur_mu_head ---")
+        print(model.ur_mu_head)
+
+    if hasattr(model, "ur_logsigma_head"):
+        print("\n--- ur_logsigma_head ---")
+        print(model.ur_logsigma_head)
+
+    if hasattr(model, "uv_mu_head"):
+        print("\n--- uv_mu_head ---")
+        print(model.uv_mu_head)
+
+    if hasattr(model, "uv_logsigma_head"):
+        print("\n--- uv_logsigma_head ---")
+        print(model.uv_logsigma_head)
 
     # ------------------------------------------------------
     # Final scalar heads
@@ -221,6 +245,21 @@ def print_trainable_status(model):
 
         modules.append(("energy_logits_head", model.energy_logits_head))
 
+    if hasattr(model, "ur_head"):
+        modules.append(("ur_head", model.ur_head))
+
+    if hasattr(model, "ur_mu_head"):
+        modules.append(("ur_mu_head", model.ur_mu_head))
+
+    if hasattr(model, "ur_logsigma_head"):
+        modules.append(("ur_logsigma_head", model.ur_logsigma_head))
+
+    if hasattr(model, "uv_mu_head"):
+        modules.append(("uv_mu_head", model.uv_mu_head))
+
+    if hasattr(model, "uv_logsigma_head"):
+        modules.append(("uv_logsigma_head", model.uv_logsigma_head))
+
     for name, module in modules:
 
         print(_module_status_line(name, module))
@@ -315,7 +354,10 @@ def print_model_tree_with_params(model):
     # ------------------------------------------------------
     if hasattr(model, "encoder"):
         print(_fmt_module_line("Encoder", model.encoder, prefix="", connector="├── "))
-        print("│   ├── input: [y_cont, E_onehot, uv_onehot, cond]")
+        if hasattr(model, "n_uv_bins"):
+            print("│   ├── input: [y_cont, E_onehot, uv_onehot, cond]")
+        else:
+            print("│   ├── input: [y_cont, E_onehot, cond]")
         print("│   ├── z_mean")
         print("│   └── z_logvar")
         print("│")
@@ -371,6 +413,12 @@ def print_model_tree_with_params(model):
 
         if hasattr(model, "position_branch"):
             print(_fmt_module_line("Position branch", model.position_branch, prefix="│   ", connector="├── "))
+            if hasattr(model, "ur_head"):
+                print(_fmt_module_line("ur_head", model.ur_head, prefix="│   │   ", connector="├── "))
+                if hasattr(model, "ur_mu_head"):
+                    print(_fmt_module_line("ur_mu_head", model.ur_mu_head, prefix="│   │   │   ", connector="├── "))
+                if hasattr(model, "ur_logsigma_head"):
+                    print(_fmt_module_line("ur_logsigma_head", model.ur_logsigma_head, prefix="│   │   │   ", connector="└── "))
             if hasattr(model, "sr_head"):
                 print(_fmt_module_line("sr_head", model.sr_head, prefix="│   │   ", connector="├── "))
                 if hasattr(model, "sr_mu_head"):
@@ -382,6 +430,11 @@ def print_model_tree_with_params(model):
 
         if hasattr(model, "direction_branch"):
             print(_fmt_module_line("Direction branch", model.direction_branch, prefix="│   ", connector="└── "))
+            if hasattr(model, "uv_mu_head"):
+                print(_fmt_module_line("uv_mu_head", model.uv_mu_head, prefix="│       │   ", connector="├── "))
+
+            if hasattr(model, "uv_logsigma_head"):
+                print(_fmt_module_line("uv_logsigma_head", model.uv_logsigma_head, prefix="│       │   ", connector="└── "))
             if hasattr(model, "uv_head"):
                 print(_fmt_module_line("uv_head", model.uv_head, prefix="│       ", connector="├── "))
                 if hasattr(model, "uv_logits_head"):
@@ -398,13 +451,24 @@ def print_model_tree_with_params(model):
     print("│")
     print("├── Losses")
     print("│   ├── energy : categorical CE")
-    print("│   ├── sr     : Gaussian NLL")
-    print("│   ├── uv     : smoothed categorical CE")
+
+    if hasattr(model, "ur_mu_head"):
+        print("│   ├── ur_q   : Gaussian NLL")
+    else:
+        print("│   ├── sr     : Gaussian NLL")
+
+    if hasattr(model, "uv_logits_head"):
+        print("│   ├── uv     : smoothed categorical CE")
+    elif hasattr(model, "uv_mu_head"):
+        print("│   ├── uv_q   : Gaussian NLL")
+
     print("│   ├── phi_r  : MSE")
-    print("│   ├── phi_v  : weighted (normalized MSE + angular loss)")
-    print("│   ├── xy     : geometric xy loss")
-    print("│   ├── ur     : soft radial loss")
-    print("│   └── vxy    : physical directional Cartesian loss")
+    print("│   └── phi_v  : weighted (normalized MSE + angular loss)")
+
+    if hasattr(model, "w_xy"):
+        print("│   ├── xy     : geometric xy loss")
+    if hasattr(model, "w_vxy"):
+        print("│   └── vxy    : physical directional Cartesian loss")
 
     # ------------------------------------------------------
     # Task weights

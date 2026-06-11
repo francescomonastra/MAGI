@@ -97,38 +97,84 @@ def report_norm_checks(real_pack, gen_pack):
 
 def build_real_generated_featureframes(real_pack, gen_pack):
 
-    df_real = pd.DataFrame({
+    real_dict = {
         "sample": "real",
+
         "logE": real_pack["logE_real"],
-        "s_r": real_pack["s_r_real"],
+
+        "u_r": real_pack["u_r_real"],
         "u_v": real_pack["u_v_real"],
+
         "cphi_r": real_pack["cphi_r_real"],
         "sphi_r": real_pack["sphi_r_real"],
+
         "cphi_v": real_pack["cphi_v_real"],
         "sphi_v": real_pack["sphi_v_real"],
+
         "x": real_pack["x_real"],
         "y": real_pack["y_real"],
         "z": real_pack["z_real"],
+
         "vx": real_pack["vx_real"],
         "vy": real_pack["vy_real"],
         "vz": real_pack["vz_real"],
-    })
+    }
 
-    df_gen = pd.DataFrame({
+    gen_dict = {
         "sample": "generated",
+
         "logE": gen_pack["logE_gen"],
-        "s_r": gen_pack["s_r_gen"],
+
+        "u_r": gen_pack["u_r_gen"],
         "u_v": gen_pack["u_v_gen"],
+
         "cphi_r": gen_pack["cphi_r_gen"],
         "sphi_r": gen_pack["sphi_r_gen"],
+
         "cphi_v": gen_pack["cphi_v_gen"],
         "sphi_v": gen_pack["sphi_v_gen"],
+
         "x": gen_pack["x_gen"],
         "y": gen_pack["y_gen"],
         "z": gen_pack["z_gen"],
+
         "vx": gen_pack["vx_gen"],
         "vy": gen_pack["vy_gen"],
         "vz": gen_pack["vz_gen"],
-    })
+    }
 
-    return df_real, df_gen, pd.concat([df_real, df_gen], ignore_index=True)
+    # --------------------------------------------------
+    # Optional quantile-space variables (v0.7)
+    # --------------------------------------------------
+
+    if "u_r_q_real" in real_pack:
+        real_dict["u_r_q"] = real_pack["u_r_q_real"]
+
+    if "u_r_q_gen" in gen_pack:
+        gen_dict["u_r_q"] = gen_pack["u_r_q_gen"]
+
+    if "u_v_q_real" in real_pack:
+        real_dict["u_v_q"] = real_pack["u_v_q_real"]
+
+    if "u_v_q_gen" in gen_pack:
+        gen_dict["u_v_q"] = gen_pack["u_v_q_gen"]
+
+    # --------------------------------------------------
+    # Backward compatibility v0.6
+    # --------------------------------------------------
+
+    if "s_r_real" in real_pack:
+        real_dict["s_r"] = real_pack["s_r_real"]
+
+    if "s_r_gen" in gen_pack:
+        gen_dict["s_r"] = gen_pack["s_r_gen"]
+
+    df_real = pd.DataFrame(real_dict)
+    df_gen = pd.DataFrame(gen_dict)
+
+    df_compare = pd.concat(
+        [df_real, df_gen],
+        ignore_index=True,
+    )
+
+    return df_real, df_gen, df_compare
