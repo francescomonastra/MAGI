@@ -1,5 +1,20 @@
 """
 Dataset construction utilities for GEEANNT.
+
+This module supports two geometry modes:
+
+1. Legacy discrete-u_v mode:
+   - s_r continuous
+   - u_v discretized into quantile bins
+   - continuous columns:
+       s_r, cphi_r, sphi_r, cphi_v, sphi_v
+
+2. v0.7 continuous-geometry mode:
+   - u_r_q continuous
+   - u_v_q continuous
+   - no u_v discretization
+   - continuous columns:
+       u_r_q, u_v_q, cphi_r, sphi_r, cphi_v, sphi_v
 """
 
 import numpy as np
@@ -10,6 +25,10 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 
 
+# =============================================================================
+# Legacy pipeline: particle filtering + u_v discretization
+# =============================================================================
+
 def filter_particle_types_and_discretize_uv(
     feat,
     prob_threshold=1e-5,
@@ -17,30 +36,15 @@ def filter_particle_types_and_discretize_uv(
     uv_eps=1e-6,
 ):
     """
+    Legacy dataset builder.
+
     Filter rare particle types and discretize u_v.
 
-    Parameters
-    ----------
-    feat : pd.DataFrame
-        Feature dataframe containing:
+    Expected columns:
         ParticleName, E_idx, s_r, cphi_r, sphi_r, u_v, cphi_v, sphi_v
-    prob_threshold : float
-        Minimum empirical particle-type probability to keep a class.
-    uv_nbins : int
-        Requested number of u_v quantile bins.
-    uv_eps : float
-        Small padding applied to first/last u_v bin edge.
-
-    Returns
-    -------
-    dict
-        Dictionary containing filtered dataframe, mappings, matrices and u_v bins.
     """
     feat = feat.copy()
 
-    # ------------------------------------------------------
-    # Filter rare particle types
-    # ------------------------------------------------------
     type_counts_full = feat["ParticleName"].value_counts()
     type_probs_full = type_counts_full / type_counts_full.sum()
 
@@ -55,9 +59,6 @@ def filter_particle_types_and_discretize_uv(
     idx_to_type = {i: t for t, i in type_to_idx.items()}
     type_probs = (type_counts / type_counts.sum()).to_numpy(dtype=np.float64)
 
-    # ------------------------------------------------------
-    # Discretize u_v
-    # ------------------------------------------------------
     u_v_values = feat["u_v"].to_numpy(dtype=np.float64)
 
     u_v_bins = np.quantile(u_v_values, np.linspace(0.0, 1.0, uv_nbins + 1))
@@ -74,19 +75,14 @@ def filter_particle_types_and_discretize_uv(
 
     u_v_centers = 0.5 * (u_v_bins[:-1] + u_v_bins[1:])
 
-    # ------------------------------------------------------
-    # Continuous matrix
-    # ------------------------------------------------------
     cont_cols = ["s_r", "cphi_r", "sphi_r", "cphi_v", "sphi_v"]
     X_cont_raw = feat[cont_cols].to_numpy(dtype=np.float32)
 
-    # ------------------------------------------------------
-    # Targets
-    # ------------------------------------------------------
     E_idx = feat["E_idx"].to_numpy(dtype=np.int32)
     y_type = feat["ParticleName"].map(type_to_idx).to_numpy(dtype=np.int32)
 
     return {
+        "dataset_mode": "discrete_uv",
         "feat": feat,
         "cont_cols": cont_cols,
         "X_cont_raw": X_cont_raw,
@@ -107,6 +103,9 @@ def filter_particle_types_and_discretize_uv(
 
 
 def report_discretized_features(dataset_pack):
+    """
+    Report diagnostics for the legacy discrete-u_v dataset.
+    """
     feat = dataset_pack["feat"]
     X_cont_raw = dataset_pack["X_cont_raw"]
     cont_cols = dataset_pack["cont_cols"]
@@ -115,8 +114,8 @@ def report_discretized_features(dataset_pack):
     u_v_values = dataset_pack["u_v_values"]
     u_v_centers = dataset_pack["u_v_centers"]
 
-    print("Original particle types:", feat["ParticleName"].nunique())
-    print("Kept particle types    :", dataset_pack["n_types"])
+    print("Dataset mode:", dataset_pack.get("dataset_mode", "discrete_uv"))
+    print("Original/kept particle types:", dataset_pack["n_types"])
     print("Types:", dataset_pack["type_names"])
 
     print("\nEmpirical probabilities:")
@@ -141,19 +140,118 @@ def report_discretized_features(dataset_pack):
     print("u_v_idx   :", u_v_idx.shape)
     print("y_type    :", dataset_pack["y_type"].shape)
 
-    print("\n--- Continuous feature ranges (RAW) ---")
+    print("\n--- Continuous feature ranges ---")
     for i, c in enumerate(cont_cols):
         print(f"{c:>8s} : {X_cont_raw[:, i].min()}  {X_cont_raw[:, i].max()}")
 
     print("\n--- Continuous means/std ---")
     for i, c in enumerate(cont_cols):
-        print(f"{c:>8s} : mean={X_cont_raw[:, i].mean(): .6f}  std={X_cont_raw[:, i].std(): .6f}")
+        print(
+            f"{c:>8s} : "
+            f"mean={X_cont_raw[:, i].mean(): .6f}  "
+            f"std={X_cont_raw[:, i].std(): .6f}"
+        )
 
     u_v_reco = u_v_centers[u_v_idx]
     print("\n--- u_v reconstruction from bins ---")
     print("u_v reco: min =", u_v_reco.min(), "max =", u_v_reco.max())
     print("mean abs diff =", np.mean(np.abs(u_v_reco - u_v_values)))
 
+
+# =============================================================================
+# v0.7 pipeline: particle filtering + fully continuous geometry
+# =============================================================================
+
+def filter_particle_types_continuous_geometry(
+    feat,
+    prob_threshold=1e-5,
+    cont_cols=("u_r_q", "u_v_q", "cphi_r", "sphi_r", "cphi_v", "sphi_v"),
+):
+    """
+    v0.7 dataset builder.
+
+    Filter rare particle types and keep geometry fully continuous.
+
+    Expected columns:
+        ParticleName, E_idx, u_r_q, u_v_q, cphi_r, sphi_r, cphi_v, sphi_v
+    """
+    feat = feat.copy()
+
+    missing = [c for c in ["ParticleName", "E_idx", *cont_cols] if c not in feat.columns]
+    if missing:
+        raise ValueError(f"Missing required columns for continuous geometry: {missing}")
+
+    type_counts_full = feat["ParticleName"].value_counts()
+    type_probs_full = type_counts_full / type_counts_full.sum()
+
+    valid_types = type_probs_full[type_probs_full >= prob_threshold].index
+    feat = feat[feat["ParticleName"].isin(valid_types)].reset_index(drop=True)
+
+    type_counts = feat["ParticleName"].value_counts()
+    type_names = type_counts.index.to_list()
+    n_types = len(type_names)
+
+    type_to_idx = {t: i for i, t in enumerate(type_names)}
+    idx_to_type = {i: t for t, i in type_to_idx.items()}
+    type_probs = (type_counts / type_counts.sum()).to_numpy(dtype=np.float64)
+
+    X_cont_raw = feat[list(cont_cols)].to_numpy(dtype=np.float32)
+    E_idx = feat["E_idx"].to_numpy(dtype=np.int32)
+    y_type = feat["ParticleName"].map(type_to_idx).to_numpy(dtype=np.int32)
+
+    return {
+        "dataset_mode": "continuous_geometry",
+        "feat": feat,
+        "cont_cols": list(cont_cols),
+        "X_cont_raw": X_cont_raw,
+        "E_idx": E_idx,
+        "y_type": y_type,
+        "type_names": type_names,
+        "type_to_idx": type_to_idx,
+        "idx_to_type": idx_to_type,
+        "type_probs": type_probs,
+        "n_types": n_types,
+    }
+
+
+def report_continuous_geometry_features(dataset_pack):
+    """
+    Report diagnostics for the v0.7 continuous-geometry dataset.
+    """
+    feat = dataset_pack["feat"]
+    X_cont_raw = dataset_pack["X_cont_raw"]
+    cont_cols = dataset_pack["cont_cols"]
+
+    print("Dataset mode:", dataset_pack.get("dataset_mode", "continuous_geometry"))
+    print("Kept particle types:", dataset_pack["n_types"])
+    print("Types:", dataset_pack["type_names"])
+
+    print("\nEmpirical probabilities:")
+    for t, p in zip(dataset_pack["type_names"], dataset_pack["type_probs"]):
+        print(f"{t:>12s}  p={p:.6e}")
+
+    print("\nShapes:")
+    print("X_cont_raw:", X_cont_raw.shape)
+    print("E_idx     :", dataset_pack["E_idx"].shape)
+    print("y_type    :", dataset_pack["y_type"].shape)
+
+    print("\n--- Continuous feature ranges ---")
+    for i, c in enumerate(cont_cols):
+        x = X_cont_raw[:, i]
+        print(f"{c:>8s} : {x.min()}  {x.max()}")
+
+    print("\n--- Continuous means/std ---")
+    for i, c in enumerate(cont_cols):
+        x = X_cont_raw[:, i]
+        print(f"{c:>8s} : mean={x.mean(): .6f}  std={x.std(): .6f}")
+
+    print("\nFirst rows:")
+    print(feat.head())
+
+
+# =============================================================================
+# Shared split / scaling / conditioning utilities
+# =============================================================================
 
 def split_feature_data(
     dataset_pack,
@@ -163,12 +261,17 @@ def split_feature_data(
 ):
     """
     Split raw feature matrices into train/val/test.
+
+    Works for both:
+      - dataset_mode == "discrete_uv"
+      - dataset_mode == "continuous_geometry"
     """
     X_cont_raw = dataset_pack["X_cont_raw"]
     E_idx = dataset_pack["E_idx"]
-    u_v_idx = dataset_pack["u_v_idx"]
     y_type = dataset_pack["y_type"]
     feat = dataset_pack["feat"]
+
+    dataset_mode = dataset_pack.get("dataset_mode", "discrete_uv")
 
     idx_all = np.arange(len(X_cont_raw))
 
@@ -177,7 +280,7 @@ def split_feature_data(
         y_type,
         test_size=test_size_total,
         random_state=random_state,
-        stratify=y_type
+        stratify=y_type,
     )
 
     idx_val, idx_test, y_val, y_test = train_test_split(
@@ -185,10 +288,11 @@ def split_feature_data(
         y_temp,
         test_size=val_size_from_temp,
         random_state=random_state,
-        stratify=y_temp
+        stratify=y_temp,
     )
 
     split_pack = {
+        **dataset_pack,
         "idx_train": idx_train,
         "idx_val": idx_val,
         "idx_test": idx_test,
@@ -198,18 +302,27 @@ def split_feature_data(
         "E_train": E_idx[idx_train],
         "E_val": E_idx[idx_val],
         "E_test": E_idx[idx_test],
-        "u_v_train": u_v_idx[idx_train],
-        "u_v_val": u_v_idx[idx_val],
-        "u_v_test": u_v_idx[idx_test],
         "y_train": y_train,
         "y_val": y_val,
         "y_test": y_test,
-        "u_v_train_raw": feat["u_v"].to_numpy()[idx_train],
-        "u_v_val_raw": feat["u_v"].to_numpy()[idx_val],
-        "u_v_test_raw": feat["u_v"].to_numpy()[idx_test],
     }
 
-    # optional diagnostic raw energy if present in feat
+    if dataset_mode == "discrete_uv":
+        u_v_idx = dataset_pack["u_v_idx"]
+        split_pack.update({
+            "u_v_train": u_v_idx[idx_train],
+            "u_v_val": u_v_idx[idx_val],
+            "u_v_test": u_v_idx[idx_test],
+        })
+
+        if "u_v" in feat.columns:
+            u_v_raw = feat["u_v"].to_numpy()
+            split_pack.update({
+                "u_v_train_raw": u_v_raw[idx_train],
+                "u_v_val_raw": u_v_raw[idx_val],
+                "u_v_test_raw": u_v_raw[idx_test],
+            })
+
     if "Energy" in feat.columns:
         E_raw = feat["Energy"].to_numpy()
         split_pack["E_train_raw"] = E_raw[idx_train]
@@ -225,9 +338,11 @@ def frac_per_type(y_idx, n_types):
 
 
 def report_split_summary(split_pack, n_types):
-    print("Train:", split_pack["X_cont_train"].shape,
-          "Val:", split_pack["X_cont_val"].shape,
-          "Test:", split_pack["X_cont_test"].shape)
+    print(
+        "Train:", split_pack["X_cont_train"].shape,
+        "Val:", split_pack["X_cont_val"].shape,
+        "Test:", split_pack["X_cont_test"].shape,
+    )
 
     print("\nType distribution check:")
     print("Train:", frac_per_type(split_pack["y_train"], n_types))
@@ -238,7 +353,25 @@ def report_split_summary(split_pack, n_types):
 def scale_continuous_features(split_pack, scale_cols=(0,)):
     """
     Scale selected continuous features using TRAIN only.
+
+    For v0.7 continuous geometry, use:
+        scale_cols=()
+
+    because u_r_q and u_v_q are already quantile-normalized.
     """
+    scale_cols = tuple(scale_cols)
+
+    if len(scale_cols) == 0:
+        return {
+            **split_pack,
+            "X_cont_train_s": split_pack["X_cont_train"].copy().astype(np.float32),
+            "X_cont_val_s": split_pack["X_cont_val"].copy().astype(np.float32),
+            "X_cont_test_s": split_pack["X_cont_test"].copy().astype(np.float32),
+            "scaler": None,
+            "scaler_sr": None,
+            "scale_cols": (),
+        }
+
     scaler = StandardScaler()
     scaler.fit(split_pack["X_cont_train"][:, list(scale_cols)])
 
@@ -258,41 +391,56 @@ def scale_continuous_features(split_pack, scale_cols=(0,)):
         "X_cont_train_s": X_cont_train_s,
         "X_cont_val_s": X_cont_val_s,
         "X_cont_test_s": X_cont_test_s,
+        "scaler": scaler,
         "scaler_sr": scaler,
-        "scale_cols": tuple(scale_cols),
+        "scale_cols": scale_cols,
     }
 
     if 0 in scale_cols:
-        out["s_r_mean"] = float(scaler.mean_[list(scale_cols).index(0)])
-        out["s_r_std"] = float(np.sqrt(scaler.var_[list(scale_cols).index(0)]))
+        idx0 = list(scale_cols).index(0)
+        out["s_r_mean"] = float(scaler.mean_[idx0])
+        out["s_r_std"] = float(np.sqrt(scaler.var_[idx0]))
 
     return out
 
 
 def report_scaled_features(scaled_pack):
-    scaler = scaled_pack["scaler_sr"]
+    cont_cols = scaled_pack.get("cont_cols", None)
+
+    if scaled_pack.get("scaler", None) is None:
+        print("No StandardScaler applied.")
+        print("scale_cols:", scaled_pack["scale_cols"])
+
+        print("\n--- Train continuous means/std ---")
+        X = scaled_pack["X_cont_train_s"]
+        for i in range(X.shape[1]):
+            name = cont_cols[i] if cont_cols is not None else f"col_{i}"
+            print(f"{name:>10s}: mean={X[:, i].mean(): .6f}  std={X[:, i].std(): .6f}")
+        return
+
+    scaler = scaled_pack["scaler"]
+
     print("Scaler mean:", scaler.mean_)
     print("Scaler std :", np.sqrt(scaler.var_))
+    print("scale_cols :", scaled_pack["scale_cols"])
 
     print("\n--- RAW ranges ---")
-    print("s_r RAW train:", scaled_pack["X_cont_train"][:, 0].min(), scaled_pack["X_cont_train"][:, 0].max())
+    for i in range(scaled_pack["X_cont_train"].shape[1]):
+        name = cont_cols[i] if cont_cols is not None else f"col_{i}"
+        x = scaled_pack["X_cont_train"][:, i]
+        print(f"{name:>10s} RAW train: {x.min()}  {x.max()}")
 
     print("\n--- SCALED ranges ---")
-    print("s_r scaled train:", scaled_pack["X_cont_train_s"][:, 0].min(), scaled_pack["X_cont_train_s"][:, 0].max())
+    for i in range(scaled_pack["X_cont_train_s"].shape[1]):
+        name = cont_cols[i] if cont_cols is not None else f"col_{i}"
+        x = scaled_pack["X_cont_train_s"][:, i]
+        print(f"{name:>10s} scaled train: {x.min()}  {x.max()}")
 
-    print("\n--- Means/std AFTER scaling (train only) ---")
-    print("s_r : mean =", scaled_pack["X_cont_train_s"][:, 0].mean(),
-          "std =", scaled_pack["X_cont_train_s"][:, 0].std())
-
-    print("\n--- Angular features remain unscaled ---")
-    print("cphi_r: mean =", scaled_pack["X_cont_train_s"][:, 1].mean(),
-          "std =", scaled_pack["X_cont_train_s"][:, 1].std())
-    print("sphi_r: mean =", scaled_pack["X_cont_train_s"][:, 2].mean(),
-          "std =", scaled_pack["X_cont_train_s"][:, 2].std())
-    print("cphi_v: mean =", scaled_pack["X_cont_train_s"][:, 3].mean(),
-          "std =", scaled_pack["X_cont_train_s"][:, 3].std())
-    print("sphi_v: mean =", scaled_pack["X_cont_train_s"][:, 4].mean(),
-          "std =", scaled_pack["X_cont_train_s"][:, 4].std())
+    print("\n--- Means/std AFTER scaling ---")
+    for i in range(scaled_pack["X_cont_train_s"].shape[1]):
+        name = cont_cols[i] if cont_cols is not None else f"col_{i}"
+        x = scaled_pack["X_cont_train_s"][:, i]
+        print(f"{name:>10s}: mean={x.mean(): .6f}  std={x.std(): .6f}")
 
 
 def to_one_hot(y_idx, n_types):
@@ -300,12 +448,21 @@ def to_one_hot(y_idx, n_types):
     return tf.one_hot(y_idx, depth=n_types, dtype=tf.float32)
 
 
-def build_conditioning_and_weights(scaled_pack, n_types, idx_to_type=None, alpha=0.5):
+def build_conditioning_and_weights(
+    scaled_pack,
+    n_types,
+    idx_to_type=None,
+    alpha=0.5,
+):
     cond_train = to_one_hot(scaled_pack["y_train"], n_types)
     cond_val = to_one_hot(scaled_pack["y_val"], n_types)
     cond_test = to_one_hot(scaled_pack["y_test"], n_types)
 
-    counts_train = np.bincount(scaled_pack["y_train"], minlength=n_types).astype(np.float64)
+    counts_train = np.bincount(
+        scaled_pack["y_train"],
+        minlength=n_types,
+    ).astype(np.float64)
+
     freq_train = counts_train / counts_train.sum()
 
     w = (1.0 / np.maximum(freq_train, 1e-12)) ** alpha
@@ -338,8 +495,10 @@ def report_conditioning(condition_pack, n_types):
     if "idx_to_type" in condition_pack:
         print("\nClass fractions in train:")
         for i in range(n_types):
-            print(f"{condition_pack['idx_to_type'][i]}:",
-                  condition_pack["cond_train"][:, i].numpy().mean())
+            print(
+                f"{condition_pack['idx_to_type'][i]}:",
+                condition_pack["cond_train"][:, i].numpy().mean(),
+            )
 
     print("\nClass counts:", condition_pack["counts_train"])
     print("Class frequencies:", condition_pack["freq_train"])
@@ -350,7 +509,22 @@ def make_dummy_targets(n):
     return tf.zeros((n, 1), dtype=tf.float32)
 
 
-def build_tf_datasets(condition_pack, batch_size=4096, shuffle_buffer_cap=200_000):
+def build_tf_datasets(
+    condition_pack,
+    batch_size=4096,
+    shuffle_buffer_cap=200_000,
+):
+    """
+    Build TensorFlow datasets.
+
+    Legacy discrete-u_v output batch:
+        (X_cont, E_idx, u_v_idx, cond), dummy
+
+    v0.7 continuous-geometry output batch:
+        (X_cont, E_idx, cond), dummy
+    """
+    dataset_mode = condition_pack.get("dataset_mode", "discrete_uv")
+
     X_cont_train_s = condition_pack["X_cont_train_s"].astype(np.float32)
     X_cont_val_s = condition_pack["X_cont_val_s"].astype(np.float32)
     X_cont_test_s = condition_pack["X_cont_test_s"].astype(np.float32)
@@ -359,38 +533,52 @@ def build_tf_datasets(condition_pack, batch_size=4096, shuffle_buffer_cap=200_00
     E_val = condition_pack["E_val"].astype(np.int32)
     E_test = condition_pack["E_test"].astype(np.int32)
 
-    u_v_train = condition_pack["u_v_train"].astype(np.int32)
-    u_v_val = condition_pack["u_v_val"].astype(np.int32)
-    u_v_test = condition_pack["u_v_test"].astype(np.int32)
-
     cond_train = condition_pack["cond_train"]
     cond_val = condition_pack["cond_val"]
     cond_test = condition_pack["cond_test"]
 
     shuffle_buffer = min(len(X_cont_train_s), shuffle_buffer_cap)
 
+    if dataset_mode == "discrete_uv":
+        u_v_train = condition_pack["u_v_train"].astype(np.int32)
+        u_v_val = condition_pack["u_v_val"].astype(np.int32)
+        u_v_test = condition_pack["u_v_test"].astype(np.int32)
+
+        train_inputs = (X_cont_train_s, E_train, u_v_train, cond_train)
+        val_inputs = (X_cont_val_s, E_val, u_v_val, cond_val)
+        test_inputs = (X_cont_test_s, E_test, u_v_test, cond_test)
+
+    elif dataset_mode == "continuous_geometry":
+        train_inputs = (X_cont_train_s, E_train, cond_train)
+        val_inputs = (X_cont_val_s, E_val, cond_val)
+        test_inputs = (X_cont_test_s, E_test, cond_test)
+
+    else:
+        raise ValueError(f"Unknown dataset_mode: {dataset_mode}")
+
     train_ds = tf.data.Dataset.from_tensor_slices(
-        (
-            (X_cont_train_s, E_train, u_v_train, cond_train),
-            make_dummy_targets(len(X_cont_train_s))
-        )
-    ).shuffle(shuffle_buffer, reshuffle_each_iteration=True).batch(
-        batch_size, drop_remainder=False
+        (train_inputs, make_dummy_targets(len(X_cont_train_s)))
+    ).shuffle(
+        shuffle_buffer,
+        reshuffle_each_iteration=True,
+    ).batch(
+        batch_size,
+        drop_remainder=False,
     ).prefetch(tf.data.AUTOTUNE)
 
     val_ds = tf.data.Dataset.from_tensor_slices(
-        (
-            (X_cont_val_s, E_val, u_v_val, cond_val),
-            make_dummy_targets(len(X_cont_val_s))
-        )
-    ).batch(batch_size, drop_remainder=False).prefetch(tf.data.AUTOTUNE)
+        (val_inputs, make_dummy_targets(len(X_cont_val_s)))
+    ).batch(
+        batch_size,
+        drop_remainder=False,
+    ).prefetch(tf.data.AUTOTUNE)
 
     test_ds = tf.data.Dataset.from_tensor_slices(
-        (
-            (X_cont_test_s, E_test, u_v_test, cond_test),
-            make_dummy_targets(len(X_cont_test_s))
-        )
-    ).batch(batch_size, drop_remainder=False).prefetch(tf.data.AUTOTUNE)
+        (test_inputs, make_dummy_targets(len(X_cont_test_s)))
+    ).batch(
+        batch_size,
+        drop_remainder=False,
+    ).prefetch(tf.data.AUTOTUNE)
 
     return {
         **condition_pack,
@@ -402,17 +590,28 @@ def build_tf_datasets(condition_pack, batch_size=4096, shuffle_buffer_cap=200_00
 
 
 def report_tf_datasets(dataset_tf_pack):
+    dataset_mode = dataset_tf_pack.get("dataset_mode", "discrete_uv")
+
     print("\nDatasets ready.")
+    print("Dataset mode:", dataset_mode)
     print("Train batches:", tf.data.experimental.cardinality(dataset_tf_pack["train_ds"]).numpy())
     print("Val batches  :", tf.data.experimental.cardinality(dataset_tf_pack["val_ds"]).numpy())
     print("Test batches :", tf.data.experimental.cardinality(dataset_tf_pack["test_ds"]).numpy())
 
-    for (xb_cont, eb, uvb, cb), _ in dataset_tf_pack["train_ds"].take(1):
-        print("\nBatch check:")
-        print("X_cont batch shape :", xb_cont.shape)
-        print("E_idx batch shape  :", eb.shape)
-        print("u_v_idx batch shape:", uvb.shape)
-        print("cond batch shape   :", cb.shape)
+    if dataset_mode == "discrete_uv":
+        for (xb_cont, eb, uvb, cb), _ in dataset_tf_pack["train_ds"].take(1):
+            print("\nBatch check:")
+            print("X_cont batch shape :", xb_cont.shape)
+            print("E_idx batch shape  :", eb.shape)
+            print("u_v_idx batch shape:", uvb.shape)
+            print("cond batch shape   :", cb.shape)
+
+    elif dataset_mode == "continuous_geometry":
+        for (xb_cont, eb, cb), _ in dataset_tf_pack["train_ds"].take(1):
+            print("\nBatch check:")
+            print("X_cont batch shape:", xb_cont.shape)
+            print("E_idx batch shape :", eb.shape)
+            print("cond batch shape  :", cb.shape)
 
 
 def report_energy_binning_diagnostics(

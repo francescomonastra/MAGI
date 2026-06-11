@@ -49,8 +49,17 @@ from .data import (
     build_energy_bins,
     build_feature_dataframe,
     report_feature_dataframe,
+    fit_quantile_geometry_transforms,
+
+    # v0.6
     filter_particle_types_and_discretize_uv,
     report_discretized_features,
+
+    # v0.7
+    filter_particle_types_continuous_geometry,
+    report_continuous_geometry_features,
+
+    # shared
     split_feature_data,
     report_split_summary,
     scale_continuous_features,
@@ -147,8 +156,17 @@ __all__ = [
     "build_energy_bins",
     "build_feature_dataframe",
     "report_feature_dataframe",
+    "fit_quantile_geometry_transforms",
+
+    # v0.6
     "filter_particle_types_and_discretize_uv",
     "report_discretized_features",
+
+    # v0.7
+    "filter_particle_types_continuous_geometry",
+    "report_continuous_geometry_features",
+
+    # shared
     "split_feature_data",
     "report_split_summary",
     "scale_continuous_features",
@@ -159,6 +177,7 @@ __all__ = [
     "build_tf_datasets",
     "report_tf_datasets",
     "report_energy_binning_diagnostics",
+    "fit_quantile_geometry_transforms",
     "sample_types",
     "one_hot_from_idx",
     "energy_from_idx",

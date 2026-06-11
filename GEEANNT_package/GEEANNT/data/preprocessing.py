@@ -4,6 +4,7 @@ Preprocessing and physical feature construction for GEEANNT.
 
 import numpy as np
 import pandas as pd
+import sklearn.preprocessing
 
 
 def build_physical_features(
@@ -21,24 +22,24 @@ def build_physical_features(
     df : pd.DataFrame
         Input dataframe with columns:
         ParticleName, Energy, X, Y, Z, Vx, Vy, Vz
+
     center : tuple[float, float, float]
-        Sphere center.
+        Sphere center in mm.
+
     radius : float
-        Sphere radius.
+        Sphere radius in mm.
+
     eps : float
         Numerical stability constant.
+
     drop_invalid_energy : bool
         If True, remove rows with E <= 0 or non-finite energy.
 
     Returns
     -------
     dict
-        Dictionary containing:
-        - cleaned dataframe
-        - raw/projected coordinates
-        - normalized directions
-        - engineered features
-        - diagnostic arrays
+        Dictionary containing cleaned dataframe, physical features,
+        projected coordinates, normalized directions and diagnostics.
     """
     C = np.asarray(center, dtype=np.float64)
     R = float(radius)
@@ -103,10 +104,21 @@ def build_physical_features(
         "ParticleName": df["ParticleName"].astype(str).to_numpy(),
         "Energy": E.astype(np.float64),
         "logE": logE.astype(np.float64),
+
+        # Radial position features
+        "u_r": u_r.astype(np.float64),
         "s_r": s_r.astype(np.float64),
+
+        # Angular position features
+        "phi_r": phi_r.astype(np.float64),
         "cphi_r": cphi_r.astype(np.float64),
         "sphi_r": sphi_r.astype(np.float64),
+
+        # Direction cosine feature
         "u_v": u_v.astype(np.float64),
+
+        # Angular direction features
+        "phi_v": phi_v.astype(np.float64),
         "cphi_v": cphi_v.astype(np.float64),
         "sphi_v": sphi_v.astype(np.float64),
     })
@@ -117,17 +129,25 @@ def build_physical_features(
         "center": C,
         "radius": R,
         "raw": {
-            "x": x, "y": y, "z": z,
-            "vx": vx, "vy": vy, "vz": vz,
+            "x": x,
+            "y": y,
+            "z": z,
+            "vx": vx,
+            "vy": vy,
+            "vz": vz,
             "r": r,
             "vnorm": vnorm,
         },
         "projected": {
-            "x": x_proj, "y": y_proj, "z": z_proj,
+            "x": x_proj,
+            "y": y_proj,
+            "z": z_proj,
             "r": r_proj,
         },
         "normalized_direction": {
-            "vx": vx_hat, "vy": vy_hat, "vz": vz_hat,
+            "vx": vx_hat,
+            "vy": vy_hat,
+            "vz": vz_hat,
             "vnorm": vnorm_hat,
         },
         "derived": {
@@ -156,38 +176,73 @@ def print_physical_summary(prep):
     R = prep["radius"]
 
     print("\n--- RAW sphere check ---")
-    print("r: mean =", raw["r"].mean(), "std =", raw["r"].std(),
-          "min =", raw["r"].min(), "max =", raw["r"].max())
+    print(
+        "r: mean =", raw["r"].mean(),
+        "std =", raw["r"].std(),
+        "min =", raw["r"].min(),
+        "max =", raw["r"].max(),
+    )
     print("Mean absolute deviation from R:", np.mean(np.abs(raw["r"] - R)))
 
     print("\n--- RAW direction norm check ---")
-    print("||v||: mean =", raw["vnorm"].mean(), "std =", raw["vnorm"].std(),
-          "min =", raw["vnorm"].min(), "max =", raw["vnorm"].max())
+    print(
+        "||v||: mean =", raw["vnorm"].mean(),
+        "std =", raw["vnorm"].std(),
+        "min =", raw["vnorm"].min(),
+        "max =", raw["vnorm"].max(),
+    )
     print("Mean absolute deviation from 1:", np.mean(np.abs(raw["vnorm"] - 1.0)))
 
     print("\n--- PROJECTED sphere check ---")
-    print("r_proj: mean =", proj["r"].mean(), "std =", proj["r"].std(),
-          "min =", proj["r"].min(), "max =", proj["r"].max())
+    print(
+        "r_proj: mean =", proj["r"].mean(),
+        "std =", proj["r"].std(),
+        "min =", proj["r"].min(),
+        "max =", proj["r"].max(),
+    )
     print("Mean absolute deviation from R:", np.mean(np.abs(proj["r"] - R)))
 
     print("\n--- RENORMALIZED direction check ---")
-    print("||vhat||: mean =", normdir["vnorm"].mean(), "std =", normdir["vnorm"].std(),
-          "min =", normdir["vnorm"].min(), "max =", normdir["vnorm"].max())
+    print(
+        "||vhat||: mean =", normdir["vnorm"].mean(),
+        "std =", normdir["vnorm"].std(),
+        "min =", normdir["vnorm"].min(),
+        "max =", normdir["vnorm"].max(),
+    )
     print("Mean absolute deviation from 1:", np.mean(np.abs(normdir["vnorm"] - 1.0)))
 
     print("\n--- Energy check ---")
-    print("E: min =", feat["Energy"].min(), "max =", feat["Energy"].max(),
-          "#E<=0 =", np.sum(feat["Energy"] <= 0))
+    print(
+        "E: min =", feat["Energy"].min(),
+        "max =", feat["Energy"].max(),
+        "#E<=0 =", np.sum(feat["Energy"] <= 0),
+    )
 
-    print("\n--- Check u_v ---")
-    print("u_v: min =", feat["u_v"].min(),
-          "max =", feat["u_v"].max(),
-          "mean =", feat["u_v"].mean(),
-          "std =", feat["u_v"].std())
+    print("\n--- u_r check ---")
+    print(
+        "u_r: min =", feat["u_r"].min(),
+        "max =", feat["u_r"].max(),
+        "mean =", feat["u_r"].mean(),
+        "std =", feat["u_r"].std(),
+    )
+
+    print("\n--- u_v check ---")
+    print(
+        "u_v: min =", feat["u_v"].min(),
+        "max =", feat["u_v"].max(),
+        "mean =", feat["u_v"].mean(),
+        "std =", feat["u_v"].std(),
+    )
     print("fraction u_v > 0 =", np.mean(feat["u_v"] > 0))
 
 
-def build_energy_bins(E, mode, bin_width=0.5, n_bins=512, min_counts=20):
+def build_energy_bins(
+    E,
+    mode,
+    bin_width=0.5,
+    n_bins=512,
+    min_counts=20,
+):
     """
     Build energy bin edges according to the selected mode.
 
@@ -195,15 +250,19 @@ def build_energy_bins(E, mode, bin_width=0.5, n_bins=512, min_counts=20):
     ----------
     E : array-like
         Physical energy values in MeV.
+
     mode : str
         One of:
           - "fixed_width"
           - "min_counts"
           - "log_fixed_count"
+
     bin_width : float
         Fixed bin width in MeV for "fixed_width".
+
     n_bins : int
         Initial / target number of bins.
+
     min_counts : int
         Minimum counts per bin for "min_counts".
 
@@ -244,7 +303,6 @@ def build_energy_bins(E, mode, bin_width=0.5, n_bins=512, min_counts=20):
         i = 0
         while i < len(hist):
             if hist[i] < min_counts and len(hist) > 1:
-
                 if i == 0:
                     hist[1] += hist[0]
                     hist = np.delete(hist, 0)
@@ -271,9 +329,42 @@ def build_energy_bins(E, mode, bin_width=0.5, n_bins=512, min_counts=20):
         bins = np.array(edges, dtype=np.float64)
 
     else:
-        raise ValueError("Invalid energy binning mode.")
+        raise ValueError(
+            "Invalid energy binning mode. Use "
+            "'fixed_width', 'min_counts', or 'log_fixed_count'."
+        )
 
     return bins
+
+
+def _fit_quantile_column(
+    values,
+    n_quantiles=10000,
+    random_state=42,
+    output_distribution="normal",
+):
+    """
+    Fit a QuantileTransformer to one 1D feature array.
+
+    Returns
+    -------
+    transformed : np.ndarray
+        Transformed values as float32.
+
+    transformer : sklearn.preprocessing.QuantileTransformer
+        Fitted transformer.
+    """
+    values = np.asarray(values, dtype=np.float64).reshape(-1, 1)
+
+    qt = sklearn.preprocessing.QuantileTransformer(
+        n_quantiles=min(int(n_quantiles), len(values)),
+        output_distribution=output_distribution,
+        random_state=random_state,
+    )
+
+    transformed = qt.fit_transform(values).reshape(-1).astype(np.float32)
+
+    return transformed, qt
 
 
 def build_feature_dataframe(
@@ -284,6 +375,9 @@ def build_feature_dataframe(
     bin_width=0.5,
     n_bins=512,
     min_counts=20,
+    geometry_transform="arctanh_uv_discrete",
+    n_quantiles=10000,
+    random_state=42,
 ):
     """
     Build the final feature dataframe used before train/val/test splitting.
@@ -292,21 +386,47 @@ def build_feature_dataframe(
     ----------
     prep : dict
         Output of build_physical_features().
+
     energy_binning_mode : str
         Energy binning mode:
         - "fixed_width"
         - "min_counts"
         - "log_fixed_count"
+
     e_min_cut : float or None
         Optional lower energy cut in MeV.
+
     e_max_cut : float or None
         Optional upper energy cut in MeV.
+
     bin_width : float
         Bin width for fixed-width energy binning.
+
     n_bins : int
         Number of bins for fixed-count/log binning.
+
     min_counts : int
         Minimum counts per bin for min-counts mode.
+
+    geometry_transform : str
+        Geometry preprocessing mode.
+
+        Supported:
+        - "arctanh_uv_discrete":
+            legacy mode.
+            Uses s_r = arctanh(u_r), keeps u_v raw for later discretization.
+
+        - "quantile_u_r_u_v":
+            v0.7a mode.
+            Uses QuantileTransformer on u_r and u_v.
+            The final continuous geometry variables are:
+            u_r_q, u_v_q, cphi_r, sphi_r, cphi_v, sphi_v
+
+    n_quantiles : int
+        Number of quantiles for QuantileTransformer.
+
+    random_state : int
+        Random state for QuantileTransformer.
 
     Returns
     -------
@@ -317,6 +437,9 @@ def build_feature_dataframe(
         - n_energy_bins : int
         - mask_energy : np.ndarray
         - filtered_prep : dict
+        - geometry_transform : str
+        - quantile_transformers : dict
+        - geometry_metadata : dict
     """
     df = prep["dataframe"].copy()
     feat0 = prep["features"].copy()
@@ -349,16 +472,89 @@ def build_feature_dataframe(
 
     n_energy_bins = len(energy_bins) - 1
 
-    feat = pd.DataFrame({
+    geometry_transform = str(geometry_transform)
+
+    quantile_transformers = {}
+
+    geometry_metadata = {
+        "geometry_transform": geometry_transform,
+    }
+
+    if geometry_transform == "arctanh_uv_discrete":
+        geom_cols = {
+            "s_r": feat0["s_r"].to_numpy(dtype=np.float32),
+            "u_v": feat0["u_v"].to_numpy(dtype=np.float32),
+        }
+
+        geometry_metadata.update({
+            "X_cont_cols": [
+                "s_r",
+                "cphi_r",
+                "sphi_r",
+                "cphi_v",
+                "sphi_v",
+            ],
+            "u_v_mode": "raw_for_discretization",
+        })
+
+    elif geometry_transform == "quantile_u_r_u_v":
+        u_r_q, qt_u_r = _fit_quantile_column(
+            feat0["u_r"].to_numpy(dtype=np.float64),
+            n_quantiles=n_quantiles,
+            random_state=random_state,
+            output_distribution="normal",
+        )
+
+        u_v_q, qt_u_v = _fit_quantile_column(
+            feat0["u_v"].to_numpy(dtype=np.float64),
+            n_quantiles=n_quantiles,
+            random_state=random_state,
+            output_distribution="normal",
+        )
+
+        geom_cols = {
+            "u_r_q": u_r_q,
+            "u_v_q": u_v_q,
+        }
+
+        quantile_transformers = {
+            "qt_u_r": qt_u_r,
+            "qt_u_v": qt_u_v,
+        }
+
+        geometry_metadata.update({
+            "quantile_output_distribution": "normal",
+            "quantile_n_quantiles": min(int(n_quantiles), len(feat0)),
+            "random_state": random_state,
+            "X_cont_cols": [
+                "u_r_q",
+                "u_v_q",
+                "cphi_r",
+                "sphi_r",
+                "cphi_v",
+                "sphi_v",
+            ],
+        })
+
+    else:
+        raise ValueError(
+            "Invalid geometry_transform. Use "
+            "'arctanh_uv_discrete' or 'quantile_u_r_u_v'."
+        )
+
+    feat_dict = {
         "ParticleName": feat0["ParticleName"].astype(str).to_numpy(),
         "E_idx": energy_idx.astype(np.int32),
-        "s_r": feat0["s_r"].to_numpy(dtype=np.float32),
+
         "cphi_r": feat0["cphi_r"].to_numpy(dtype=np.float32),
         "sphi_r": feat0["sphi_r"].to_numpy(dtype=np.float32),
-        "u_v": feat0["u_v"].to_numpy(dtype=np.float32),
         "cphi_v": feat0["cphi_v"].to_numpy(dtype=np.float32),
         "sphi_v": feat0["sphi_v"].to_numpy(dtype=np.float32),
-    })
+    }
+
+    feat_dict.update(geom_cols)
+
+    feat = pd.DataFrame(feat_dict)
 
     filtered_prep = {
         **prep,
@@ -372,6 +568,9 @@ def build_feature_dataframe(
         "n_energy_bins": n_energy_bins,
         "mask_energy": mask_energy,
         "filtered_prep": filtered_prep,
+        "geometry_transform": geometry_transform,
+        "quantile_transformers": quantile_transformers,
+        "geometry_metadata": geometry_metadata,
         "energy_config": {
             "mode": energy_binning_mode,
             "e_min_cut": e_min_cut,
@@ -389,38 +588,137 @@ def report_feature_dataframe(feature_pack):
     """
     feat = feature_pack["feat"]
     energy_bins = feature_pack["energy_bins"]
+    geometry_transform = feature_pack.get("geometry_transform", "unknown")
 
     print("\nfeat shape:", feat.shape)
+    print("geometry_transform:", geometry_transform)
+
     print("\nFirst rows:")
     print(feat.head())
 
     print("\n--- Finite check ---")
-    arr = feat[["s_r", "cphi_r", "sphi_r", "u_v", "cphi_v", "sphi_v"]].to_numpy()
+
+    numeric_cols = [
+        c for c in feat.columns
+        if c not in ["ParticleName"]
+    ]
+
+    arr = feat[numeric_cols].to_numpy(dtype=np.float64)
     bad = ~np.isfinite(arr).all(axis=1)
     print("Rows with NaN/Inf:", np.sum(bad))
 
     print("\n--- Feature ranges ---")
-    for c in ["s_r", "cphi_r", "sphi_r", "u_v", "cphi_v", "sphi_v"]:
-        print(f"{c:>8s} : {feat[c].min()}  {feat[c].max()}")
+    for c in numeric_cols:
+        print(f"{c:>10s} : {feat[c].min()}  {feat[c].max()}")
 
     print("\n--- Unit circle checks ---")
-    cr = np.sqrt(feat["cphi_r"].to_numpy()**2 + feat["sphi_r"].to_numpy()**2)
-    cv = np.sqrt(feat["cphi_v"].to_numpy()**2 + feat["sphi_v"].to_numpy()**2)
+    cr = np.sqrt(
+        feat["cphi_r"].to_numpy()**2
+        + feat["sphi_r"].to_numpy()**2
+    )
+    cv = np.sqrt(
+        feat["cphi_v"].to_numpy()**2
+        + feat["sphi_v"].to_numpy()**2
+    )
 
-    print("position: mean =", cr.mean(), "std =", cr.std(), "min =", cr.min(), "max =", cr.max())
-    print("direction: mean =", cv.mean(), "std =", cv.std(), "min =", cv.min(), "max =", cv.max())
+    print(
+        "position: mean =", cr.mean(),
+        "std =", cr.std(),
+        "min =", cr.min(),
+        "max =", cr.max(),
+    )
+    print(
+        "direction: mean =", cv.mean(),
+        "std =", cv.std(),
+        "min =", cv.min(),
+        "max =", cv.max(),
+    )
 
-    print("\n--- u_v checks ---")
-    print("u_v: min =", feat["u_v"].min(), "max =", feat["u_v"].max())
-    print("u_v mean =", feat["u_v"].mean(), "std =", feat["u_v"].std())
-    print("fraction u_v > 0 =", np.mean(feat["u_v"] > 0))
+    if "u_v" in feat.columns:
+        print("\n--- u_v checks ---")
+        print("u_v: min =", feat["u_v"].min(), "max =", feat["u_v"].max())
+        print("u_v mean =", feat["u_v"].mean(), "std =", feat["u_v"].std())
+        print("fraction u_v > 0 =", np.mean(feat["u_v"] > 0))
+
+    if "u_r_q" in feat.columns:
+        print("\n--- Quantile geometry checks ---")
+        for c in ["u_r_q", "u_v_q"]:
+            print(
+                f"{c}: mean = {feat[c].mean():.6f}, "
+                f"std = {feat[c].std():.6f}, "
+                f"min = {feat[c].min():.6f}, "
+                f"max = {feat[c].max():.6f}"
+            )
 
     print("\n--- Energy bin population ---")
     hist_counts, _ = np.histogram(
         feature_pack["filtered_prep"]["features"]["Energy"].to_numpy(dtype=np.float64),
-        bins=energy_bins
+        bins=energy_bins,
     )
     print("Min counts per bin:", hist_counts.min())
     print("Max counts per bin:", hist_counts.max())
     print("Mean counts per bin:", hist_counts.mean())
     print("Empty bins:", np.sum(hist_counts == 0))
+
+
+def fit_quantile_geometry_transforms(
+    feat,
+    derived=None,
+    n_quantiles=10000,
+    random_state=42,
+):
+    """
+    Standalone helper for exploratory tests.
+
+    Prefer using build_feature_dataframe(..., geometry_transform="quantile_u_r_u_v")
+    for production preprocessing, because it guarantees that energy cuts and
+    quantile fitting are applied consistently.
+    """
+    qt_u_r = sklearn.preprocessing.QuantileTransformer(
+        n_quantiles=min(n_quantiles, len(feat)),
+        output_distribution="normal",
+        random_state=random_state,
+    )
+
+    qt_u_v = sklearn.preprocessing.QuantileTransformer(
+        n_quantiles=min(n_quantiles, len(feat)),
+        output_distribution="normal",
+        random_state=random_state,
+    )
+
+    if "u_r" in feat.columns:
+        u_r = np.asarray(feat["u_r"], dtype=np.float64).reshape(-1, 1)
+    elif derived is not None and "u_r" in derived:
+        u_r = np.asarray(derived["u_r"], dtype=np.float64).reshape(-1, 1)
+    else:
+        raise ValueError("u_r must be present in feat or derived.")
+
+    if "u_v" not in feat.columns:
+        raise ValueError("u_v must be present in feat.")
+
+    u_v = np.asarray(feat["u_v"], dtype=np.float64).reshape(-1, 1)
+
+    feat = feat.copy()
+    feat["u_r_q"] = qt_u_r.fit_transform(u_r).reshape(-1).astype(np.float32)
+    feat["u_v_q"] = qt_u_v.fit_transform(u_v).reshape(-1).astype(np.float32)
+
+    transformers = {
+        "qt_u_r": qt_u_r,
+        "qt_u_v": qt_u_v,
+    }
+
+    metadata = {
+        "geometry_transform": "quantile_u_r_u_v",
+        "quantile_output_distribution": "normal",
+        "quantile_n_quantiles": min(n_quantiles, len(feat)),
+        "X_cont_cols": [
+            "u_r_q",
+            "u_v_q",
+            "cphi_r",
+            "sphi_r",
+            "cphi_v",
+            "sphi_v",
+        ],
+    }
+
+    return feat, transformers, metadata
