@@ -1,5 +1,9 @@
 """
 Training utilities for GEEANNT.
+Compatible with:
+  - v0.6 discrete-u_v models
+  - v0.7 continuous-geometry cos/sin phi models
+  - v0.7.2 continuous-geometry quantile-phi models
 """
 
 from tensorflow import keras

@@ -460,8 +460,9 @@ def load_task_adaptive_model_for_generation(
     Load a saved task-adaptive GEEANNT model for generation.
 
     Supports:
-      - CVAE_CatEnergy_CatUV_TaskAdaptive          v0.6
-      - CVAE_CatEnergy_ContGeom_TaskAdaptive      v0.7
+        - CVAE_CatEnergy_CatUV_TaskAdaptive       v0.6
+        - CVAE_CatEnergy_ContGeom_TaskAdaptive   v0.7
+        - CVAE_CatEnergy_ContPhi_TaskAdaptive    v0.7.2
     """
     import os
     import json
@@ -471,6 +472,7 @@ def load_task_adaptive_model_for_generation(
     from GEEANNT.core import (
         CVAE_CatEnergy_CatUV_TaskAdaptive,
         CVAE_CatEnergy_ContGeom_TaskAdaptive,
+        CVAE_CatEnergy_ContPhi_TaskAdaptive,
     )
 
     weights_path = os.path.join(save_dir, f"{model_name}.weights.h5")
@@ -589,6 +591,65 @@ def load_task_adaptive_model_for_generation(
 
             phi_v_ang_weight=model_config.get("phi_v_ang_weight", 1.2),
             phi_v_mse_weight=model_config.get("phi_v_mse_weight", 0.5),
+
+            stem_width=model_config.get("stem_width", 64),
+            deep_decoder_hidden=tuple(
+                model_config.get("deep_decoder_hidden", (128, 128, 64))
+            ),
+            energy_branch_hidden=tuple(
+                model_config.get("energy_branch_hidden", (48, 48))
+            ),
+        )
+
+        dummy_y_cont = tf.zeros((1, y_cont_dim), dtype=tf.float32)
+        dummy_E = tf.zeros((1,), dtype=tf.int32)
+        dummy_cond = tf.zeros((1, int(n_types)), dtype=tf.float32)
+
+        dummy_E_onehot = tf.one_hot(
+            dummy_E,
+            depth=int(n_energy_bins),
+            dtype=tf.float32,
+        )
+
+        dummy_encoder_input = tf.concat(
+            [dummy_y_cont, dummy_E_onehot, dummy_cond],
+            axis=1,
+        )
+
+        _ = model.encoder(dummy_encoder_input, training=False)
+
+        dummy_z = tf.zeros((1, model.latent_dim), dtype=tf.float32)
+        _ = model.decode(dummy_z, dummy_cond)
+
+    elif model_class == "CVAE_CatEnergy_ContPhi_TaskAdaptive":
+        y_cont_dim = int(model_config.get("y_cont_dim", 4))
+
+        model = CVAE_CatEnergy_ContPhi_TaskAdaptive(
+            n_types=int(n_types),
+            n_energy_bins=int(n_energy_bins),
+            y_cont_dim=y_cont_dim,
+
+            latent_dim=model_config["latent_dim"],
+            hidden=tuple(model_config["hidden"]),
+            beta=model_config["beta"],
+            type_weights=type_weights,
+
+            min_log_sigma=model_config.get("min_log_sigma", -6.0),
+            max_log_sigma=model_config.get("max_log_sigma", 1.5),
+
+            lambda_sigma=model_config.get("lambda_sigma", 2e-3),
+            sigma_target=model_config.get("sigma_target", -2.5),
+
+            w_energy=model_config.get("w_energy", 1.0),
+            w_ur=model_config.get("w_ur", 1.0),
+            w_uv=model_config.get("w_uv", 1.0),
+            w_phi_r=model_config.get("w_phi_r", 1.0),
+            w_phi_v=model_config.get("w_phi_v", 1.0),
+
+            energy_sampling_temperature=model_config.get(
+                "energy_sampling_temperature",
+                1.0,
+            ),
 
             stem_width=model_config.get("stem_width", 64),
             deep_decoder_hidden=tuple(

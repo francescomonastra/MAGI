@@ -417,10 +417,16 @@ def build_feature_dataframe(
             Uses s_r = arctanh(u_r), keeps u_v raw for later discretization.
 
         - "quantile_u_r_u_v":
-            v0.7a mode.
+            v0.7 mode.
             Uses QuantileTransformer on u_r and u_v.
-            The final continuous geometry variables are:
+            Continuous variables:
             u_r_q, u_v_q, cphi_r, sphi_r, cphi_v, sphi_v
+
+        - "quantile_u_r_u_v_phi_r_phi_v":
+            v0.7.2 mode.
+            Uses QuantileTransformer on u_r, u_v, phi_r, phi_v.
+            Continuous variables:
+            u_r_q, u_v_q, phi_r_q, phi_v_q
 
     n_quantiles : int
         Number of quantiles for QuantileTransformer.
@@ -536,21 +542,85 @@ def build_feature_dataframe(
             ],
         })
 
+    elif geometry_transform == "quantile_u_r_u_v_phi_r_phi_v":
+        u_r_q, qt_u_r = _fit_quantile_column(
+            feat0["u_r"].to_numpy(dtype=np.float64),
+            n_quantiles=n_quantiles,
+            random_state=random_state,
+            output_distribution="normal",
+        )
+
+        u_v_q, qt_u_v = _fit_quantile_column(
+            feat0["u_v"].to_numpy(dtype=np.float64),
+            n_quantiles=n_quantiles,
+            random_state=random_state,
+            output_distribution="normal",
+        )
+
+        phi_r_q, qt_phi_r = _fit_quantile_column(
+            feat0["phi_r"].to_numpy(dtype=np.float64),
+            n_quantiles=n_quantiles,
+            random_state=random_state,
+            output_distribution="normal",
+        )
+
+        phi_v_q, qt_phi_v = _fit_quantile_column(
+            feat0["phi_v"].to_numpy(dtype=np.float64),
+            n_quantiles=n_quantiles,
+            random_state=random_state,
+            output_distribution="normal",
+        )
+
+        geom_cols = {
+            "u_r_q": u_r_q,
+            "u_v_q": u_v_q,
+            "phi_r_q": phi_r_q,
+            "phi_v_q": phi_v_q,
+        }
+
+        quantile_transformers = {
+            "qt_u_r": qt_u_r,
+            "qt_u_v": qt_u_v,
+            "qt_phi_r": qt_phi_r,
+            "qt_phi_v": qt_phi_v,
+        }
+
+        geometry_metadata.update({
+            "quantile_output_distribution": "normal",
+            "quantile_n_quantiles": min(int(n_quantiles), len(feat0)),
+            "random_state": random_state,
+            "phi_domain": "[-pi, pi]",
+            "phi_periodic": True,
+            "phi_shift_applied": False,
+            "X_cont_cols": [
+                "u_r_q",
+                "u_v_q",
+                "phi_r_q",
+                "phi_v_q",
+            ],
+        })
+
     else:
         raise ValueError(
             "Invalid geometry_transform. Use "
-            "'arctanh_uv_discrete' or 'quantile_u_r_u_v'."
+            "'arctanh_uv_discrete', 'quantile_u_r_u_v', or 'quantile_u_r_u_v_phi_r_phi_v'."
         )
 
     feat_dict = {
         "ParticleName": feat0["ParticleName"].astype(str).to_numpy(),
         "E_idx": energy_idx.astype(np.int32),
-
-        "cphi_r": feat0["cphi_r"].to_numpy(dtype=np.float32),
-        "sphi_r": feat0["sphi_r"].to_numpy(dtype=np.float32),
-        "cphi_v": feat0["cphi_v"].to_numpy(dtype=np.float32),
-        "sphi_v": feat0["sphi_v"].to_numpy(dtype=np.float32),
     }
+
+    if geometry_transform in [
+        "arctanh_uv_discrete",
+        "quantile_u_r_u_v",
+    ]:
+        feat_dict.update({
+            "cphi_r": feat0["cphi_r"].to_numpy(dtype=np.float32),
+            "sphi_r": feat0["sphi_r"].to_numpy(dtype=np.float32),
+            "cphi_v": feat0["cphi_v"].to_numpy(dtype=np.float32),
+            "sphi_v": feat0["sphi_v"].to_numpy(dtype=np.float32),
+        })
 
     feat_dict.update(geom_cols)
 
@@ -611,28 +681,29 @@ def report_feature_dataframe(feature_pack):
     for c in numeric_cols:
         print(f"{c:>10s} : {feat[c].min()}  {feat[c].max()}")
 
-    print("\n--- Unit circle checks ---")
-    cr = np.sqrt(
-        feat["cphi_r"].to_numpy()**2
-        + feat["sphi_r"].to_numpy()**2
-    )
-    cv = np.sqrt(
-        feat["cphi_v"].to_numpy()**2
-        + feat["sphi_v"].to_numpy()**2
-    )
+    if {"cphi_r", "sphi_r", "cphi_v", "sphi_v"}.issubset(feat.columns):
+        print("\n--- Unit circle checks ---")
+        cr = np.sqrt(
+            feat["cphi_r"].to_numpy()**2
+            + feat["sphi_r"].to_numpy()**2
+        )
+        cv = np.sqrt(
+            feat["cphi_v"].to_numpy()**2
+            + feat["sphi_v"].to_numpy()**2
+        )
 
-    print(
-        "position: mean =", cr.mean(),
-        "std =", cr.std(),
-        "min =", cr.min(),
-        "max =", cr.max(),
-    )
-    print(
-        "direction: mean =", cv.mean(),
-        "std =", cv.std(),
-        "min =", cv.min(),
-        "max =", cv.max(),
-    )
+        print(
+            "position: mean =", cr.mean(),
+            "std =", cr.std(),
+            "min =", cr.min(),
+            "max =", cr.max(),
+        )
+        print(
+            "direction: mean =", cv.mean(),
+            "std =", cv.std(),
+            "min =", cv.min(),
+            "max =", cv.max(),
+        )
 
     if "u_v" in feat.columns:
         print("\n--- u_v checks ---")
@@ -640,9 +711,11 @@ def report_feature_dataframe(feature_pack):
         print("u_v mean =", feat["u_v"].mean(), "std =", feat["u_v"].std())
         print("fraction u_v > 0 =", np.mean(feat["u_v"] > 0))
 
-    if "u_r_q" in feat.columns:
+    q_cols = [c for c in ["u_r_q", "u_v_q", "phi_r_q", "phi_v_q"] if c in feat.columns]
+
+    if len(q_cols) > 0:
         print("\n--- Quantile geometry checks ---")
-        for c in ["u_r_q", "u_v_q"]:
+        for c in q_cols:
             print(
                 f"{c}: mean = {feat[c].mean():.6f}, "
                 f"std = {feat[c].std():.6f}, "
@@ -666,59 +739,115 @@ def fit_quantile_geometry_transforms(
     derived=None,
     n_quantiles=10000,
     random_state=42,
+    include_phi=False,
 ):
     """
     Standalone helper for exploratory tests.
 
-    Prefer using build_feature_dataframe(..., geometry_transform="quantile_u_r_u_v")
-    for production preprocessing, because it guarantees that energy cuts and
-    quantile fitting are applied consistently.
+    Prefer using build_feature_dataframe(...) for production preprocessing.
     """
-    qt_u_r = sklearn.preprocessing.QuantileTransformer(
-        n_quantiles=min(n_quantiles, len(feat)),
-        output_distribution="normal",
-        random_state=random_state,
-    )
-
-    qt_u_v = sklearn.preprocessing.QuantileTransformer(
-        n_quantiles=min(n_quantiles, len(feat)),
-        output_distribution="normal",
-        random_state=random_state,
-    )
+    feat = feat.copy()
 
     if "u_r" in feat.columns:
-        u_r = np.asarray(feat["u_r"], dtype=np.float64).reshape(-1, 1)
+        u_r = np.asarray(feat["u_r"], dtype=np.float64)
     elif derived is not None and "u_r" in derived:
-        u_r = np.asarray(derived["u_r"], dtype=np.float64).reshape(-1, 1)
+        u_r = np.asarray(derived["u_r"], dtype=np.float64)
     else:
         raise ValueError("u_r must be present in feat or derived.")
 
-    if "u_v" not in feat.columns:
-        raise ValueError("u_v must be present in feat.")
+    if "u_v" in feat.columns:
+        u_v = np.asarray(feat["u_v"], dtype=np.float64)
+    elif derived is not None and "u_v" in derived:
+        u_v = np.asarray(derived["u_v"], dtype=np.float64)
+    else:
+        raise ValueError("u_v must be present in feat or derived.")
 
-    u_v = np.asarray(feat["u_v"], dtype=np.float64).reshape(-1, 1)
+    u_r_q, qt_u_r = _fit_quantile_column(
+        u_r,
+        n_quantiles=n_quantiles,
+        random_state=random_state,
+        output_distribution="normal",
+    )
 
-    feat = feat.copy()
-    feat["u_r_q"] = qt_u_r.fit_transform(u_r).reshape(-1).astype(np.float32)
-    feat["u_v_q"] = qt_u_v.fit_transform(u_v).reshape(-1).astype(np.float32)
+    u_v_q, qt_u_v = _fit_quantile_column(
+        u_v,
+        n_quantiles=n_quantiles,
+        random_state=random_state,
+        output_distribution="normal",
+    )
+
+    feat["u_r_q"] = u_r_q
+    feat["u_v_q"] = u_v_q
 
     transformers = {
         "qt_u_r": qt_u_r,
         "qt_u_v": qt_u_v,
     }
 
-    metadata = {
-        "geometry_transform": "quantile_u_r_u_v",
-        "quantile_output_distribution": "normal",
-        "quantile_n_quantiles": min(n_quantiles, len(feat)),
-        "X_cont_cols": [
+    x_cont_cols = [
+        "u_r_q",
+        "u_v_q",
+        "cphi_r",
+        "sphi_r",
+        "cphi_v",
+        "sphi_v",
+    ]
+
+    geometry_transform = "quantile_u_r_u_v"
+
+    if include_phi:
+        if "phi_r" in feat.columns:
+            phi_r = np.asarray(feat["phi_r"], dtype=np.float64)
+        elif derived is not None and "phi_r" in derived:
+            phi_r = np.asarray(derived["phi_r"], dtype=np.float64)
+        else:
+            raise ValueError("phi_r must be present in feat or derived.")
+
+        if "phi_v" in feat.columns:
+            phi_v = np.asarray(feat["phi_v"], dtype=np.float64)
+        elif derived is not None and "phi_v" in derived:
+            phi_v = np.asarray(derived["phi_v"], dtype=np.float64)
+        else:
+            raise ValueError("phi_v must be present in feat or derived.")
+
+        phi_r_q, qt_phi_r = _fit_quantile_column(
+            phi_r,
+            n_quantiles=n_quantiles,
+            random_state=random_state,
+            output_distribution="normal",
+        )
+
+        phi_v_q, qt_phi_v = _fit_quantile_column(
+            phi_v,
+            n_quantiles=n_quantiles,
+            random_state=random_state,
+            output_distribution="normal",
+        )
+
+        feat["phi_r_q"] = phi_r_q
+        feat["phi_v_q"] = phi_v_q
+
+        transformers["qt_phi_r"] = qt_phi_r
+        transformers["qt_phi_v"] = qt_phi_v
+
+        x_cont_cols = [
             "u_r_q",
             "u_v_q",
-            "cphi_r",
-            "sphi_r",
-            "cphi_v",
-            "sphi_v",
-        ],
+            "phi_r_q",
+            "phi_v_q",
+        ]
+
+        geometry_transform = "quantile_u_r_u_v_phi_r_phi_v"
+
+    metadata = {
+        "geometry_transform": geometry_transform,
+        "quantile_output_distribution": "normal",
+        "quantile_n_quantiles": min(int(n_quantiles), len(feat)),
+        "random_state": random_state,
+        "phi_domain": "[-pi, pi]",
+        "phi_periodic": bool(include_phi),
+        "phi_shift_applied": False,
+        "X_cont_cols": x_cont_cols,
     }
 
     return feat, transformers, metadata

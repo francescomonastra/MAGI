@@ -88,6 +88,22 @@ def print_model_structure(model):
         print("\n--- uv_logsigma_head ---")
         print(model.uv_logsigma_head)
 
+    if hasattr(model, "phi_r_mu_head"):
+        print("\n--- phi_r_mu_head ---")
+        print(model.phi_r_mu_head)
+
+    if hasattr(model, "phi_r_logsigma_head"):
+        print("\n--- phi_r_logsigma_head ---")
+        print(model.phi_r_logsigma_head)
+
+    if hasattr(model, "phi_v_mu_head"):
+        print("\n--- phi_v_mu_head ---")
+        print(model.phi_v_mu_head)
+
+    if hasattr(model, "phi_v_logsigma_head"):
+        print("\n--- phi_v_logsigma_head ---")
+        print(model.phi_v_logsigma_head)
+
     # ------------------------------------------------------
     # Final scalar heads
     # ------------------------------------------------------
@@ -260,6 +276,18 @@ def print_trainable_status(model):
     if hasattr(model, "uv_logsigma_head"):
         modules.append(("uv_logsigma_head", model.uv_logsigma_head))
 
+    if hasattr(model, "phi_r_mu_head"):
+        modules.append(("phi_r_mu_head", model.phi_r_mu_head))
+
+    if hasattr(model, "phi_r_logsigma_head"):
+        modules.append(("phi_r_logsigma_head", model.phi_r_logsigma_head))
+
+    if hasattr(model, "phi_v_mu_head"):
+        modules.append(("phi_v_mu_head", model.phi_v_mu_head))
+
+    if hasattr(model, "phi_v_logsigma_head"):
+        modules.append(("phi_v_logsigma_head", model.phi_v_logsigma_head))
+
     for name, module in modules:
 
         print(_module_status_line(name, module))
@@ -344,6 +372,7 @@ def print_model_tree_with_params(model):
     Supports both:
     - CVAE_CatEnergy_CatUV
     - CVAE_CatEnergy_CatUV_TaskAdaptive
+    - CVAE_CatEnergy_ContPhi_TaskAdaptive
     """
     print("\n===== GEEANNT MODEL TREE (WITH PARAMS) =====")
     print(f"{model.__class__.__name__}")
@@ -382,8 +411,15 @@ def print_model_tree_with_params(model):
                     print(_fmt_module_line("sr_mu_head", model.sr_mu_head, prefix="│   │   │   ", connector="├── "))
                 if hasattr(model, "sr_logsigma_head"):
                     print(_fmt_module_line("sr_logsigma_head", model.sr_logsigma_head, prefix="│   │   │   ", connector="└── "))
-            if hasattr(model, "phi_r_head"):
-                print(_fmt_module_line("phi_r_head", model.phi_r_head, prefix="│   │   ", connector="└── "))
+                if hasattr(model, "phi_r_head"):
+                    connector = "└── " if not hasattr(model, "phi_r_mu_head") else "├── "
+                    print(_fmt_module_line("phi_r_head", model.phi_r_head, prefix="│   │   ", connector=connector))
+
+                    if hasattr(model, "phi_r_mu_head"):
+                        print(_fmt_module_line("phi_r_mu_head", model.phi_r_mu_head, prefix="│   │   │   ", connector="├── "))
+
+                    if hasattr(model, "phi_r_logsigma_head"):
+                        print(_fmt_module_line("phi_r_logsigma_head", model.phi_r_logsigma_head, prefix="│   │   │   ", connector="└── "))
 
         if hasattr(model, "direction_branch"):
             print(_fmt_module_line("Direction branch", model.direction_branch, prefix="│   ", connector="└── "))
@@ -391,8 +427,15 @@ def print_model_tree_with_params(model):
                 print(_fmt_module_line("uv_head", model.uv_head, prefix="│       ", connector="├── "))
                 if hasattr(model, "uv_logits_head"):
                     print(_fmt_module_line("uv_logits_head", model.uv_logits_head, prefix="│       │   ", connector="└── "))
-            if hasattr(model, "phi_v_head"):
-                print(_fmt_module_line("phi_v_head", model.phi_v_head, prefix="│       ", connector="└── "))
+                if hasattr(model, "phi_v_head"):
+                    connector = "└── " if not hasattr(model, "phi_v_mu_head") else "├── "
+                    print(_fmt_module_line("phi_v_head", model.phi_v_head, prefix="│       ", connector=connector))
+
+                    if hasattr(model, "phi_v_mu_head"):
+                        print(_fmt_module_line("phi_v_mu_head", model.phi_v_mu_head, prefix="│       │   ", connector="├── "))
+
+                    if hasattr(model, "phi_v_logsigma_head"):
+                        print(_fmt_module_line("phi_v_logsigma_head", model.phi_v_logsigma_head, prefix="│       │   ", connector="└── "))
 
     # ------------------------------------------------------
     # Task-adaptive decoder structure
@@ -426,21 +469,38 @@ def print_model_tree_with_params(model):
                 if hasattr(model, "sr_logsigma_head"):
                     print(_fmt_module_line("sr_logsigma_head", model.sr_logsigma_head, prefix="│   │   │   ", connector="└── "))
             if hasattr(model, "phi_r_head"):
-                print(_fmt_module_line("phi_r_head", model.phi_r_head, prefix="│   │   ", connector="└── "))
+                connector = "└── " if not hasattr(model, "phi_r_mu_head") else "├── "
+                print(_fmt_module_line("phi_r_head", model.phi_r_head, prefix="│   │   ", connector=connector))
+
+                if hasattr(model, "phi_r_mu_head"):
+                    print(_fmt_module_line("phi_r_mu_head", model.phi_r_mu_head, prefix="│   │   │   ", connector="├── "))
+
+                if hasattr(model, "phi_r_logsigma_head"):
+                    print(_fmt_module_line("phi_r_logsigma_head", model.phi_r_logsigma_head, prefix="│   │   │   ", connector="└── "))
 
         if hasattr(model, "direction_branch"):
             print(_fmt_module_line("Direction branch", model.direction_branch, prefix="│   ", connector="└── "))
-            if hasattr(model, "uv_mu_head"):
-                print(_fmt_module_line("uv_mu_head", model.uv_mu_head, prefix="│       │   ", connector="├── "))
-
-            if hasattr(model, "uv_logsigma_head"):
-                print(_fmt_module_line("uv_logsigma_head", model.uv_logsigma_head, prefix="│       │   ", connector="└── "))
             if hasattr(model, "uv_head"):
                 print(_fmt_module_line("uv_head", model.uv_head, prefix="│       ", connector="├── "))
+
                 if hasattr(model, "uv_logits_head"):
                     print(_fmt_module_line("uv_logits_head", model.uv_logits_head, prefix="│       │   ", connector="└── "))
+
+                if hasattr(model, "uv_mu_head"):
+                    print(_fmt_module_line("uv_mu_head", model.uv_mu_head, prefix="│       │   ", connector="├── "))
+
+                if hasattr(model, "uv_logsigma_head"):
+                    print(_fmt_module_line("uv_logsigma_head", model.uv_logsigma_head, prefix="│       │   ", connector="└── "))
+                    
             if hasattr(model, "phi_v_head"):
-                print(_fmt_module_line("phi_v_head", model.phi_v_head, prefix="│       ", connector="└── "))
+                connector = "└── " if not hasattr(model, "phi_v_mu_head") else "├── "
+                print(_fmt_module_line("phi_v_head", model.phi_v_head, prefix="│       ", connector=connector))
+
+                if hasattr(model, "phi_v_mu_head"):
+                    print(_fmt_module_line("phi_v_mu_head", model.phi_v_mu_head, prefix="│       │   ", connector="├── "))
+
+                if hasattr(model, "phi_v_logsigma_head"):
+                    print(_fmt_module_line("phi_v_logsigma_head", model.phi_v_logsigma_head, prefix="│       │   ", connector="└── "))
 
     else:
         print("├── [Unknown decoder structure]")
@@ -462,8 +522,15 @@ def print_model_tree_with_params(model):
     elif hasattr(model, "uv_mu_head"):
         print("│   ├── uv_q   : Gaussian NLL")
 
-    print("│   ├── phi_r  : MSE")
-    print("│   └── phi_v  : weighted (normalized MSE + angular loss)")
+    if hasattr(model, "phi_r_mu_head"):
+        print("│   ├── phi_r_q: Gaussian NLL")
+    else:
+        print("│   ├── phi_r  : MSE")
+
+    if hasattr(model, "phi_v_mu_head"):
+        print("│   └── phi_v_q: Gaussian NLL")
+    else:
+        print("│   └── phi_v  : weighted (normalized MSE + angular loss)")
 
     if hasattr(model, "w_xy"):
         print("│   ├── xy     : geometric xy loss")

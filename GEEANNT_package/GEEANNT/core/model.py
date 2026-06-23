@@ -1954,3 +1954,671 @@ class CVAE_CatEnergy_ContGeom_TaskAdaptive(keras.Model):
             "y_cont": y_cont,
             "params": params,
         }
+    
+
+
+class CVAE_CatEnergy_ContPhi_TaskAdaptive(keras.Model):
+    """
+    Continuous-geometry Task-Adaptive CVAE.
+
+    Continuous targets:
+
+        y_cont = [
+            u_r_q,
+            u_v_q,
+            phi_r_q,
+            phi_v_q,
+        ]
+
+    Categorical targets:
+
+        energy_idx
+    """
+
+    def __init__(
+        self,
+        n_types,
+        n_energy_bins,
+        y_cont_dim=4,
+
+        latent_dim=8,
+        hidden=(128, 128, 64),
+
+        beta=0.1,
+        type_weights=None,
+
+        min_log_sigma=-6.0,
+        max_log_sigma=1.5,
+
+        lambda_sigma=1e-3,
+        sigma_target=-2.0,
+
+        w_energy=1.0,
+        w_ur=1.0,
+        w_uv=1.0,
+        w_phi_r=1.0,
+        w_phi_v=1.0,
+
+        energy_sampling_temperature=1.0,
+
+        stem_width=64,
+        deep_decoder_hidden=(128,128,64),
+        energy_branch_hidden=(48,48),
+    ):
+        super().__init__()
+
+        self.n_types = int(n_types)
+        self.n_energy_bins = int(n_energy_bins)
+        self.y_cont_dim = int(y_cont_dim)
+
+        self.latent_dim = latent_dim
+        self.beta = beta
+
+        self.type_weights = type_weights
+
+        self.min_log_sigma = min_log_sigma
+        self.max_log_sigma = max_log_sigma
+
+        self.lambda_sigma = lambda_sigma
+        self.sigma_target = sigma_target
+
+
+        self.energy_sampling_temperature = energy_sampling_temperature
+
+        self.task_weights = {
+            "energy": float(w_energy),
+            "ur": float(w_ur),
+            "uv": float(w_uv),
+            "phi_r": float(w_phi_r),
+            "phi_v": float(w_phi_v),
+        }
+
+        # =====================================================
+        # Encoder
+        # =====================================================
+
+        enc_in = layers.Input(
+            shape=(
+                self.y_cont_dim
+                + self.n_energy_bins
+                + self.n_types,
+            )
+        )
+
+        x = enc_in
+
+        for h in hidden:
+            x = layers.Dense(h)(x)
+            x = layers.LeakyReLU(0.05)(x)
+
+        z_mean = layers.Dense(latent_dim, name="z_mean")(x)
+        z_logvar = layers.Dense(latent_dim, name="z_logvar")(x)
+
+        self.encoder = keras.Model(
+            enc_in,
+            [z_mean, z_logvar],
+            name="encoder",
+        )
+
+        # =====================================================
+        # Decoder stem
+        # =====================================================
+
+        dec_in = layers.Input(
+            shape=(latent_dim + self.n_types,)
+        )
+
+        stem = layers.Dense(stem_width)(dec_in)
+        stem = layers.LeakyReLU(0.03)(stem)
+
+        self.decoder_stem = keras.Model(
+            dec_in,
+            stem,
+            name="decoder_stem",
+        )
+
+        # =====================================================
+        # Deep trunk
+        # =====================================================
+
+        trunk_in = layers.Input(shape=(stem_width,))
+
+        x = trunk_in
+
+        for h in deep_decoder_hidden:
+            x = layers.Dense(h)(x)
+            x = layers.LeakyReLU(0.03)(x)
+
+        self.decoder_deep_trunk = keras.Model(
+            trunk_in,
+            x,
+            name="decoder_deep_trunk",
+        )
+
+        # =====================================================
+        # Energy branch
+        # =====================================================
+
+        energy_in = layers.Input(shape=(stem_width,))
+
+        x = energy_in
+
+        for h in energy_branch_hidden:
+            x = layers.Dense(h)(x)
+            x = layers.LeakyReLU(0.03)(x)
+
+        self.energy_branch = keras.Model(
+            energy_in,
+            x,
+            name="energy_branch",
+        )
+
+        # =====================================================
+        # Position branch
+        # =====================================================
+
+        self.position_branch = keras.Sequential([
+            layers.Input(shape=(deep_decoder_hidden[-1],)),
+            layers.Dense(128),
+            layers.LeakyReLU(0.03),
+            layers.Dense(128),
+            layers.LeakyReLU(0.03),
+            layers.Dense(64),
+            layers.LeakyReLU(0.03),
+        ])
+
+        # =====================================================
+        # Direction branch
+        # =====================================================
+
+        self.direction_branch = keras.Sequential([
+            layers.Input(shape=(deep_decoder_hidden[-1],)),
+            layers.Dense(128),
+            layers.LeakyReLU(0.03),
+            layers.Dense(128),
+            layers.LeakyReLU(0.03),
+            layers.Dense(64),
+            layers.LeakyReLU(0.03),
+        ])
+
+        # ======================================================
+        # Decoder heads
+        # ======================================================
+        self.energy_logits_head = layers.Dense(
+            self.n_energy_bins,
+            name="energy_logits",
+        )
+
+        # u_r_q Gaussian head
+        self.ur_head = keras.Sequential([
+            layers.Input(shape=(64,)),
+            layers.Dense(128),
+            layers.LeakyReLU(0.05),
+            layers.Dense(64),
+            layers.LeakyReLU(0.05),
+        ], name="ur_head")
+
+        self.ur_mu_head = layers.Dense(1, name="ur_mu")
+        self.ur_logsigma_head = layers.Dense(1, name="ur_logsigma")
+
+        # u_v_q Gaussian head
+        self.uv_head = keras.Sequential([
+            layers.Input(shape=(64,)),
+            layers.Dense(128),
+            layers.LeakyReLU(0.05),
+            layers.Dense(64),
+            layers.LeakyReLU(0.05),
+        ], name="uv_head")
+
+        self.uv_mu_head = layers.Dense(1, name="uv_mu")
+        self.uv_logsigma_head = layers.Dense(1, name="uv_logsigma")
+
+        # phi_r_q Gaussian head
+        self.phi_r_head = keras.Sequential([
+            layers.Input(shape=(64,)),
+            layers.Dense(128),
+            layers.LeakyReLU(0.05),
+            layers.Dense(64),
+            layers.LeakyReLU(0.05),
+        ], name="phi_r_head")
+
+        self.phi_r_mu_head = layers.Dense(1, name="phi_r_mu")
+        self.phi_r_logsigma_head = layers.Dense(1, name="phi_r_logsigma")
+
+
+        # phi_v_q Gaussian head
+        self.phi_v_head = keras.Sequential([
+            layers.Input(shape=(64,)),
+            layers.Dense(128),
+            layers.LeakyReLU(0.05),
+            layers.Dense(64),
+            layers.LeakyReLU(0.05),
+        ], name="phi_v_head")
+
+        self.phi_v_mu_head = layers.Dense(1, name="phi_v_mu")
+        self.phi_v_logsigma_head = layers.Dense(1, name="phi_v_logsigma")
+
+        # ======================================================
+        # Metrics
+        # ======================================================
+        self.loss_tracker = keras.metrics.Mean(name="loss")
+        self.rec_tracker = keras.metrics.Mean(name="rec")
+        self.kl_tracker = keras.metrics.Mean(name="kl")
+
+        self.nll_tracker = keras.metrics.Mean(name="nll")
+        self.sigma_reg_tracker = keras.metrics.Mean(name="sigma_reg")
+
+
+        self.energy_ce_tracker = keras.metrics.Mean(name="energy_ce")
+
+        self.ur_nll_tracker = keras.metrics.Mean(name="ur_nll")
+        self.uv_nll_tracker = keras.metrics.Mean(name="uv_nll")
+
+        self.phi_r_nll_tracker = keras.metrics.Mean(name="phi_r_nll")
+        self.phi_v_nll_tracker = keras.metrics.Mean(name="phi_v_nll")
+
+
+    @property
+    def metrics(self):
+        return [
+            self.loss_tracker,
+            self.rec_tracker,
+            self.kl_tracker,
+            self.nll_tracker,
+            self.sigma_reg_tracker,
+
+            self.energy_ce_tracker,
+            self.ur_nll_tracker,
+            self.uv_nll_tracker,
+            self.phi_r_nll_tracker,
+            self.phi_v_nll_tracker,
+        ]
+
+    # ==========================================================
+    # Task-weight API
+    # ==========================================================
+    def get_task_weight(self, task_name):
+        return float(self.task_weights[task_name])
+
+    def set_task_weight(self, task_name, value):
+        value = float(value)
+        self.task_weights[task_name] = value
+
+        if task_name == "energy":
+            self.w_energy = value
+        elif task_name == "ur":
+            self.w_ur = value
+        elif task_name == "uv":
+            self.w_uv = value
+        elif task_name == "phi_r":
+            self.w_phi_r = value
+        elif task_name == "phi_v":
+            self.w_phi_v = value
+        else:
+            raise ValueError(f"Unknown task name: {task_name}")
+
+    def decay_task_weight(self, task_name, factor=0.5, min_value=0.0):
+        old = self.get_task_weight(task_name)
+        new = max(min_value, old * float(factor))
+        self.set_task_weight(task_name, new)
+        return old, new
+
+    # ==========================================================
+    # Utilities
+    # ==========================================================
+    def sample_z(self, z_mean, z_logvar):
+        eps = tf.random.normal(shape=tf.shape(z_mean))
+        return z_mean + tf.exp(0.5 * z_logvar) * eps
+
+    def _sigma_regularizer(self, params):
+
+        if self.lambda_sigma <= 0:
+            return tf.constant(0.0, dtype=tf.float32)
+
+        regs = []
+
+        for key in [
+            "ur_logsigma",
+            "uv_logsigma",
+            "phi_r_logsigma",
+            "phi_v_logsigma",
+        ]:
+            regs.append(
+                tf.reduce_mean(
+                    tf.square(
+                        tf.nn.relu(params[key] - self.sigma_target)
+                    )
+                )
+            )
+
+        return self.lambda_sigma * tf.add_n(regs)
+
+
+
+    # ==========================================================
+    # Decoder
+    # ==========================================================
+    def _decode_params(self, z, cond, training=False):
+
+        base = tf.concat([z, cond], axis=1)
+
+        stem = self.decoder_stem(base, training=training)
+        deep = self.decoder_deep_trunk(stem, training=training)
+
+        energy_feat = self.energy_branch(stem, training=training)
+
+        pos_feat = self.position_branch(deep, training=training)
+        dir_feat = self.direction_branch(deep, training=training)
+
+        energy_logits = self.energy_logits_head(
+            energy_feat
+        )
+
+        ur_feat = self.ur_head(
+            pos_feat,
+            training=training,
+        )
+
+        ur_mu = self.ur_mu_head(ur_feat)
+
+        ur_logsigma = tf.clip_by_value(
+            self.ur_logsigma_head(ur_feat),
+            self.min_log_sigma,
+            self.max_log_sigma,
+        )
+
+        uv_feat = self.uv_head(
+            dir_feat,
+            training=training,
+        )
+
+        uv_mu = self.uv_mu_head(uv_feat)
+
+        uv_logsigma = tf.clip_by_value(
+            self.uv_logsigma_head(uv_feat),
+            self.min_log_sigma,
+            self.max_log_sigma,
+        )
+
+        phi_r_feat = self.phi_r_head(
+            pos_feat,
+            training=training,
+        )
+
+        phi_r_mu = self.phi_r_mu_head(phi_r_feat)
+
+        phi_r_logsigma = tf.clip_by_value(
+            self.phi_r_logsigma_head(phi_r_feat),
+            self.min_log_sigma,
+            self.max_log_sigma,
+        )
+
+        phi_v_feat = self.phi_v_head(
+            dir_feat,
+            training=training,
+        )
+
+        phi_v_mu = self.phi_v_mu_head(phi_v_feat)
+
+        phi_v_logsigma = tf.clip_by_value(
+            self.phi_v_logsigma_head(phi_v_feat),
+            self.min_log_sigma,
+            self.max_log_sigma,
+        )
+
+        return {
+            "energy_logits": energy_logits,
+
+            "ur_mu": ur_mu,
+            "ur_logsigma": ur_logsigma,
+
+            "uv_mu": uv_mu,
+            "uv_logsigma": uv_logsigma,
+
+            "phi_r_mu": phi_r_mu,
+            "phi_r_logsigma": phi_r_logsigma,
+
+            "phi_v_mu": phi_v_mu,
+            "phi_v_logsigma": phi_v_logsigma,
+        }
+
+    def _reconstruction_terms(self, y_cont_true, E_idx_true, params):
+
+        ur_true = y_cont_true[:, 0:1]
+        uv_true = y_cont_true[:, 1:2]
+        phi_r_true = y_cont_true[:, 2:3]
+        phi_v_true = y_cont_true[:, 3:4]
+
+        energy_ce = tf.nn.sparse_softmax_cross_entropy_with_logits(
+            labels=E_idx_true,
+            logits=params["energy_logits"],
+        )
+
+        ur_nll = tf.squeeze(
+            gaussian_nll(ur_true, params["ur_mu"], params["ur_logsigma"]),
+            axis=1,
+        )
+
+        uv_nll = tf.squeeze(
+            gaussian_nll(uv_true, params["uv_mu"], params["uv_logsigma"]),
+            axis=1,
+        )
+
+        phi_r_nll = tf.squeeze(
+            gaussian_nll(
+                phi_r_true,
+                params["phi_r_mu"],
+                params["phi_r_logsigma"],
+            ),
+            axis=1,
+        )
+
+        phi_v_nll = tf.squeeze(
+            gaussian_nll(
+                phi_v_true,
+                params["phi_v_mu"],
+                params["phi_v_logsigma"],
+            ),
+            axis=1,
+        )
+
+        rec_per = (
+            self.task_weights["energy"] * energy_ce +
+            self.task_weights["ur"]     * ur_nll +
+            self.task_weights["uv"]     * uv_nll +
+            self.task_weights["phi_r"]  * phi_r_nll +
+            self.task_weights["phi_v"]  * phi_v_nll
+        )
+
+        pieces = {
+            "energy_ce": energy_ce,
+            "ur_nll": ur_nll,
+            "uv_nll": uv_nll,
+            "phi_r_nll": phi_r_nll,
+            "phi_v_nll": phi_v_nll,
+        }
+
+        return rec_per, pieces
+
+    # ==========================================================
+    # Keras train/test
+    # ==========================================================
+    def train_step(self, data):
+        (y_cont, E_idx_true, cond), _ = data
+
+        E_onehot = tf.one_hot(
+            E_idx_true,
+            depth=self.n_energy_bins,
+            dtype=tf.float32,
+        )
+
+        x_in = tf.concat([y_cont, E_onehot, cond], axis=1)
+
+        with tf.GradientTape() as tape:
+            z_mean, z_logvar = self.encoder(x_in, training=True)
+            z = self.sample_z(z_mean, z_logvar)
+
+            params = self._decode_params(z, cond, training=True)
+
+            rec_per, pieces = self._reconstruction_terms(
+                y_cont,
+                E_idx_true,
+                params,
+            )
+
+            if self.type_weights is not None:
+                t_idx = tf.argmax(cond, axis=1, output_type=tf.int32)
+                w = tf.gather(self.type_weights, t_idx)
+                rec_per_weighted = rec_per * w
+            else:
+                rec_per_weighted = rec_per
+
+            rec = tf.reduce_mean(rec_per_weighted)
+            nll = tf.reduce_mean(rec_per)
+
+            kl_per = -0.5 * tf.reduce_sum(
+                1.0 + z_logvar - tf.square(z_mean) - tf.exp(z_logvar),
+                axis=1,
+            )
+            kl = tf.reduce_mean(kl_per)
+
+            sigma_reg = self._sigma_regularizer(params)
+
+            loss = rec + self.beta * kl + sigma_reg
+
+        grads = tape.gradient(loss, self.trainable_variables)
+
+        grads_and_vars = []
+        seen = set()
+
+        for g, v in zip(grads, self.trainable_variables):
+            if g is None:
+                continue
+
+            vid = id(v)
+            if vid in seen:
+                continue
+
+            seen.add(vid)
+            grads_and_vars.append((g, v))
+
+        self.optimizer.apply_gradients(grads_and_vars)
+
+        self.loss_tracker.update_state(loss)
+        self.rec_tracker.update_state(rec)
+        self.kl_tracker.update_state(kl)
+        self.nll_tracker.update_state(nll)
+
+        self.sigma_reg_tracker.update_state(sigma_reg)
+
+        self.energy_ce_tracker.update_state(tf.reduce_mean(pieces["energy_ce"]))
+        self.ur_nll_tracker.update_state(tf.reduce_mean(pieces["ur_nll"]))
+        self.uv_nll_tracker.update_state(tf.reduce_mean(pieces["uv_nll"]))
+        self.phi_r_nll_tracker.update_state(tf.reduce_mean(pieces["phi_r_nll"]))
+        self.phi_v_nll_tracker.update_state(tf.reduce_mean(pieces["phi_v_nll"]))
+
+        return {m.name: m.result() for m in self.metrics}
+
+    def test_step(self, data):
+        (y_cont, E_idx_true, cond), _ = data
+
+        E_onehot = tf.one_hot(
+            E_idx_true,
+            depth=self.n_energy_bins,
+            dtype=tf.float32,
+        )
+
+        x_in = tf.concat([y_cont, E_onehot, cond], axis=1)
+
+        z_mean, z_logvar = self.encoder(x_in, training=False)
+        z = self.sample_z(z_mean, z_logvar)
+
+        params = self._decode_params(z, cond, training=False)
+
+        rec_per, pieces = self._reconstruction_terms(
+            y_cont,
+            E_idx_true,
+            params,
+        )
+
+        if self.type_weights is not None:
+            t_idx = tf.argmax(cond, axis=1, output_type=tf.int32)
+            w = tf.gather(self.type_weights, t_idx)
+            rec_per_weighted = rec_per * w
+        else:
+            rec_per_weighted = rec_per
+
+        rec = tf.reduce_mean(rec_per_weighted)
+        nll = tf.reduce_mean(rec_per)
+
+        kl_per = -0.5 * tf.reduce_sum(
+            1.0 + z_logvar - tf.square(z_mean) - tf.exp(z_logvar),
+            axis=1,
+        )
+        kl = tf.reduce_mean(kl_per)
+
+        sigma_reg = self._sigma_regularizer(params)
+
+        loss = rec + self.beta * kl + sigma_reg
+
+        self.loss_tracker.update_state(loss)
+        self.rec_tracker.update_state(rec)
+        self.kl_tracker.update_state(kl)
+        self.nll_tracker.update_state(nll)
+
+        self.sigma_reg_tracker.update_state(sigma_reg)
+
+        self.energy_ce_tracker.update_state(tf.reduce_mean(pieces["energy_ce"]))
+        self.ur_nll_tracker.update_state(tf.reduce_mean(pieces["ur_nll"]))
+        self.uv_nll_tracker.update_state(tf.reduce_mean(pieces["uv_nll"]))
+        self.phi_r_nll_tracker.update_state(tf.reduce_mean(pieces["phi_r_nll"]))
+        self.phi_v_nll_tracker.update_state(tf.reduce_mean(pieces["phi_v_nll"]))
+
+        return {m.name: m.result() for m in self.metrics}
+
+    # ==========================================================
+    # Sampling / generation
+    # ==========================================================
+    @tf.function(reduce_retracing=True)
+    def decode(self, z, cond):
+        return self._decode_params(z, cond, training=False)
+
+    def _sample_energy_from_logits(self, logits):
+        logits = logits / self.energy_sampling_temperature
+        idx = tf.random.categorical(logits, num_samples=1)
+        idx = tf.cast(tf.squeeze(idx, axis=1), tf.int32)
+        return idx
+
+    def generate(self, cond, n_samples):
+        z = tf.random.normal((n_samples, self.latent_dim))
+        params = self.decode(z, cond)
+
+        energy_idx = self._sample_energy_from_logits(params["energy_logits"])
+
+        ur_eps = tf.random.normal(tf.shape(params["ur_mu"]))
+        ur_q = params["ur_mu"] + tf.exp(params["ur_logsigma"]) * ur_eps
+
+        uv_eps = tf.random.normal(tf.shape(params["uv_mu"]))
+        uv_q = params["uv_mu"] + tf.exp(params["uv_logsigma"]) * uv_eps
+
+        phi_r_eps = tf.random.normal(tf.shape(params["phi_r_mu"]))
+        phi_r_q = params["phi_r_mu"] + tf.exp(params["phi_r_logsigma"]) * phi_r_eps
+
+        phi_v_eps = tf.random.normal(tf.shape(params["phi_v_mu"]))
+        phi_v_q = params["phi_v_mu"] + tf.exp(params["phi_v_logsigma"]) * phi_v_eps
+
+        y_cont = tf.concat(
+            [
+                ur_q,
+                uv_q,
+                phi_r_q,
+                phi_v_q,
+            ],
+            axis=1,
+        )
+
+        return {
+            "energy_idx": energy_idx,
+            "y_cont": y_cont,
+            "params": params,
+        }

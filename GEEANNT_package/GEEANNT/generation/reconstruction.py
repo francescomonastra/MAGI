@@ -33,7 +33,10 @@ def reconstruct_generated_features(
     # v0.7 quantile geometry
     qt_u_r=None,
     qt_u_v=None,
+    qt_phi_r=None,
+    qt_phi_v=None,
     geometry_mode=None,
+    geometry_metadata=None,
 ):
     """
     Convert raw generated model outputs into physical feature arrays.
@@ -46,14 +49,37 @@ def reconstruct_generated_features(
       - v0.7 continuous geometry:
           y_cont = [u_r_q, u_v_q, cphi_r, sphi_r, cphi_v, sphi_v]
           u_r/u_v recovered through QuantileTransformer inverse_transform
+
+      - v0.7.2 continuous geometry with quantile phi_r/phi_v:
+          y_cont = [u_r_q, u_v_q, phi_r_q, phi_v_q]
+          u_r/u_v recovered through QuantileTransformer inverse_transform
+          phi_r/phi_v recovered through QuantileTransformer inverse_transform
     """
     from .sampling import energy_from_idx
 
     y_cont_gen_s = gen_pack["y_cont_gen_s"]
     y_cont_gen = y_cont_gen_s.copy()
 
+    if geometry_metadata is not None:
+        geometry_mode = geometry_metadata.get(
+            "geometry_transform",
+            geometry_metadata.get("geometry_mode", geometry_mode),
+        )
+
+        qt_u_r = geometry_metadata.get("qt_u_r", qt_u_r)
+        qt_u_v = geometry_metadata.get("qt_u_v", qt_u_v)
+        qt_phi_r = geometry_metadata.get("qt_phi_r", qt_phi_r)
+        qt_phi_v = geometry_metadata.get("qt_phi_v", qt_phi_v)
+
     if geometry_mode is None:
-        if qt_u_r is not None and qt_u_v is not None:
+        if (
+            qt_u_r is not None
+            and qt_u_v is not None
+            and qt_phi_r is not None
+            and qt_phi_v is not None
+        ):
+            geometry_mode = "quantile_u_r_u_v_phi_r_phi_v"
+        elif qt_u_r is not None and qt_u_v is not None:
             geometry_mode = "quantile_u_r_u_v"
         else:
             geometry_mode = "legacy_sr_discrete_uv"
@@ -68,9 +94,48 @@ def reconstruct_generated_features(
     logE_gen = np.log10(E_gen)
 
     # ======================================================
+    # v0.7.2 quantile geometry + quantile phi
+    # ======================================================
+    if geometry_mode in [
+        "quantile_u_r_u_v_phi_r_phi_v",
+        "continuous_phi",
+        "quantile_phi",
+    ]:
+
+        if qt_u_r is None or qt_u_v is None or qt_phi_r is None or qt_phi_v is None:
+            raise ValueError(
+                "qt_u_r, qt_u_v, qt_phi_r and qt_phi_v are required "
+                "for v0.7.2 quantile-phi reconstruction."
+            )
+
+        u_r_q_gen = y_cont_gen[:, 0]
+        u_v_q_gen = y_cont_gen[:, 1]
+        phi_r_q_gen = y_cont_gen[:, 2]
+        phi_v_q_gen = y_cont_gen[:, 3]
+
+        u_r_gen = _inverse_quantile(qt_u_r, u_r_q_gen)
+        u_v_gen = _inverse_quantile(qt_u_v, u_v_q_gen)
+        phi_r_gen = _inverse_quantile(qt_phi_r, phi_r_q_gen)
+        phi_v_gen = _inverse_quantile(qt_phi_v, phi_v_q_gen)
+
+        u_r_gen = np.clip(u_r_gen, -1.0 + 1e-6, 1.0 - 1e-6)
+        u_v_gen = np.clip(u_v_gen, -1.0 + 1e-6, 1.0 - 1e-6)
+
+        # Wrap angles back to [-pi, pi]
+        phi_r_gen = (phi_r_gen + np.pi) % (2.0 * np.pi) - np.pi
+        phi_v_gen = (phi_v_gen + np.pi) % (2.0 * np.pi) - np.pi
+
+        cphi_r_gen = np.cos(phi_r_gen)
+        sphi_r_gen = np.sin(phi_r_gen)
+        cphi_v_gen = np.cos(phi_v_gen)
+        sphi_v_gen = np.sin(phi_v_gen)
+
+        s_r_gen = np.arctanh(u_r_gen)
+
+    # ======================================================
     # v0.7 quantile geometry
     # ======================================================
-    if geometry_mode in ["quantile_u_r_u_v", "continuous_geometry"]:
+    elif geometry_mode in ["quantile_u_r_u_v", "continuous_geometry"]:
 
         if qt_u_r is None or qt_u_v is None:
             raise ValueError(
@@ -79,6 +144,7 @@ def reconstruct_generated_features(
 
         u_r_q_gen = y_cont_gen[:, 0]
         u_v_q_gen = y_cont_gen[:, 1]
+        
 
         u_r_gen = _inverse_quantile(qt_u_r, u_r_q_gen)
         u_v_gen = _inverse_quantile(qt_u_v, u_v_q_gen)
@@ -90,6 +156,11 @@ def reconstruct_generated_features(
         sphi_r_gen = y_cont_gen[:, 3]
         cphi_v_gen = y_cont_gen[:, 4]
         sphi_v_gen = y_cont_gen[:, 5]
+
+        phi_r_q_gen = None
+        phi_v_q_gen = None
+        phi_r_gen = np.arctan2(sphi_r_gen, cphi_r_gen)
+        phi_v_gen = np.arctan2(sphi_v_gen, cphi_v_gen)
 
         s_r_gen = np.arctanh(u_r_gen)
 
@@ -123,6 +194,10 @@ def reconstruct_generated_features(
 
         u_r_q_gen = None
         u_v_q_gen = None
+        phi_r_q_gen = None
+        phi_v_q_gen = None
+        phi_r_gen = np.arctan2(sphi_r_gen, cphi_r_gen)
+        phi_v_gen = np.arctan2(sphi_v_gen, cphi_v_gen)
 
     else:
         raise ValueError(f"Unknown geometry_mode: {geometry_mode}")
@@ -141,10 +216,17 @@ def reconstruct_generated_features(
 
         "u_r_q_gen": u_r_q_gen if geometry_mode != "legacy_sr_discrete_uv" else None,
         "u_v_q_gen": u_v_q_gen if geometry_mode != "legacy_sr_discrete_uv" else None,
+        "phi_r_q_gen": phi_r_q_gen,
+        "phi_v_q_gen": phi_v_q_gen,
+        "phi_r_gen": phi_r_gen,
+        "phi_v_gen": phi_v_gen,
 
         "s_r_gen": s_r_gen,
         "u_r_gen": u_r_gen,
         "u_v_gen": u_v_gen,
+
+        "phi_r_gen": phi_r_gen,
+        "phi_v_gen": phi_v_gen,
 
         "cphi_r_gen": cphi_r_gen,
         "sphi_r_gen": sphi_r_gen,
@@ -228,6 +310,11 @@ def reconstruct_real_test_physics(
     qt_u_r=None,
     qt_u_v=None,
     geometry_mode=None,
+
+    # v0.7.2 quantile geometry with quantile phi
+    qt_phi_r=None,
+    qt_phi_v=None,
+    geometry_metadata=None,
 ):
     """
     Reconstruct physical quantities from real test-set features.
@@ -238,12 +325,22 @@ def reconstruct_real_test_physics(
 
       - v0.7:
           X_cont_test = [u_r_q, u_v_q, cphi_r, sphi_r, cphi_v, sphi_v]
+    
+      - v0.7.2:
+          X_cont_test = [u_r_q, u_v_q, phi_r_q, phi_v_q]
     """
     C = np.asarray(center, dtype=np.float64)
     R = float(radius)
 
     if geometry_mode is None:
-        if qt_u_r is not None and qt_u_v is not None:
+        if (
+            qt_u_r is not None
+            and qt_u_v is not None
+            and qt_phi_r is not None
+            and qt_phi_v is not None
+        ):
+            geometry_mode = "quantile_u_r_u_v_phi_r_phi_v"
+        elif qt_u_r is not None and qt_u_v is not None:
             geometry_mode = "quantile_u_r_u_v"
         else:
             geometry_mode = "legacy_sr_discrete_uv"
@@ -252,9 +349,47 @@ def reconstruct_real_test_physics(
     logE_real = np.log10(E_real)
 
     # ======================================================
+    # v0.7.2 quantile geometry + quantile phi
+    # ======================================================
+    if geometry_mode in [
+        "quantile_u_r_u_v_phi_r_phi_v",
+        "continuous_phi",
+        "quantile_phi",
+    ]:
+
+        if qt_u_r is None or qt_u_v is None or qt_phi_r is None or qt_phi_v is None:
+            raise ValueError(
+                "qt_u_r, qt_u_v, qt_phi_r and qt_phi_v are required "
+                "for v0.7.2 quantile-phi real reconstruction."
+            )
+
+        u_r_q_real = X_cont_test[:, 0]
+        u_v_q_real = X_cont_test[:, 1]
+        phi_r_q_real = X_cont_test[:, 2]
+        phi_v_q_real = X_cont_test[:, 3]
+
+        u_r_real = _inverse_quantile(qt_u_r, u_r_q_real)
+        u_v_real = _inverse_quantile(qt_u_v, u_v_q_real)
+        phi_r_real = _inverse_quantile(qt_phi_r, phi_r_q_real)
+        phi_v_real = _inverse_quantile(qt_phi_v, phi_v_q_real)
+
+        u_r_real = np.clip(u_r_real, -1.0 + eps, 1.0 - eps)
+        u_v_real = np.clip(u_v_real, -1.0 + eps, 1.0 - eps)
+
+        phi_r_real = (phi_r_real + np.pi) % (2.0 * np.pi) - np.pi
+        phi_v_real = (phi_v_real + np.pi) % (2.0 * np.pi) - np.pi
+
+        s_r_real = np.arctanh(u_r_real)
+
+        cphi_r_real = np.cos(phi_r_real)
+        sphi_r_real = np.sin(phi_r_real)
+        cphi_v_real = np.cos(phi_v_real)
+        sphi_v_real = np.sin(phi_v_real)
+
+    # ======================================================
     # v0.7 quantile geometry
     # ======================================================
-    if geometry_mode in ["quantile_u_r_u_v", "continuous_geometry"]:
+    elif geometry_mode in ["quantile_u_r_u_v", "continuous_geometry"]:
 
         if qt_u_r is None or qt_u_v is None:
             raise ValueError(
@@ -276,6 +411,11 @@ def reconstruct_real_test_physics(
         sphi_r_real = X_cont_test[:, 3].copy()
         cphi_v_real = X_cont_test[:, 4].copy()
         sphi_v_real = X_cont_test[:, 5].copy()
+
+        phi_r_q_real = None
+        phi_v_q_real = None
+        phi_r_real = np.arctan2(sphi_r_real, cphi_r_real)
+        phi_v_real = np.arctan2(sphi_v_real, cphi_v_real)
 
     # ======================================================
     # v0.6 legacy geometry
@@ -308,6 +448,10 @@ def reconstruct_real_test_physics(
 
         u_r_q_real = None
         u_v_q_real = None
+        phi_r_q_real = None
+        phi_v_q_real = None
+        phi_r_real = np.arctan2(sphi_r_real, cphi_r_real)
+        phi_v_real = np.arctan2(sphi_v_real, cphi_v_real)
 
     else:
         raise ValueError(f"Unknown geometry_mode: {geometry_mode}")
@@ -340,6 +484,10 @@ def reconstruct_real_test_physics(
 
         "u_r_q_real": u_r_q_real if geometry_mode != "legacy_sr_discrete_uv" else None,
         "u_v_q_real": u_v_q_real if geometry_mode != "legacy_sr_discrete_uv" else None,
+        "phi_r_q_real": phi_r_q_real,
+        "phi_v_q_real": phi_v_q_real,
+        "phi_r_real": phi_r_real,
+        "phi_v_real": phi_v_real,
 
         "s_r_real": s_r_real,
         "u_r_real": u_r_real,

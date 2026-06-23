@@ -146,20 +146,36 @@ def build_real_generated_featureframes(real_pack, gen_pack):
     }
 
     # --------------------------------------------------
-    # Optional quantile-space variables (v0.7)
+    # Optional angular variables
     # --------------------------------------------------
 
-    if "u_r_q_real" in real_pack:
-        real_dict["u_r_q"] = real_pack["u_r_q_real"]
+    if "phi_r_real" in real_pack:
+        real_dict["phi_r"] = real_pack["phi_r_real"]
 
-    if "u_r_q_gen" in gen_pack:
-        gen_dict["u_r_q"] = gen_pack["u_r_q_gen"]
+    if "phi_r_gen" in gen_pack:
+        gen_dict["phi_r"] = gen_pack["phi_r_gen"]
 
-    if "u_v_q_real" in real_pack:
-        real_dict["u_v_q"] = real_pack["u_v_q_real"]
+    if "phi_v_real" in real_pack:
+        real_dict["phi_v"] = real_pack["phi_v_real"]
 
-    if "u_v_q_gen" in gen_pack:
-        gen_dict["u_v_q"] = gen_pack["u_v_q_gen"]
+    if "phi_v_gen" in gen_pack:
+        gen_dict["phi_v"] = gen_pack["phi_v_gen"]
+
+    # --------------------------------------------------
+    # Optional quantile-space variables v0.7 / v0.7.2
+    # --------------------------------------------------
+
+    for key_real, key_gen, out_key in [
+        ("u_r_q_real", "u_r_q_gen", "u_r_q"),
+        ("u_v_q_real", "u_v_q_gen", "u_v_q"),
+        ("phi_r_q_real", "phi_r_q_gen", "phi_r_q"),
+        ("phi_v_q_real", "phi_v_q_gen", "phi_v_q"),
+    ]:
+        if key_real in real_pack and real_pack[key_real] is not None:
+            real_dict[out_key] = real_pack[key_real]
+
+        if key_gen in gen_pack and gen_pack[key_gen] is not None:
+            gen_dict[out_key] = gen_pack[key_gen]
 
     # --------------------------------------------------
     # Backward compatibility v0.6

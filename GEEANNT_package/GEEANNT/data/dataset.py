@@ -1,7 +1,7 @@
 """
 Dataset construction utilities for GEEANNT.
 
-This module supports two geometry modes:
+This module supports three geometry modes:
 
 1. Legacy discrete-u_v mode:
    - s_r continuous
@@ -12,9 +12,17 @@ This module supports two geometry modes:
 2. v0.7 continuous-geometry mode:
    - u_r_q continuous
    - u_v_q continuous
-   - no u_v discretization
+   - phi encoded as cos/sin
    - continuous columns:
        u_r_q, u_v_q, cphi_r, sphi_r, cphi_v, sphi_v
+
+3. v0.7.2 continuous-phi mode:
+   - u_r_q continuous
+   - u_v_q continuous
+   - phi_r_q continuous
+   - phi_v_q continuous
+   - continuous columns:
+       u_r_q, u_v_q, phi_r_q, phi_v_q
 """
 
 import numpy as np
@@ -165,17 +173,46 @@ def report_discretized_features(dataset_pack):
 def filter_particle_types_continuous_geometry(
     feat,
     prob_threshold=1e-5,
-    cont_cols=("u_r_q", "u_v_q", "cphi_r", "sphi_r", "cphi_v", "sphi_v"),
+    cont_cols=None,
 ):
     """
-    v0.7 dataset builder.
+    Continuous-geometry dataset builder.
 
-    Filter rare particle types and keep geometry fully continuous.
+    Supports:
 
-    Expected columns:
-        ParticleName, E_idx, u_r_q, u_v_q, cphi_r, sphi_r, cphi_v, sphi_v
+    v0.7:
+        ParticleName, E_idx,
+        u_r_q, u_v_q, cphi_r, sphi_r, cphi_v, sphi_v
+
+    v0.7.2:
+        ParticleName, E_idx,
+        u_r_q, u_v_q, phi_r_q, phi_v_q
     """
     feat = feat.copy()
+
+    if cont_cols is None:
+        if {"u_r_q", "u_v_q", "phi_r_q", "phi_v_q"}.issubset(feat.columns):
+            cont_cols = ("u_r_q", "u_v_q", "phi_r_q", "phi_v_q")
+            continuous_geometry_version = "v0.7.2_continuous_phi"
+        elif {"u_r_q", "u_v_q", "cphi_r", "sphi_r", "cphi_v", "sphi_v"}.issubset(feat.columns):
+            cont_cols = ("u_r_q", "u_v_q", "cphi_r", "sphi_r", "cphi_v", "sphi_v")
+            continuous_geometry_version = "v0.7_cos_sin_phi"
+        else:
+            raise ValueError(
+                "Could not infer continuous geometry columns. "
+                "Expected either v0.7 columns "
+                "('u_r_q','u_v_q','cphi_r','sphi_r','cphi_v','sphi_v') "
+                "or v0.7.2 columns "
+                "('u_r_q','u_v_q','phi_r_q','phi_v_q')."
+            )
+    else:
+        cont_cols = tuple(cont_cols)
+        if set(cont_cols) == {"u_r_q", "u_v_q", "phi_r_q", "phi_v_q"}:
+            continuous_geometry_version = "v0.7.2_continuous_phi"
+        elif set(cont_cols) == {"u_r_q", "u_v_q", "cphi_r", "sphi_r", "cphi_v", "sphi_v"}:
+            continuous_geometry_version = "v0.7_cos_sin_phi"
+        else:
+            continuous_geometry_version = "custom_continuous_geometry"
 
     missing = [c for c in ["ParticleName", "E_idx", *cont_cols] if c not in feat.columns]
     if missing:
@@ -201,6 +238,7 @@ def filter_particle_types_continuous_geometry(
 
     return {
         "dataset_mode": "continuous_geometry",
+        "continuous_geometry_version": continuous_geometry_version,
         "feat": feat,
         "cont_cols": list(cont_cols),
         "X_cont_raw": X_cont_raw,
@@ -213,7 +251,6 @@ def filter_particle_types_continuous_geometry(
         "n_types": n_types,
     }
 
-
 def report_continuous_geometry_features(dataset_pack):
     """
     Report diagnostics for the v0.7 continuous-geometry dataset.
@@ -223,6 +260,7 @@ def report_continuous_geometry_features(dataset_pack):
     cont_cols = dataset_pack["cont_cols"]
 
     print("Dataset mode:", dataset_pack.get("dataset_mode", "continuous_geometry"))
+    print("Continuous geometry version:", dataset_pack.get("continuous_geometry_version", "unknown"))
     print("Kept particle types:", dataset_pack["n_types"])
     print("Types:", dataset_pack["type_names"])
 

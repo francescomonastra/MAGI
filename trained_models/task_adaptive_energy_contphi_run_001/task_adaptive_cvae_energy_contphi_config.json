@@ -1,0 +1,35 @@
+{
+  "model_class": "CVAE_CatEnergy_ContPhi_TaskAdaptive",
+  "n_types": 2,
+  "n_energy_bins": 256,
+  "y_cont_dim": 4,
+  "latent_dim": 8,
+  "hidden": [
+    128,
+    128,
+    64,
+    64,
+    64
+  ],
+  "beta": 0.1,
+  "w_energy": 0.8,
+  "w_ur": 1.1,
+  "w_uv": 1.1,
+  "w_phi_r": 1.2,
+  "w_phi_v": 1.2,
+  "min_log_sigma": -6.0,
+  "max_log_sigma": 1.5,
+  "lambda_sigma": 0.002,
+  "sigma_target": -2.5,
+  "energy_sampling_temperature": 1.0,
+  "stem_width": 64,
+  "deep_decoder_hidden": [
+    128,
+    128,
+    64
+  ],
+  "energy_branch_hidden": [
+    48,
+    48
+  ]
+}

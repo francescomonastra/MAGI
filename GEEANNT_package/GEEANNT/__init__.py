@@ -20,7 +20,8 @@ configure_tensorflow = initialize_environment
 from .core import (
     CVAE_CatEnergy_CatUV,
     CVAE_CatEnergy_CatUV_TaskAdaptive,
-    CVAE_CatEnergy_ContGeom_TaskAdaptive
+    CVAE_CatEnergy_ContGeom_TaskAdaptive,
+    CVAE_CatEnergy_ContPhi_TaskAdaptive
 )
 from .training import (
     build_default_callbacks,
@@ -127,6 +128,7 @@ __all__ = [
     "CVAE_CatEnergy_CatUV",
     "CVAE_CatEnergy_CatUV_TaskAdaptive",
     "CVAE_CatEnergy_ContGeom_TaskAdaptive",
+    "CVAE_CatEnergy_ContPhi_TaskAdaptive",
     "build_default_callbacks",
     "compile_model",
     "fit_model",

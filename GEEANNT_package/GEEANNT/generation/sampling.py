@@ -1,5 +1,9 @@
 """
 Sampling utilities for GEEANNT generation.
+Supports:
+  - v0.6 legacy models with categorical u_v
+  - v0.7 continuous-geometry models with u_r_q/u_v_q and cos/sin phi
+  - v0.7.2 continuous-phi models with u_r_q/u_v_q/phi_r_q/phi_v_q
 """
 
 import numpy as np

@@ -123,7 +123,7 @@ class TaskAdaptiveTrainingMonitor(keras.callbacks.Callback):
             "energy_ce",
             "val_energy_ce",
 
-            # v0.6
+            # v0.6 legacy
             "sr_nll",
             "val_sr_nll",
             "uv_ce",
@@ -135,13 +135,13 @@ class TaskAdaptiveTrainingMonitor(keras.callbacks.Callback):
             "u_r_mse",
             "val_u_r_mse",
 
-            # v0.7
+            # v0.7 / v0.7.2 continuous geometry
             "ur_nll",
             "val_ur_nll",
             "uv_nll",
             "val_uv_nll",
 
-            # shared angular terms
+            # v0.7 cos/sin phi
             "phi_r_mse",
             "val_phi_r_mse",
             "phi_v_mse",
@@ -150,6 +150,20 @@ class TaskAdaptiveTrainingMonitor(keras.callbacks.Callback):
             "val_phi_v_ang",
             "phi_v_loss",
             "val_phi_v_loss",
+
+            # v0.7.2 quantile phi
+            "phi_r_nll",
+            "val_phi_r_nll",
+            "phi_v_nll",
+            "val_phi_v_nll",
+
+            # regularization, when present
+            "sigma_reg",
+            "val_sigma_reg",
+            "phi_reg",
+            "val_phi_reg",
+            "phi_r_reg",
+            "val_phi_r_reg",
         ]
         self.show_task_weights = show_task_weights
         self.show_scheduler_state = show_scheduler_state
