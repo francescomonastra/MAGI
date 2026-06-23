@@ -3,7 +3,7 @@ GEEANNT
 Geant4 Efficiency Enhancing Artificial Neural Network Toolkit
 """
 
-__version__ = "0.7.0"
+__version__ = "0.7.2"
 
 # ==========================================================
 # Environment / configuration helpers
