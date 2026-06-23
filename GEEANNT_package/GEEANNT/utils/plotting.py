@@ -124,8 +124,8 @@ def plot_history(history, keys=None, show_available=True):
         plt.show()
 
 
-def plot_dist(data, name, bins=200, range_=None, density=True, figsize=(7, 4), xscale="linear", yscale="linear"):
-    plt.figure(figsize=figsize)
+def plot_dist(data, name, bins=200, range_=None, density=True, figsize=(7, 4), xscale="linear", yscale="linear", savepath=None, dpi=300, show=True):
+    fig = plt.figure(figsize=figsize)
     plt.hist(
         data,
         bins=bins,
@@ -141,7 +141,7 @@ def plot_dist(data, name, bins=200, range_=None, density=True, figsize=(7, 4), x
     plt.yscale(yscale)
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
-    plt.show()
+    return _save_and_show(fig=fig, savepath=savepath, dpi=dpi, show=show)
 
 
 def plot_dist_by_class(
@@ -178,34 +178,30 @@ def plot_dist_by_class(
     plt.show()
 
 
-def plot_correlation_matrix(df, cols, method="pearson", figsize=(8, 6), cmap="coolwarm"):
+def plot_correlation_matrix(df, cols, method="pearson", figsize=(8, 6), cmap="coolwarm", savepath=None, dpi=300, show=True):
     corr = df[cols].corr(method=method)
 
-    plt.figure(figsize=figsize)
+    fig = plt.figure(figsize=figsize)
     im = plt.imshow(corr, cmap=cmap, vmin=-1, vmax=1)
     plt.colorbar(im, label=f"{method} correlation")
     plt.xticks(range(len(cols)), cols, rotation=45, ha="right")
     plt.yticks(range(len(cols)), cols)
     plt.title(f"{method.capitalize()} correlation matrix")
     plt.tight_layout()
-    plt.show()
-
-    return corr
+    return _save_and_show(fig=fig, savepath=savepath, dpi=dpi, show=show), corr
 
 
-def plot_covariance_matrix(df, cols, figsize=(8, 6), cmap="viridis"):
+def plot_covariance_matrix(df, cols, figsize=(8, 6), cmap="viridis", savepath=None, dpi=300, show=True):
     cov = df[cols].cov()
 
-    plt.figure(figsize=figsize)
+    fig = plt.figure(figsize=figsize)
     im = plt.imshow(cov, cmap=cmap)
     plt.colorbar(im, label="covariance")
     plt.xticks(range(len(cols)), cols, rotation=45, ha="right")
     plt.yticks(range(len(cols)), cols)
     plt.title("Covariance matrix")
     plt.tight_layout()
-    plt.show()
-
-    return cov
+    return _save_and_show(fig=fig, savepath=savepath, dpi=dpi, show=show), cov
 
 
 def plot_pairwise_sample(
@@ -613,3 +609,35 @@ def plot_pairgrid_physics(
         g.fig.tight_layout()
     plt.show()
     return g
+
+def _save_and_show(fig=None, savepath=None, dpi=300, bbox_inches="tight", show=True):
+    """
+    Save and/or show a matplotlib figure.
+
+    Parameters
+    ----------
+    fig : matplotlib.figure.Figure or None
+        Figure to save/show. If None, uses current figure.
+    savepath : str or None
+        Output path. If None, the figure is not saved.
+    dpi : int
+        Save resolution.
+    bbox_inches : str
+        Bounding box mode for saving.
+    show : bool
+        If True, call plt.show().
+    """
+    if fig is None:
+        fig = plt.gcf()
+
+    if savepath is not None:
+        fig.savefig(
+            savepath,
+            dpi=dpi,
+            bbox_inches=bbox_inches,
+        )
+
+    if show:
+        plt.show()
+
+    return fig

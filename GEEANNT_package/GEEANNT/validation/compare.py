@@ -6,7 +6,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 
-
 def compare_hist_with_residuals(
     real,
     gen,
@@ -15,6 +14,9 @@ def compare_hist_with_residuals(
     range_=None,
     eps_res=1e-12,
     ratio_clip=None,
+    savepath=None,
+    dpi=300,
+    show=True
 ):
     real = np.asarray(real)
     gen = np.asarray(gen)
@@ -50,7 +52,7 @@ def compare_hist_with_residuals(
     ax_bot.set_ylabel("(gen/real)-1")
     ax_bot.grid(True, alpha=0.3)
 
-    plt.show()
+    return _save_and_show(fig=fig, savepath=savepath, dpi=dpi, show=show)
 
 
 def report_final_ranges(real_pack, gen_pack):
@@ -178,3 +180,35 @@ def build_real_generated_featureframes(real_pack, gen_pack):
     )
 
     return df_real, df_gen, df_compare
+
+def _save_and_show(fig=None, savepath=None, dpi=300, bbox_inches="tight", show=True):
+    """
+    Save and/or show a matplotlib figure.
+
+    Parameters
+    ----------
+    fig : matplotlib.figure.Figure or None
+        Figure to save/show. If None, uses current figure.
+    savepath : str or None
+        Output path. If None, the figure is not saved.
+    dpi : int
+        Save resolution.
+    bbox_inches : str
+        Bounding box mode for saving.
+    show : bool
+        If True, call plt.show().
+    """
+    if fig is None:
+        fig = plt.gcf()
+
+    if savepath is not None:
+        fig.savefig(
+            savepath,
+            dpi=dpi,
+            bbox_inches=bbox_inches,
+        )
+
+    if show:
+        plt.show()
+
+    return fig

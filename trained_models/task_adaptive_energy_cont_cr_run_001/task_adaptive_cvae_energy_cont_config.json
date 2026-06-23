@@ -1,0 +1,39 @@
+{
+  "model_class": "CVAE_CatEnergy_ContGeom_TaskAdaptive",
+  "n_types": 6,
+  "n_energy_bins": 256,
+  "y_cont_dim": 6,
+  "latent_dim": 8,
+  "hidden": [
+    128,
+    128,
+    64,
+    64,
+    64
+  ],
+  "beta": 0.1,
+  "w_energy": 0.8,
+  "w_ur": 1.1,
+  "w_uv": 1.1,
+  "w_phi_r": 1.4,
+  "w_phi_v": 1.1,
+  "min_log_sigma": -6.0,
+  "max_log_sigma": 1.5,
+  "lambda_sigma": 0.002,
+  "sigma_target": -2.5,
+  "lambda_phi": 0.02,
+  "lambda_phi_r": 0.03,
+  "energy_sampling_temperature": 1.0,
+  "phi_v_mse_weight": 0.5,
+  "phi_v_ang_weight": 1.2,
+  "stem_width": 64,
+  "deep_decoder_hidden": [
+    128,
+    128,
+    64
+  ],
+  "energy_branch_hidden": [
+    48,
+    48
+  ]
+}

@@ -11,6 +11,7 @@ from .plotting import (
     plot_pairwise_sample,
     plot_pairgrid_physics,
     set_plot_theme,
+    _save_and_show,
 )
 
 from .model_inspection import (
@@ -33,4 +34,5 @@ __all__ = [
     "print_trainable_status",
     "print_model_tree_with_params",
     "print_duplicate_trainable_variables",
+    "_save_and_show"
 ]

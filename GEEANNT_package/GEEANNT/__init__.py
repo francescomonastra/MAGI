@@ -89,6 +89,7 @@ from .utils import (
     print_trainable_status,
     print_model_tree_with_params,
     print_duplicate_trainable_variables,
+    _save_and_show,
 )
 
 # ==========================================================
@@ -155,6 +156,7 @@ __all__ = [
     "plot_covariance_matrix",
     "plot_pairwise_sample",
     "plot_pairgrid_physics",
+    "_save_and_show",
     "build_energy_bins",
     "build_feature_dataframe",
     "report_feature_dataframe",
