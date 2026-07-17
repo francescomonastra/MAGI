@@ -11,39 +11,57 @@ DEFAULT_COLUMNS_DET = [
     "EventId", "ParticleName", "Energy", "X", "Y", "Z", "Vx", "Vy", "Vz"
 ]
 
+DEFAULT_COLUMNS_DET_PRIM = [
+    "EventId", "ParticleName", "Energy", "PrimBool",
+    "X", "Y", "Z", "Vx", "Vy", "Vz",
+]
+
+
+def _peek_ncols(filepath, sep=None):
+    """
+    Count whitespace/sep-separated fields on the first non-empty,
+    non-comment line, without loading the whole file.
+    """
+    with open(filepath) as f:
+        for line in f:
+            s = line.strip()
+            if not s or s.startswith("#"):
+                continue
+            return len(s.split()) if sep is None else len(s.split(sep))
+    return 0
+
 
 def load_detector_table(
     filepath,
     columns=None,
     drop_event_id=True,
     sep=None,
+    has_primary_flag=None,
+    drop_primary_flag=False,
 ):
     """
     Load a detector event table.
 
-    Supports both formats:
+    Supports the legacy 9-column format:
         EventId ParticleName Energy X Y Z Vx Vy Vz
-    and:
-        ParticleName Energy X Y Z Vx Vy Vz
+    and the PrimBool-tagged 10-column format:
+        EventId ParticleName Energy PrimBool X Y Z Vx Vy Vz
+
+    has_primary_flag : bool or None
+        If None (default), inferred from the number of whitespace-separated
+        fields on the first data line (>=10 => PrimBool present).
     """
     if columns is None:
-        if drop_event_id:
-            columns = [
-                "EventId", "ParticleName", "Energy",
-                "X", "Y", "Z", "Vx", "Vy", "Vz"
-            ]
-        else:
-            columns = [
-                "ParticleName", "Energy",
-                "X", "Y", "Z", "Vx", "Vy", "Vz"
-            ]
+        if has_primary_flag is None:
+            has_primary_flag = (_peek_ncols(filepath, sep) >= 10)
+        columns = DEFAULT_COLUMNS_DET_PRIM if has_primary_flag else DEFAULT_COLUMNS_DET
 
     dtype_map = {}
 
     for name in columns:
         if name == "ParticleName":
             dtype_map[name] = str
-        elif name == "EventId":
+        elif name in ("EventId", "PrimBool"):
             dtype_map[name] = int
         else:
             dtype_map[name] = float
@@ -57,6 +75,9 @@ def load_detector_table(
 
     if drop_event_id and "EventId" in df.columns:
         df = df.drop(columns=["EventId"])
+
+    if drop_primary_flag and "PrimBool" in df.columns:
+        df = df.drop(columns=["PrimBool"])
 
     return df
 
@@ -78,6 +99,15 @@ def report_basic_table_checks(df, numeric_cols=None):
             bad = ~np.isfinite(df[c].to_numpy(dtype=float))
             if bad.any():
                 print(f"Warning: {bad.sum()} non-finite values in {c}")
+
+    if "PrimBool" in df.columns:
+        n_generated = len(df)
+        n_primaries = int((df["PrimBool"].to_numpy() == 1).sum())
+        print(
+            f"\nPrimBool present: n_primaries={n_primaries} "
+            f"n_generated={n_generated} "
+            f"primary_fraction={(n_primaries / n_generated if n_generated else None)}"
+        )
 
 
 def save_detector_table(

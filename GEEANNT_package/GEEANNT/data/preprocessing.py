@@ -7,6 +7,39 @@ import pandas as pd
 import sklearn.preprocessing
 
 
+def compute_primary_fraction(df, primary_col="PrimBool"):
+    """
+    Count primaries vs. total CryoSphere crossings for flux normalization.
+
+    Returns None if `primary_col` is not present (legacy 9-column data),
+    so downstream code can treat "no normalization info" uniformly.
+    """
+    if primary_col not in df.columns:
+        return None
+
+    is_prim = df[primary_col].to_numpy()
+    n_generated = int(len(is_prim))
+    n_primaries = int(np.sum(is_prim == 1))
+
+    per_species = {}
+    if "ParticleName" in df.columns:
+        for name, sub in df.groupby("ParticleName"):
+            tot = int(len(sub))
+            pri = int(np.sum(sub[primary_col].to_numpy() == 1))
+            per_species[str(name)] = {
+                "n_generated": tot,
+                "n_primaries": pri,
+                "primary_fraction": (pri / tot if tot else None),
+            }
+
+    return {
+        "n_generated": n_generated,
+        "n_primaries": n_primaries,
+        "primary_fraction": (n_primaries / n_generated if n_generated else None),
+        "per_species": per_species,
+    }
+
+
 def build_physical_features(
     df,
     center=(0.0, 0.0, -507.66),
@@ -45,6 +78,10 @@ def build_physical_features(
     R = float(radius)
 
     df = df.copy()
+
+    # Computed before any row filtering so n_generated matches the raw
+    # crossing count (NCryoSphereCR in the notebook), None if PrimBool absent.
+    normalization = compute_primary_fraction(df)
 
     xyz = df[["X", "Y", "Z"]].to_numpy(dtype=np.float64)
     v = df[["Vx", "Vy", "Vz"]].to_numpy(dtype=np.float64)
@@ -123,9 +160,13 @@ def build_physical_features(
         "sphi_v": sphi_v.astype(np.float64),
     })
 
+    if "PrimBool" in df.columns:
+        features["PrimBool"] = df["PrimBool"].to_numpy()
+
     return {
         "dataframe": df,
         "features": features,
+        "normalization": normalization,
         "center": C,
         "radius": R,
         "raw": {
@@ -624,6 +665,9 @@ def build_feature_dataframe(
 
     feat_dict.update(geom_cols)
 
+    if "PrimBool" in feat0.columns:
+        feat_dict["PrimBool"] = feat0["PrimBool"].to_numpy()
+
     feat = pd.DataFrame(feat_dict)
 
     filtered_prep = {
@@ -641,6 +685,7 @@ def build_feature_dataframe(
         "geometry_transform": geometry_transform,
         "quantile_transformers": quantile_transformers,
         "geometry_metadata": geometry_metadata,
+        "normalization": prep.get("normalization"),
         "energy_config": {
             "mode": energy_binning_mode,
             "e_min_cut": e_min_cut,

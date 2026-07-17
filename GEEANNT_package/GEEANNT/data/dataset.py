@@ -42,6 +42,7 @@ def filter_particle_types_and_discretize_uv(
     prob_threshold=1e-5,
     uv_nbins=128,
     uv_eps=1e-6,
+    normalization=None,
 ):
     """
     Legacy dataset builder.
@@ -50,6 +51,12 @@ def filter_particle_types_and_discretize_uv(
 
     Expected columns:
         ParticleName, E_idx, s_r, cphi_r, sphi_r, u_v, cphi_v, sphi_v
+
+    normalization : dict or None
+        Dataset-level primary/secondary crossing counts from
+        build_feature_dataframe(...)["normalization"], carried through
+        unchanged (not a per-row model input) so it survives to
+        checkpointing metadata.
     """
     feat = feat.copy()
 
@@ -107,6 +114,7 @@ def filter_particle_types_and_discretize_uv(
         "u_v_values": u_v_values,
         "uv_nbins_requested": uv_nbins,
         "uv_nbins_eff": uv_nbins_eff,
+        "normalization": normalization,
     }
 
 
@@ -174,6 +182,7 @@ def filter_particle_types_continuous_geometry(
     feat,
     prob_threshold=1e-5,
     cont_cols=None,
+    normalization=None,
 ):
     """
     Continuous-geometry dataset builder.
@@ -187,6 +196,12 @@ def filter_particle_types_continuous_geometry(
     v0.7.2:
         ParticleName, E_idx,
         u_r_q, u_v_q, phi_r_q, phi_v_q
+
+    normalization : dict or None
+        Dataset-level primary/secondary crossing counts from
+        build_feature_dataframe(...)["normalization"], carried through
+        unchanged (not a per-row model input) so it survives to
+        checkpointing metadata.
     """
     feat = feat.copy()
 
@@ -249,6 +264,7 @@ def filter_particle_types_continuous_geometry(
         "idx_to_type": idx_to_type,
         "type_probs": type_probs,
         "n_types": n_types,
+        "normalization": normalization,
     }
 
 def report_continuous_geometry_features(dataset_pack):

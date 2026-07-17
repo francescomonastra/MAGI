@@ -184,6 +184,7 @@ def build_model_metadata(
     evaluation_metadata=None,
     callbacks=None,
     notes=None,
+    normalization_metadata=None,
 ):
     """
     Collect all information needed to reproduce or reuse a trained model.
@@ -212,6 +213,7 @@ def build_model_metadata(
         "model_built": bool(getattr(model, "built", False)),
         "model_config": _to_json_safe(model_config or {}),
         "preprocessing_metadata": _to_json_safe(preprocessing_metadata or {}),
+        "normalization": _to_json_safe(normalization_metadata or {}),
         "training_metadata": _to_json_safe(training_metadata),
         "evaluation_metadata": _to_json_safe(evaluation_metadata or {}),
     }
@@ -275,6 +277,7 @@ def save_training_checkpoint(
     evaluation_metadata=None,
     callbacks=None,
     notes=None,
+    normalization_metadata=None,
 ):
     """
     Save a lightweight training checkpoint.
@@ -312,6 +315,7 @@ def save_training_checkpoint(
         evaluation_metadata=evaluation_metadata or {},
         callbacks=callbacks,
         notes=notes,
+        normalization_metadata=normalization_metadata,
     )
 
     with open(metadata_path, "w") as f:
@@ -341,6 +345,7 @@ def save_final_trained_model(
     evaluation_metadata=None,
     callbacks=None,
     notes=None,
+    normalization_metadata=None,
 ):
     """
     Save a complete final trained model package.
@@ -381,6 +386,7 @@ def save_final_trained_model(
         evaluation_metadata=evaluation_metadata or {},
         callbacks=callbacks,
         notes=notes,
+        normalization_metadata=normalization_metadata,
     )
 
     with open(metadata_path, "w") as f:
