@@ -1,6 +1,9 @@
 TrainingData/
 generated/
 checkpoints/generated_particles/
+
+# macOS
+.DS_Store
 *.dat
 *.txt
 *.gntbin

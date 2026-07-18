@@ -19,7 +19,7 @@ executing==2.2.1
 flatbuffers==25.12.19
 fonttools==4.62.1
 gast==0.7.0
--e git+https://github.com/Fchewie/GEEANNT.git@0f914cab60f183123eb60d33c722a07badf3cdf9#egg=GEEANNT&subdirectory=GEEANNT_package
+-e git+https://github.com/francescomonastra/GEEANNT.git@0f914cab60f183123eb60d33c722a07badf3cdf9#egg=GEEANNT&subdirectory=GEEANNT_package
 google-pasta==0.2.0
 grpcio==1.78.0
 h5py==3.16.0

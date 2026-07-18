@@ -1,5 +1,5 @@
 {
-  "created_at_unix": 1782250373.71248,
+  "created_at_unix": 1782401309.229132,
   "model_class": "CVAE_CatEnergy_ContPhi_TaskAdaptive",
   "model_built": true,
   "model_config": {
@@ -377,7 +377,7 @@
         "seed": 42,
         "every_n_epochs": 1,
         "verbose": 1,
-        "n_val_events": 280565,
+        "n_val_events": 516583,
         "n_energy_bins": 256
       },
       "03_TaskAdaptiveLossScheduler": {
@@ -395,11 +395,11 @@
         },
         "state": {
           "energy": {
-            "best": 0.8246268656716413,
-            "wait": 18,
+            "best": 1.2446555819477436,
+            "wait": 25,
             "cooldown_counter": 0,
-            "n_reductions": 1,
-            "last_reduction_epoch": 22
+            "n_reductions": 0,
+            "last_reduction_epoch": null
           }
         },
         "verbose": 1
@@ -444,23 +444,6 @@
       "uv": 1.1,
       "phi_r": 1.2,
       "phi_v": 1.2
-    },
-    "optimizer_config": {
-      "name": "adam",
-      "learning_rate": 0.00019999999494757503,
-      "weight_decay": null,
-      "clipnorm": null,
-      "global_clipnorm": null,
-      "clipvalue": null,
-      "use_ema": false,
-      "ema_momentum": 0.99,
-      "ema_overwrite_frequency": null,
-      "loss_scale_factor": null,
-      "gradient_accumulation_steps": null,
-      "beta_1": 0.9,
-      "beta_2": 0.999,
-      "epsilon": 1e-07,
-      "amsgrad": false
     }
   },
   "evaluation_metadata": {},
