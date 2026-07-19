@@ -4,15 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-GEEANNT (Geant4 Efficiency Enhancing Artificial Neural Network Toolkit) is a research
-project, not a production application. A Conditional Variational Autoencoder (CVAE),
-implemented in Keras/TensorFlow, learns the phase-space distribution of particles
-(energy, position, direction) crossing a detector surface in Geant4 Monte Carlo
-simulations, so that new physically-consistent events can be sampled cheaply instead of
-running full Geant4 transport. Author/maintainer: Francesco Monastra (INAF).
+MAGI is a research project, not a production application. A Conditional Variational
+Autoencoder (CVAE), implemented in Keras/TensorFlow, learns the phase-space distribution
+of particles (energy, position, direction) crossing a detector surface in Geant4 Monte
+Carlo simulations, so that new physically-consistent events can be sampled cheaply
+instead of running full Geant4 transport. Author/maintainer: Francesco Monastra (INAF).
 
 The repo has two parts:
-- `GEEANNT_package/` — the installable Python library (`import GEEANNT as ge`).
+- `MAGI_package/` — the installable Python library (`import magi`).
 - The repo root — Jupyter notebooks, raw/training data, trained model artifacts, and
   Optuna hyperparameter-search results that *use* the library. This is where actual
   experiments happen.
@@ -20,50 +19,53 @@ The repo has two parts:
 ## Environment / install
 
 ```bash
-pip install -r requirements.txt          # installs GEEANNT in editable mode from GitHub
+pip install -r requirements.txt          # installs magi in editable mode from GitHub
 # or, to develop the package itself:
-pip install -e GEEANNT_package/
+pip install -e MAGI_package/
 ```
 
 TensorFlow/Keras (`tensorflow`, `tensorflow-macos`, `tensorflow-metal` on Apple
 Silicon), `optuna`, `astropy`, `joblib`, `scikit-learn` are core runtime deps. There is
 no test suite, linter, or CI config in this repo — validation happens empirically via
-notebooks and the `GEEANNT.validation` module (Wasserstein distances, histogram
+notebooks and the `magi.validation` module (Wasserstein distances, histogram
 comparisons between real and generated distributions).
 
 ## Typical workflow
 
-1. Open the newest `GEEANNT_v0_*.ipynb` notebook at the repo root (highest version
+See also `MAGI_package/docs/USAGE.md` for the user-facing version of this workflow, and
+`Example_Usage.ipynb` for a runnable, fully-commented walkthrough on synthetic data.
+
+1. Open the newest `MAGI_v0_*.ipynb` notebook at the repo root (highest version
    number = current pipeline; older ones are kept for reference, `OldNotebooks/` holds
    deprecated versions). Each notebook is a full run: load data → preprocess → build
    dataset → train → generate → validate → plot.
-2. `ge.setup(...)` initializes the environment (seed, CPU-only TF, quiet logging) —
+2. `magi.setup(...)` initializes the environment (seed, CPU-only TF, quiet logging) —
    call this before anything else in a notebook.
-3. Data prep: `GEEANNT.data` (`load_detector_table` → `build_physical_features` →
+3. Data prep: `magi.data` (`load_detector_table` → `build_physical_features` →
    `build_feature_dataframe` / `fit_quantile_geometry_transforms` →
    `filter_particle_types_continuous_geometry` → `split_feature_data` →
    `scale_continuous_features` → `build_conditioning_and_weights` →
    `build_tf_datasets`). Most steps have a matching `report_*` function used purely for
    printed sanity checks in the notebook.
-4. Model: pick a class from `GEEANNT.core` (see Architecture below), then
-   `GEEANNT.training.compile_model` / `train_single_run` / `fit_model`.
-5. Checkpointing: `GEEANNT.training.checkpointing` saves weights + JSON metadata +
+4. Model: pick a class from `magi.core` (see Architecture below), then
+   `magi.training.compile_model` / `train_single_run` / `fit_model`.
+5. Checkpointing: `magi.training.checkpointing` saves weights + JSON metadata +
    fitted transformers (`*_quantile_transformers.joblib`) under `trained_models/<run_name>/`
    or `checkpoints/<run_name>/`. `load_task_adaptive_model_for_generation` reloads a
    trained run for inference.
-6. Generation: `GEEANNT.generation` samples from the trained model and reconstructs
+6. Generation: `magi.generation` samples from the trained model and reconstructs
    physical quantities (`reconstruct_generated_physics`), then
    `generated_physics_to_detector_dataframe` / `generate_detector_table_to_file` write
    Geant4-ready particle source files (text or binary).
-7. Validation/plots: `GEEANNT.validation` (Wasserstein scores, real-vs-generated
-   comparisons) and `GEEANNT.utils.plotting` (dist/pairgrid/correlation plots), saved
+7. Validation/plots: `magi.validation` (Wasserstein scores, real-vs-generated
+   comparisons) and `magi.utils.plotting` (dist/pairgrid/correlation plots), saved
    into `Plots/`.
 8. To generate a Geant4 input file from a trained run outside a notebook, use
    `scripts/generate_geant_source.py --save-dir ... --model-name ... --metadata-file ...
    --output-file ... --n-events ...` (reads the saved metadata JSON and, for quantile
    geometry models, the matching `*_quantile_transformers.joblib`).
 
-## Architecture (`GEEANNT_package/GEEANNT/`)
+## Architecture (`MAGI_package/magi/`)
 
 - `core/model.py` — the CVAE architectures, each a `keras.Model` subclass. They form a
   version lineage; check which one a notebook actually instantiates before assuming
@@ -83,15 +85,21 @@ comparisons between real and generated distributions).
   physical coordinate transforms (`xy_from_ur_phi`, `vxyz_from_uv_phi`, etc.) used both
   inside the model and during generation/reconstruction — keep these two in sync if you
   change a coordinate convention.
-- `data/` — `io.py` (load/save the raw detector table), `preprocessing.py` (physical
-  feature engineering, energy binning, quantile-transform fitting), `dataset.py`
-  (splitting, scaling, one-hot conditioning, building `tf.data.Dataset`s). Functions are
-  versioned by geometry convention (`filter_particle_types_and_discretize_uv` = legacy
-  v0.6 discretized `u_v`; `filter_particle_types_continuous_geometry` = v0.7+
-  continuous). `geometry_transform` string values (`"arctanh_uv_discrete"`,
-  `"quantile_u_r_u_v"`, `"quantile_u_r_u_v_phi_r_phi_v"`) select which transform a given
-  run/model expects — this string is persisted in saved metadata and must match between
-  training and generation.
+- `data/` — `io.py` (load/save the raw detector table; also
+  `save_normalization_summary`/`load_normalization_summary` for exporting a measured
+  primary-fraction correction factor as standalone JSON, e.g. for the Geant4-side
+  analysis notebook to read), `preprocessing.py` (physical feature engineering, energy
+  binning, quantile-transform fitting, `compute_primary_fraction` for flux
+  normalization), `dataset.py` (splitting, scaling, one-hot conditioning, building
+  `tf.data.Dataset`s). Functions are versioned by geometry convention
+  (`filter_particle_types_and_discretize_uv` = legacy v0.6 discretized `u_v`;
+  `filter_particle_types_continuous_geometry` = v0.7+ continuous). `geometry_transform`
+  string values (`"arctanh_uv_discrete"`, `"quantile_u_r_u_v"`,
+  `"quantile_u_r_u_v_phi_r_phi_v"`) select which transform a given run/model expects —
+  this string is persisted in saved metadata and must match between training and
+  generation. Geometry is currently hard-limited to a **sphere** (`center`/`radius`
+  params) — see `MAGI_package/docs/USAGE.md` for what adapting this to other detector
+  geometries would require.
 - `training/` — `train.py` (compile/fit wrappers), `adaptive_callbacks.py`
   (`TaskAdaptiveLossScheduler` rebalances per-task loss weights during training,
   `TaskAdaptiveTrainingMonitor`/`ValidationEnergyDistributionMonitor` log diagnostics),
@@ -105,7 +113,7 @@ comparisons between real and generated distributions).
 - `utils/` — `plotting.py` (all the `plot_*` helpers used in notebooks, with a
   dark/light theme switch via `set_plot_theme`), `model_inspection.py` (introspect
   layer/parameter structure of a built model).
-- `GEEANNT.py` is a simplified high-level API (`setup`, `build_model`, `train_model`,
+- `magi/magi.py` is a simplified high-level API (`setup`, `build_model`, `train_model`,
   `plot_training`) layered on top of the modules above for quick notebook use;
   `__init__.py` re-exports the full public surface (this is the canonical list of what's
   considered "public API").
@@ -131,4 +139,4 @@ comparisons between real and generated distributions).
   what's in the current `core/model.py` — consult it when a notebook references a
   version-specific parameter not obviously present in the current code.
 - `NormalFlow_Fioretti/` is an external/experimental script (increasing SPO via
-  Normalizing Flows), not part of the GEEANNT package proper.
+  Normalizing Flows), not part of the MAGI package proper.

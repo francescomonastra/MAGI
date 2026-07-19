@@ -1,5 +1,4 @@
-# GEEANNT
-Geant4 Efficiency Enhancement Artificial Neural Network Training
+# MAGI
 
 A cVAE (Conditional Variational Auto-Encoder) with the purpose of improving Geant4 simulations efficiency, especially in low statistic cases, by sampling and reproducing multi-variate distribution in multi-step simulations.
 

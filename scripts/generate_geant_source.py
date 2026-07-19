@@ -4,7 +4,7 @@ import argparse
 import json
 import numpy as np
 import joblib
-import GEEANNT as ge
+import magi
 import os
 
 
@@ -15,7 +15,7 @@ def load_json(path):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Generate a Geant4 input particle file using a trained GEEANNT model."
+        description="Generate a Geant4 input particle file using a trained MAGI model."
     )
 
     parser.add_argument("--save-dir", required=True)
@@ -75,7 +75,7 @@ def main():
         geometry_metadata.update(quantile_transformers)
         geometry_metadata["geometry_transform"] = geometry_transform
 
-        print(f"[GEEANNT] Loaded quantile transformers: {transformers_file}")
+        print(f"[MAGI] Loaded quantile transformers: {transformers_file}")
 
     # ------------------------------------------------------
     # Legacy v0.6 compatibility
@@ -107,7 +107,7 @@ def main():
         )
     )
 
-    ge.generate_detector_input_file(
+    magi.generate_detector_input_file(
         save_dir=args.save_dir,
         model_name=args.model_name,
         model_config=model_config,
