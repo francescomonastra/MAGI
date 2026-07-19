@@ -7,11 +7,34 @@ import pandas as pd
 import sklearn.preprocessing
 
 
-def compute_primary_fraction(df, primary_col="PrimBool"):
+# Default "what counts as primary" criterion per source type. Cosmic rays:
+# the GPS-thrown particle reaching the CryoSphere unmodified (ParentID==0,
+# collapsed into PrimBool by the Geant4 writer). Radioactive decay sources
+# (K-40, Th-232, Ra-226, ...): PrimBool is always 0, since the primary track
+# is the decaying nucleus/ion itself and never propagates anywhere - what
+# should count as "primary" there is a decay-line emission that reached the
+# CryoSphere (however many times it Compton-scattered en route, since that
+# doesn't change CreatorProcessName or the track's identity), as opposed to
+# e.g. bremsstrahlung/annihilation photons genuinely produced along the way.
+SOURCE_TYPE_PRIMARY_DEFAULTS = {
+    "cosmic_ray": ("PrimBool", 1),
+    "radioactive": ("CreatorProcessName", "RadioactiveDecay"),
+}
+
+
+def compute_primary_fraction(df, primary_col="PrimBool", primary_value=1):
     """
     Count primaries vs. total CryoSphere crossings for flux normalization.
 
-    Returns None if `primary_col` is not present (legacy 9-column data),
+    primary_col / primary_value : which column, and which value in it,
+        marks a row as "primary". Defaults match the cosmic-ray convention
+        (PrimBool == 1); pass e.g. primary_col="CreatorProcessName",
+        primary_value="RadioactiveDecay" for radioactive sources, or use
+        source_type="radioactive" in build_physical_features instead of
+        setting these directly. See SOURCE_TYPE_PRIMARY_DEFAULTS.
+
+    Returns None if `primary_col` is not present (e.g. legacy 9-column
+    data, or a lineage column requested on a file that doesn't have it),
     so downstream code can treat "no normalization info" uniformly.
     """
     if primary_col not in df.columns:
@@ -19,13 +42,13 @@ def compute_primary_fraction(df, primary_col="PrimBool"):
 
     is_prim = df[primary_col].to_numpy()
     n_generated = int(len(is_prim))
-    n_primaries = int(np.sum(is_prim == 1))
+    n_primaries = int(np.sum(is_prim == primary_value))
 
     per_species = {}
     if "ParticleName" in df.columns:
         for name, sub in df.groupby("ParticleName"):
             tot = int(len(sub))
-            pri = int(np.sum(sub[primary_col].to_numpy() == 1))
+            pri = int(np.sum(sub[primary_col].to_numpy() == primary_value))
             per_species[str(name)] = {
                 "n_generated": tot,
                 "n_primaries": pri,
@@ -33,6 +56,8 @@ def compute_primary_fraction(df, primary_col="PrimBool"):
             }
 
     return {
+        "primary_col": primary_col,
+        "primary_value": primary_value,
         "n_generated": n_generated,
         "n_primaries": n_primaries,
         "primary_fraction": (n_primaries / n_generated if n_generated else None),
@@ -46,6 +71,9 @@ def build_physical_features(
     radius=100.0,
     eps=1e-6,
     drop_invalid_energy=True,
+    source_type="cosmic_ray",
+    primary_col=None,
+    primary_value=None,
 ):
     """
     Build the base physical feature representation used by GEEANNT.
@@ -68,6 +96,17 @@ def build_physical_features(
     drop_invalid_energy : bool
         If True, remove rows with E <= 0 or non-finite energy.
 
+    source_type : str
+        Selects the default "primary" criterion for compute_primary_fraction
+        via SOURCE_TYPE_PRIMARY_DEFAULTS: "cosmic_ray" (PrimBool==1, default)
+        or "radioactive" (CreatorProcessName=="RadioactiveDecay"). Ignored if
+        primary_col/primary_value are given explicitly.
+
+    primary_col, primary_value : str or None
+        Explicit override for compute_primary_fraction's criterion, taking
+        precedence over source_type. Use this for a source type not covered
+        by SOURCE_TYPE_PRIMARY_DEFAULTS.
+
     Returns
     -------
     dict
@@ -79,9 +118,20 @@ def build_physical_features(
 
     df = df.copy()
 
+    if primary_col is None or primary_value is None:
+        default_col, default_value = SOURCE_TYPE_PRIMARY_DEFAULTS.get(
+            source_type, ("PrimBool", 1)
+        )
+        if primary_col is None:
+            primary_col = default_col
+        if primary_value is None:
+            primary_value = default_value
+
     # Computed before any row filtering so n_generated matches the raw
-    # crossing count (NCryoSphereCR in the notebook), None if PrimBool absent.
-    normalization = compute_primary_fraction(df)
+    # crossing count (NCryoSphereCR in the notebook), None if primary_col absent.
+    normalization = compute_primary_fraction(
+        df, primary_col=primary_col, primary_value=primary_value
+    )
 
     xyz = df[["X", "Y", "Z"]].to_numpy(dtype=np.float64)
     v = df[["Vx", "Vy", "Vz"]].to_numpy(dtype=np.float64)
@@ -162,6 +212,9 @@ def build_physical_features(
 
     if "PrimBool" in df.columns:
         features["PrimBool"] = df["PrimBool"].to_numpy()
+
+    if primary_col in df.columns and primary_col not in features.columns:
+        features[primary_col] = df[primary_col].to_numpy()
 
     return {
         "dataframe": df,
@@ -668,6 +721,11 @@ def build_feature_dataframe(
     if "PrimBool" in feat0.columns:
         feat_dict["PrimBool"] = feat0["PrimBool"].to_numpy()
 
+    normalization = prep.get("normalization")
+    primary_col = normalization.get("primary_col") if normalization else None
+    if primary_col and primary_col in feat0.columns and primary_col not in feat_dict:
+        feat_dict[primary_col] = feat0[primary_col].to_numpy()
+
     feat = pd.DataFrame(feat_dict)
 
     filtered_prep = {
@@ -685,7 +743,7 @@ def build_feature_dataframe(
         "geometry_transform": geometry_transform,
         "quantile_transformers": quantile_transformers,
         "geometry_metadata": geometry_metadata,
-        "normalization": prep.get("normalization"),
+        "normalization": normalization,
         "energy_config": {
             "mode": energy_binning_mode,
             "e_min_cut": e_min_cut,

@@ -2,9 +2,12 @@ from .io import (
     load_detector_table,
     report_basic_table_checks,
     save_detector_table,
+    save_normalization_summary,
+    load_normalization_summary,
 )
 
 from .preprocessing import (
+    compute_primary_fraction,
     build_physical_features,
     print_physical_summary,
     build_energy_bins,
@@ -40,8 +43,11 @@ __all__ = [
     "load_detector_table",
     "save_detector_table",
     "report_basic_table_checks",
+    "save_normalization_summary",
+    "load_normalization_summary",
 
     # preprocessing
+    "compute_primary_fraction",
     "build_physical_features",
     "print_physical_summary",
     "build_energy_bins",

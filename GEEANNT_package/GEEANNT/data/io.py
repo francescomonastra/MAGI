@@ -16,6 +16,16 @@ DEFAULT_COLUMNS_DET_PRIM = [
     "X", "Y", "Z", "Vx", "Vy", "Vz",
 ]
 
+# Diagnostic lineage format: adds raw trackID/parentID and the Geant4
+# CreatorProcessName ("Primary", "RadioactiveDecay", "eBrem", "compt", ...),
+# needed to define "primary" for sources where PrimBool (ParentID==0) is
+# never true, e.g. radioactive decay chains embedded in bulk material.
+DEFAULT_COLUMNS_DET_LINEAGE = [
+    "EventId", "ParticleName", "Energy", "PrimBool",
+    "ParticleId", "ParentParticleId", "CreatorProcessName",
+    "X", "Y", "Z", "Vx", "Vy", "Vz",
+]
+
 
 def _peek_ncols(filepath, sep=None):
     """
@@ -37,31 +47,47 @@ def load_detector_table(
     drop_event_id=True,
     sep=None,
     has_primary_flag=None,
+    has_lineage_cols=None,
     drop_primary_flag=False,
+    drop_lineage_cols=False,
 ):
     """
     Load a detector event table.
 
-    Supports the legacy 9-column format:
-        EventId ParticleName Energy X Y Z Vx Vy Vz
-    and the PrimBool-tagged 10-column format:
-        EventId ParticleName Energy PrimBool X Y Z Vx Vy Vz
+    Supports three schemas, auto-detected from the field count on the first
+    data line unless overridden:
+        9  cols - legacy: EventId ParticleName Energy X Y Z Vx Vy Vz
+        10 cols - PrimBool-tagged: adds PrimBool (ParentID==0)
+        13 cols - lineage: adds ParticleId, ParentParticleId,
+                  CreatorProcessName (e.g. "Primary", "RadioactiveDecay",
+                  "eBrem") for sources where PrimBool alone can't define
+                  "primary" (see compute_primary_fraction).
 
-    has_primary_flag : bool or None
-        If None (default), inferred from the number of whitespace-separated
-        fields on the first data line (>=10 => PrimBool present).
+    has_primary_flag, has_lineage_cols : bool or None
+        If None (default), inferred from field count (>=10 => PrimBool
+        present, >=13 => lineage columns present).
     """
     if columns is None:
+        n_cols = _peek_ncols(filepath, sep)
+
+        if has_lineage_cols is None:
+            has_lineage_cols = (n_cols >= 13)
         if has_primary_flag is None:
-            has_primary_flag = (_peek_ncols(filepath, sep) >= 10)
-        columns = DEFAULT_COLUMNS_DET_PRIM if has_primary_flag else DEFAULT_COLUMNS_DET
+            has_primary_flag = (n_cols >= 10)
+
+        if has_lineage_cols:
+            columns = DEFAULT_COLUMNS_DET_LINEAGE
+        elif has_primary_flag:
+            columns = DEFAULT_COLUMNS_DET_PRIM
+        else:
+            columns = DEFAULT_COLUMNS_DET
 
     dtype_map = {}
 
     for name in columns:
-        if name == "ParticleName":
+        if name in ("ParticleName", "CreatorProcessName"):
             dtype_map[name] = str
-        elif name in ("EventId", "PrimBool"):
+        elif name in ("EventId", "PrimBool", "ParticleId", "ParentParticleId"):
             dtype_map[name] = int
         else:
             dtype_map[name] = float
@@ -78,6 +104,14 @@ def load_detector_table(
 
     if drop_primary_flag and "PrimBool" in df.columns:
         df = df.drop(columns=["PrimBool"])
+
+    if drop_lineage_cols:
+        lineage_cols = [
+            c for c in ("ParticleId", "ParentParticleId", "CreatorProcessName")
+            if c in df.columns
+        ]
+        if lineage_cols:
+            df = df.drop(columns=lineage_cols)
 
     return df
 
@@ -108,6 +142,43 @@ def report_basic_table_checks(df, numeric_cols=None):
             f"n_generated={n_generated} "
             f"primary_fraction={(n_primaries / n_generated if n_generated else None)}"
         )
+
+    if "CreatorProcessName" in df.columns:
+        print("\nCreatorProcessName counts:\n", df["CreatorProcessName"].value_counts())
+
+
+def save_normalization_summary(normalization, filepath):
+    """
+    Save a compute_primary_fraction()/build_physical_features() normalization
+    dict as a small standalone JSON file, so it can be read from outside the
+    GEEANNT package (e.g. a Geant4-side analysis notebook in another repo)
+    without pulling in the full trained-model metadata.
+    """
+    import json
+
+    if normalization is None:
+        raise ValueError("normalization is None - nothing to save.")
+
+    outdir = os.path.dirname(filepath)
+    if outdir:
+        os.makedirs(outdir, exist_ok=True)
+
+    with open(filepath, "w") as f:
+        json.dump(normalization, f, indent=2)
+
+    print(f"Saved normalization summary to: {filepath}")
+
+    return filepath
+
+
+def load_normalization_summary(filepath):
+    """
+    Load a normalization dict previously written by save_normalization_summary().
+    """
+    import json
+
+    with open(filepath) as f:
+        return json.load(f)
 
 
 def save_detector_table(
