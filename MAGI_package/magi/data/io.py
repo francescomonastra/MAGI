@@ -5,6 +5,7 @@ Input/output utilities for MAGI datasets.
 import numpy as np
 import pandas as pd
 import os
+import re
 
 
 DEFAULT_COLUMNS_DET = [
@@ -31,13 +32,21 @@ def _peek_ncols(filepath, sep=None):
     """
     Count whitespace/sep-separated fields on the first non-empty,
     non-comment line, without loading the whole file.
+
+    Mirrors pandas' own sep convention (used identically by pd.read_table
+    below): sep=None means any whitespace, a single character is a literal
+    delimiter, anything longer (e.g. r"\\s+") is treated as a regex.
     """
     with open(filepath) as f:
         for line in f:
             s = line.strip()
             if not s or s.startswith("#"):
                 continue
-            return len(s.split()) if sep is None else len(s.split(sep))
+            if sep is None:
+                return len(s.split())
+            if len(sep) == 1:
+                return len(s.split(sep))
+            return len(re.split(sep, s))
     return 0
 
 

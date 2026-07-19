@@ -1,6 +1,7 @@
 TrainingData/
 generated/
 checkpoints/generated_particles/
+trained_models/example_run/
 *.egg-info/
 __pycache__/
 *.pyc
