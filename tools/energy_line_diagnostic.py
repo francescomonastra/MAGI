@@ -59,12 +59,7 @@ import os
 import sys
 import numpy as np
 
-# scipy is used for peak finding; degrade gracefully if absent.
-try:
-    from scipy.signal import find_peaks
-    _HAVE_SCIPY = True
-except Exception:
-    _HAVE_SCIPY = False
+from magi.data.preprocessing import bin_counts, detect_line_bins
 
 
 # ----------------------------------------------------------------------------
@@ -135,41 +130,9 @@ def load_energy_bins(path):
 
 
 # ----------------------------------------------------------------------------
-# Line detection
-# ----------------------------------------------------------------------------
-def bin_counts(energies, edges):
-    counts, _ = np.histogram(energies, bins=edges)
-    return counts.astype(np.float64)
-
-
-def detect_line_bins(counts, prominence_factor=3.0, window=5):
-    """Return indices of bins that stand out as lines above a local continuum.
-
-    A bin is a line if its count exceeds `prominence_factor` x the local median
-    (rolling window, excluding the bin itself). Uses scipy.find_peaks when
-    available for a cleaner peak set, then applies the prominence gate.
-    """
-    n = counts.size
-    local_med = np.empty(n)
-    half = window // 2
-    for i in range(n):
-        lo, hi = max(0, i - half), min(n, i + half + 1)
-        neigh = np.concatenate([counts[lo:i], counts[i + 1:hi]])
-        local_med[i] = np.median(neigh) if neigh.size else 0.0
-
-    gate = counts > prominence_factor * np.maximum(local_med, 1.0)
-
-    if _HAVE_SCIPY:
-        peaks, _ = find_peaks(counts)
-        peak_mask = np.zeros(n, dtype=bool)
-        peak_mask[peaks] = True
-        lines = np.where(gate & peak_mask)[0]
-    else:
-        lines = np.where(gate)[0]
-
-    return lines, local_med
-
-
+# Line detection: bin_counts / detect_line_bins now live in
+# magi.data.preprocessing (imported above) so they're reusable outside this
+# script; behavior is unchanged.
 # ----------------------------------------------------------------------------
 # Mechanism (A): label-smoothing target cap
 # ----------------------------------------------------------------------------

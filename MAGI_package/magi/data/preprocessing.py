@@ -5,6 +5,7 @@ Preprocessing and physical feature construction for MAGI.
 import numpy as np
 import pandas as pd
 import sklearn.preprocessing
+from scipy.signal import find_peaks
 
 
 # Default "what counts as primary" criterion per source type. Cosmic rays:
@@ -20,6 +21,48 @@ SOURCE_TYPE_PRIMARY_DEFAULTS = {
     "cosmic_ray": ("PrimBool", 1),
     "radioactive": ("CreatorProcessName", "RadioactiveDecay"),
 }
+
+
+# Candidate spectral lines expected in the CryoSphere energy spectrum, in the
+# same unit convention as `Energy` throughout this module (MeV - see
+# build_energy_bins). Two origins:
+#   - "instrumental": fluorescence / annihilation lines produced in or near
+#     the TES sensor itself (SensitiveDetector_Au001 -> gold absorber -> Au L
+#     lines), independent of which background/source component is active.
+#   - "source:<isotope/chain>": primary gamma decay lines of the K-40 /
+#     Th-232-chain / Ra-226-chain radioactive sources embedded in the
+#     concrete beneath the cryostat. These primary lines are frequently
+#     Compton-degraded before reaching the CryoSphere, so
+#     detect_energy_lines commonly reports them as "expected but not
+#     statistically detected" - that absence is itself informative, not a
+#     bug.
+# Reference energies are standard gamma-/X-ray-spectroscopy values (IAEA
+# gamma-ray energy standards for the source lines; Bearden X-ray emission
+# tables for the instrumental fluorescence lines), given in keV.
+CANDIDATE_ENERGY_LINES = [
+    # -- Instrumental (detector-material) lines --
+    {"label": "e+e- annihilation", "energy_kev": 511.00, "energy_mev": 511.00 / 1000.0, "origin": "instrumental"},
+    {"label": "Al Kalpha", "energy_kev": 1.487, "energy_mev": 1.487 / 1000.0, "origin": "instrumental"},
+    {"label": "Cu Kalpha", "energy_kev": 8.048, "energy_mev": 8.048 / 1000.0, "origin": "instrumental"},
+    {"label": "Cu Kbeta", "energy_kev": 8.905, "energy_mev": 8.905 / 1000.0, "origin": "instrumental"},
+    {"label": "Au Lalpha", "energy_kev": 9.713, "energy_mev": 9.713 / 1000.0, "origin": "instrumental"},
+    {"label": "Au Lbeta", "energy_kev": 11.442, "energy_mev": 11.442 / 1000.0, "origin": "instrumental"},
+
+    # -- K-40 --
+    {"label": "K-40", "energy_kev": 1460.82, "energy_mev": 1460.82 / 1000.0, "origin": "source:K-40"},
+
+    # -- Ra-226 chain (via Pb-214 / Bi-214 equilibrium daughters) --
+    {"label": "Pb-214", "energy_kev": 295.22, "energy_mev": 295.22 / 1000.0, "origin": "source:Ra-226 chain"},
+    {"label": "Pb-214", "energy_kev": 351.93, "energy_mev": 351.93 / 1000.0, "origin": "source:Ra-226 chain"},
+    {"label": "Bi-214", "energy_kev": 609.32, "energy_mev": 609.32 / 1000.0, "origin": "source:Ra-226 chain"},
+    {"label": "Bi-214", "energy_kev": 1120.29, "energy_mev": 1120.29 / 1000.0, "origin": "source:Ra-226 chain"},
+    {"label": "Bi-214", "energy_kev": 1764.49, "energy_mev": 1764.49 / 1000.0, "origin": "source:Ra-226 chain"},
+
+    # -- Th-232 chain (via Ac-228 / Tl-208) --
+    {"label": "Ac-228", "energy_kev": 911.20, "energy_mev": 911.20 / 1000.0, "origin": "source:Th-232 chain"},
+    {"label": "Tl-208", "energy_kev": 583.19, "energy_mev": 583.19 / 1000.0, "origin": "source:Th-232 chain"},
+    {"label": "Tl-208", "energy_kev": 2614.51, "energy_mev": 2614.51 / 1000.0, "origin": "source:Th-232 chain"},
+]
 
 
 def compute_primary_fraction(df, primary_col="PrimBool", primary_value=1):
@@ -429,6 +472,257 @@ def build_energy_bins(
         )
 
     return bins
+
+
+def bin_counts(E, edges):
+    """
+    Histogram E into edges.
+
+    Parameters
+    ----------
+    E : array-like
+        Physical energy values in MeV.
+    edges : array-like
+        Bin edges, as returned by build_energy_bins.
+
+    Returns
+    -------
+    np.ndarray
+        Per-bin counts, float64.
+    """
+    counts, _ = np.histogram(E, bins=edges)
+    return counts.astype(np.float64)
+
+
+def detect_line_bins(counts, prominence_factor=3.0, window=5):
+    """
+    Return indices of bins that stand out as lines above a local continuum.
+
+    A bin is a line if its count exceeds `prominence_factor` x the local
+    median (rolling window, excluding the bin itself), intersected with
+    scipy.signal.find_peaks for a cleaner peak set.
+
+    Parameters
+    ----------
+    counts : array-like
+        Per-bin counts, as returned by bin_counts.
+    prominence_factor : float
+        A bin is flagged as a line if count > prominence_factor * local_median.
+    window : int
+        Rolling window (in bins) used to estimate the local continuum.
+
+    Returns
+    -------
+    lines : np.ndarray
+        Indices of bins flagged as lines.
+    local_med : np.ndarray
+        Local-median continuum estimate, same length as counts.
+    """
+    counts = np.asarray(counts, dtype=np.float64)
+    n = counts.size
+    local_med = np.empty(n)
+    half = window // 2
+    for i in range(n):
+        lo, hi = max(0, i - half), min(n, i + half + 1)
+        neigh = np.concatenate([counts[lo:i], counts[i + 1:hi]])
+        local_med[i] = np.median(neigh) if neigh.size else 0.0
+
+    gate = counts > prominence_factor * np.maximum(local_med, 1.0)
+
+    peaks, _ = find_peaks(counts)
+    peak_mask = np.zeros(n, dtype=bool)
+    peak_mask[peaks] = True
+    lines = np.where(gate & peak_mask)[0]
+
+    return lines, local_med
+
+
+def detect_energy_lines(
+    E,
+    energy_bins=None,
+    binning_mode="log_fixed_count",
+    bin_width=0.5,
+    n_bins=512,
+    min_counts=20,
+    prominence_factor=3.0,
+    window=5,
+    candidate_lines=None,
+    match_tolerance_bins=2.0,
+    resolution_mev=None,
+):
+    """
+    Detect statistically significant spectral lines in an energy spectrum and
+    match them against a table of physically expected candidate lines.
+
+    Parameters
+    ----------
+    E : array-like
+        Physical energy values in MeV.
+    energy_bins : array-like or None
+        Bin edges to use. If None, they are built from E via
+        build_energy_bins(E, mode=binning_mode, ...).
+    binning_mode, bin_width, n_bins, min_counts : see build_energy_bins.
+        Only used when energy_bins is None.
+    prominence_factor, window : see detect_line_bins.
+    candidate_lines : list of dict or None
+        Candidate line table to match against. Defaults to
+        CANDIDATE_ENERGY_LINES. Each entry must have "energy_mev".
+    match_tolerance_bins : float
+        Matching tolerance for a candidate line, expressed as a multiple of
+        the local bin width at that candidate's energy. Bin-width-relative
+        (rather than a fixed MeV tolerance) because build_energy_bins
+        supports non-uniform binning (e.g. log_fixed_count), where bin width
+        varies by orders of magnitude across the spectrum.
+    resolution_mev : float or None
+        If given, the matching tolerance is widened to at least this value
+        (detector energy resolution) - matching can never be tighter than
+        the instrument's own resolution allows.
+
+    Returns
+    -------
+    dict
+        n_events, energy_bins, binning_mode, prominence_factor, window,
+        match_tolerance_bins, resolution_mev,
+        detected_peaks (all statistically-flagged bins),
+        matched_lines (candidate<->detected-peak matches),
+        unmatched_detected_peaks (significant bins with no nearby candidate -
+            possible unknown/uncatalogued lines),
+        unmatched_candidates (expected candidates not statistically detected -
+            e.g. source decay lines Compton-degraded before crossing the
+            detector),
+        n_candidate_lines, n_detected_peaks, n_matched.
+        All values are native Python types (no numpy scalars), so the result
+        can be passed directly to save_normalization_summary.
+    """
+    E = np.asarray(E, dtype=np.float64)
+    if E.ndim != 1 or len(E) == 0:
+        raise ValueError("E must be a non-empty 1D array.")
+
+    if energy_bins is None:
+        edges = build_energy_bins(
+            E, mode=binning_mode, bin_width=bin_width,
+            n_bins=n_bins, min_counts=min_counts,
+        )
+        used_mode = binning_mode
+    else:
+        edges = np.asarray(energy_bins, dtype=np.float64)
+        used_mode = "external"
+
+    if candidate_lines is None:
+        candidate_lines = CANDIDATE_ENERGY_LINES
+
+    counts = bin_counts(E, edges)
+    peak_idx, local_med = detect_line_bins(
+        counts, prominence_factor=prominence_factor, window=window
+    )
+    centres = 0.5 * (edges[:-1] + edges[1:])
+
+    detected_peaks = [
+        {
+            "bin_index": int(b),
+            "energy_mev": float(centres[b]),
+            "count": float(counts[b]),
+            "local_median": float(local_med[b]),
+        }
+        for b in peak_idx
+    ]
+
+    matched_lines = []
+    matched_peak_bins = set()
+    unmatched_candidates = []
+
+    for cand in candidate_lines:
+        E_c = float(cand["energy_mev"])
+        bin_i = int(np.clip(np.searchsorted(edges, E_c) - 1, 0, len(edges) - 2))
+        local_width = float(edges[bin_i + 1] - edges[bin_i])
+        tol = match_tolerance_bins * local_width
+        if resolution_mev is not None:
+            tol = max(tol, float(resolution_mev))
+
+        best_peak = None
+        best_dist = None
+        for peak in detected_peaks:
+            if peak["bin_index"] in matched_peak_bins:
+                continue
+            dist = abs(peak["energy_mev"] - E_c)
+            if dist <= tol and (best_dist is None or dist < best_dist):
+                best_peak, best_dist = peak, dist
+
+        if best_peak is not None:
+            matched_peak_bins.add(best_peak["bin_index"])
+            matched_lines.append({
+                "label": cand["label"],
+                "origin": cand["origin"],
+                "candidate_energy_mev": E_c,
+                "detected_energy_mev": best_peak["energy_mev"],
+                "bin_index": best_peak["bin_index"],
+                "count": best_peak["count"],
+                "delta_mev": best_peak["energy_mev"] - E_c,
+            })
+        else:
+            unmatched_candidates.append({
+                "label": cand["label"],
+                "origin": cand["origin"],
+                "candidate_energy_mev": E_c,
+            })
+
+    unmatched_detected_peaks = [
+        peak for peak in detected_peaks if peak["bin_index"] not in matched_peak_bins
+    ]
+
+    return {
+        "n_events": int(E.size),
+        "energy_bins": [float(e) for e in edges],
+        "binning_mode": used_mode,
+        "prominence_factor": float(prominence_factor),
+        "window": int(window),
+        "match_tolerance_bins": float(match_tolerance_bins),
+        "resolution_mev": (float(resolution_mev) if resolution_mev is not None else None),
+        "detected_peaks": detected_peaks,
+        "matched_lines": matched_lines,
+        "unmatched_detected_peaks": unmatched_detected_peaks,
+        "unmatched_candidates": unmatched_candidates,
+        "n_candidate_lines": len(candidate_lines),
+        "n_detected_peaks": len(detected_peaks),
+        "n_matched": len(matched_lines),
+    }
+
+
+def print_detected_energy_lines(result):
+    """
+    Print a compact summary of a detect_energy_lines() result.
+    """
+    print("\n--- Energy line detection ---")
+    print(
+        "events:", result["n_events"],
+        " bins:", len(result["energy_bins"]) - 1,
+        " mode:", result["binning_mode"],
+    )
+    print(
+        "candidate lines:", result["n_candidate_lines"],
+        " detected peaks:", result["n_detected_peaks"],
+        " matched:", result["n_matched"],
+    )
+
+    print("\nMatched lines:")
+    for m in result["matched_lines"]:
+        print(
+            f"  {m['label']:20s} ({m['origin']:22s}) "
+            f"expected={m['candidate_energy_mev']:.6f} MeV "
+            f"detected={m['detected_energy_mev']:.6f} MeV "
+            f"delta={m['delta_mev']:+.6f} MeV  count={m['count']:.0f}"
+        )
+
+    print("\nExpected-but-undetected candidates (likely Compton-smeared / below prominence):")
+    for c in result["unmatched_candidates"]:
+        print(
+            f"  {c['label']:20s} ({c['origin']:22s}) "
+            f"expected={c['candidate_energy_mev']:.6f} MeV"
+        )
+
+    print("\nUnmatched detected peaks (possible unknown/uncatalogued lines):")
+    for p in result["unmatched_detected_peaks"]:
+        print(f"  bin={p['bin_index']:5d}  E={p['energy_mev']:.6f} MeV  count={p['count']:.0f}")
 
 
 def _fit_quantile_column(
