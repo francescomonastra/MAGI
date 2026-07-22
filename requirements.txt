@@ -81,7 +81,9 @@ tensorflow==2.16.2
 tensorflow-io-gcs-filesystem==0.37.1
 tensorflow-macos==2.16.2
 tensorflow-metal==1.2.0
+tensorflow_probability==0.24.0
 termcolor==3.3.0
+tf-keras==2.16.0
 threadpoolctl==3.6.0
 tomli==2.4.0
 tornado==6.5.5

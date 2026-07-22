@@ -4,6 +4,8 @@ from .io import (
     save_detector_table,
     save_normalization_summary,
     load_normalization_summary,
+    save_candidate_energy_lines,
+    load_candidate_energy_lines,
 )
 
 from .preprocessing import (
@@ -11,9 +13,11 @@ from .preprocessing import (
     build_physical_features,
     print_physical_summary,
     build_energy_bins,
-    CANDIDATE_ENERGY_LINES,
+    DEFAULT_CANDIDATE_ENERGY_LINES,
     detect_energy_lines,
     print_detected_energy_lines,
+    build_gate_targets,
+    transform_quantile_values,
     build_feature_dataframe,
     report_feature_dataframe,
     fit_quantile_geometry_transforms,
@@ -48,15 +52,19 @@ __all__ = [
     "report_basic_table_checks",
     "save_normalization_summary",
     "load_normalization_summary",
+    "save_candidate_energy_lines",
+    "load_candidate_energy_lines",
 
     # preprocessing
     "compute_primary_fraction",
     "build_physical_features",
     "print_physical_summary",
     "build_energy_bins",
-    "CANDIDATE_ENERGY_LINES",
+    "DEFAULT_CANDIDATE_ENERGY_LINES",
     "detect_energy_lines",
     "print_detected_energy_lines",
+    "build_gate_targets",
+    "transform_quantile_values",
     "build_feature_dataframe",
     "report_feature_dataframe",
     "fit_quantile_geometry_transforms",

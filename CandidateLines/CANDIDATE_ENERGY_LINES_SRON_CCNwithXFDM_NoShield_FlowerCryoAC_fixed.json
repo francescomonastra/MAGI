@@ -1,0 +1,854 @@
+{
+  "mass_model": "SRON_CCNwithXFDM_NoShield_FlowerCryoAC_fixed.gdml",
+  "mass_model_path": "/Volumes/X10Pro/Geant4-projects/Geant4-10.4.3/S1GDMLSRON_CryoSphereEmission/SRON_CCNwithXFDM_NoShield_FlowerCryoAC_fixed.gdml",
+  "sources": [
+    "K-40",
+    "Ra-226 chain",
+    "Rn-222 chain",
+    "Th-232 chain"
+  ],
+  "fluor_dataset_path": "/Volumes/X10Pro/Geant4-system/geant4-v10.4.3-build/data/G4EMLOW7.3/fluor_Bearden",
+  "photoevap_dataset_path": "/Volumes/X10Pro/Geant4-system/geant4-v10.4.3-build/data/PhotonEvaporation5.2",
+  "generated_by": "tools/build_candidate_lines_from_geant4.py",
+  "generated_at": "2026-07-21T11:34:10.708196+00:00",
+  "n_lines": 113,
+  "lines": [
+    {
+      "label": "e+e- annihilation",
+      "energy_kev": 510.999,
+      "energy_mev": 0.510999,
+      "origin": "instrumental",
+      "source": "physical constant (electron rest mass)"
+    },
+    {
+      "label": "Al K-alpha1",
+      "energy_kev": 1.4867,
+      "energy_mev": 0.0014867,
+      "origin": "instrumental",
+      "source": "G4EMLOW7.3/fluor_Bearden/fl-tr-pr-13.dat"
+    },
+    {
+      "label": "Al K-alpha2",
+      "energy_kev": 1.48627,
+      "energy_mev": 0.00148627,
+      "origin": "instrumental",
+      "source": "G4EMLOW7.3/fluor_Bearden/fl-tr-pr-13.dat"
+    },
+    {
+      "label": "Al K-beta",
+      "energy_kev": 1.5574,
+      "energy_mev": 0.0015574,
+      "origin": "instrumental",
+      "source": "G4EMLOW7.3/fluor_Bearden/fl-tr-pr-13.dat"
+    },
+    {
+      "label": "Si K-alpha1",
+      "energy_kev": 1.73998,
+      "energy_mev": 0.00173998,
+      "origin": "instrumental",
+      "source": "G4EMLOW7.3/fluor_Bearden/fl-tr-pr-14.dat"
+    },
+    {
+      "label": "Si K-alpha2",
+      "energy_kev": 1.73938,
+      "energy_mev": 0.00173938,
+      "origin": "instrumental",
+      "source": "G4EMLOW7.3/fluor_Bearden/fl-tr-pr-14.dat"
+    },
+    {
+      "label": "Si K-beta",
+      "energy_kev": 1.8359,
+      "energy_mev": 0.0018359,
+      "origin": "instrumental",
+      "source": "G4EMLOW7.3/fluor_Bearden/fl-tr-pr-14.dat"
+    },
+    {
+      "label": "P K-alpha1",
+      "energy_kev": 2.0137,
+      "energy_mev": 0.0020137,
+      "origin": "instrumental",
+      "source": "G4EMLOW7.3/fluor_Bearden/fl-tr-pr-15.dat"
+    },
+    {
+      "label": "P K-alpha2",
+      "energy_kev": 2.0127,
+      "energy_mev": 0.0020127,
+      "origin": "instrumental",
+      "source": "G4EMLOW7.3/fluor_Bearden/fl-tr-pr-15.dat"
+    },
+    {
+      "label": "P K-beta",
+      "energy_kev": 2.139,
+      "energy_mev": 0.002139,
+      "origin": "instrumental",
+      "source": "G4EMLOW7.3/fluor_Bearden/fl-tr-pr-15.dat"
+    },
+    {
+      "label": "Ar K-alpha1",
+      "energy_kev": 2.9577,
+      "energy_mev": 0.0029577,
+      "origin": "instrumental",
+      "source": "G4EMLOW7.3/fluor_Bearden/fl-tr-pr-18.dat"
+    },
+    {
+      "label": "Ar K-alpha2",
+      "energy_kev": 2.95563,
+      "energy_mev": 0.00295563,
+      "origin": "instrumental",
+      "source": "G4EMLOW7.3/fluor_Bearden/fl-tr-pr-18.dat"
+    },
+    {
+      "label": "Ar K-beta",
+      "energy_kev": 3.1905,
+      "energy_mev": 0.0031905,
+      "origin": "instrumental",
+      "source": "G4EMLOW7.3/fluor_Bearden/fl-tr-pr-18.dat"
+    },
+    {
+      "label": "Ti K-alpha1",
+      "energy_kev": 4.51084,
+      "energy_mev": 0.00451084,
+      "origin": "instrumental",
+      "source": "G4EMLOW7.3/fluor_Bearden/fl-tr-pr-22.dat"
+    },
+    {
+      "label": "Ti K-alpha2",
+      "energy_kev": 4.50486,
+      "energy_mev": 0.00450486,
+      "origin": "instrumental",
+      "source": "G4EMLOW7.3/fluor_Bearden/fl-tr-pr-22.dat"
+    },
+    {
+      "label": "Ti K-beta",
+      "energy_kev": 4.93181,
+      "energy_mev": 0.00493181,
+      "origin": "instrumental",
+      "source": "G4EMLOW7.3/fluor_Bearden/fl-tr-pr-22.dat"
+    },
+    {
+      "label": "Cr K-alpha1",
+      "energy_kev": 5.41472,
+      "energy_mev": 0.00541472,
+      "origin": "instrumental",
+      "source": "G4EMLOW7.3/fluor_Bearden/fl-tr-pr-24.dat"
+    },
+    {
+      "label": "Cr K-alpha2",
+      "energy_kev": 5.40551,
+      "energy_mev": 0.00540551,
+      "origin": "instrumental",
+      "source": "G4EMLOW7.3/fluor_Bearden/fl-tr-pr-24.dat"
+    },
+    {
+      "label": "Cr K-beta",
+      "energy_kev": 5.94671,
+      "energy_mev": 0.00594671,
+      "origin": "instrumental",
+      "source": "G4EMLOW7.3/fluor_Bearden/fl-tr-pr-24.dat"
+    },
+    {
+      "label": "Mn K-alpha1",
+      "energy_kev": 5.89875,
+      "energy_mev": 0.00589875,
+      "origin": "instrumental",
+      "source": "G4EMLOW7.3/fluor_Bearden/fl-tr-pr-25.dat"
+    },
+    {
+      "label": "Mn K-alpha2",
+      "energy_kev": 5.88765,
+      "energy_mev": 0.00588765,
+      "origin": "instrumental",
+      "source": "G4EMLOW7.3/fluor_Bearden/fl-tr-pr-25.dat"
+    },
+    {
+      "label": "Mn K-beta",
+      "energy_kev": 6.49045,
+      "energy_mev": 0.00649045,
+      "origin": "instrumental",
+      "source": "G4EMLOW7.3/fluor_Bearden/fl-tr-pr-25.dat"
+    },
+    {
+      "label": "Fe K-alpha1",
+      "energy_kev": 6.40384,
+      "energy_mev": 0.00640384,
+      "origin": "instrumental",
+      "source": "G4EMLOW7.3/fluor_Bearden/fl-tr-pr-26.dat"
+    },
+    {
+      "label": "Fe K-alpha2",
+      "energy_kev": 6.39084,
+      "energy_mev": 0.00639084,
+      "origin": "instrumental",
+      "source": "G4EMLOW7.3/fluor_Bearden/fl-tr-pr-26.dat"
+    },
+    {
+      "label": "Fe K-beta",
+      "energy_kev": 7.05798,
+      "energy_mev": 0.00705798,
+      "origin": "instrumental",
+      "source": "G4EMLOW7.3/fluor_Bearden/fl-tr-pr-26.dat"
+    },
+    {
+      "label": "Ni K-alpha1",
+      "energy_kev": 7.47815,
+      "energy_mev": 0.00747815,
+      "origin": "instrumental",
+      "source": "G4EMLOW7.3/fluor_Bearden/fl-tr-pr-28.dat"
+    },
+    {
+      "label": "Ni K-alpha2",
+      "energy_kev": 7.46089,
+      "energy_mev": 0.00746089,
+      "origin": "instrumental",
+      "source": "G4EMLOW7.3/fluor_Bearden/fl-tr-pr-28.dat"
+    },
+    {
+      "label": "Ni K-beta",
+      "energy_kev": 8.26466,
+      "energy_mev": 0.00826466,
+      "origin": "instrumental",
+      "source": "G4EMLOW7.3/fluor_Bearden/fl-tr-pr-28.dat"
+    },
+    {
+      "label": "Cu K-alpha1",
+      "energy_kev": 8.04778,
+      "energy_mev": 0.00804778,
+      "origin": "instrumental",
+      "source": "G4EMLOW7.3/fluor_Bearden/fl-tr-pr-29.dat"
+    },
+    {
+      "label": "Cu K-alpha2",
+      "energy_kev": 8.02783,
+      "energy_mev": 0.00802783,
+      "origin": "instrumental",
+      "source": "G4EMLOW7.3/fluor_Bearden/fl-tr-pr-29.dat"
+    },
+    {
+      "label": "Cu K-beta",
+      "energy_kev": 8.90529,
+      "energy_mev": 0.00890529,
+      "origin": "instrumental",
+      "source": "G4EMLOW7.3/fluor_Bearden/fl-tr-pr-29.dat"
+    },
+    {
+      "label": "Zn K-alpha1",
+      "energy_kev": 8.63886,
+      "energy_mev": 0.00863886,
+      "origin": "instrumental",
+      "source": "G4EMLOW7.3/fluor_Bearden/fl-tr-pr-30.dat"
+    },
+    {
+      "label": "Zn K-alpha2",
+      "energy_kev": 8.61578,
+      "energy_mev": 0.00861578,
+      "origin": "instrumental",
+      "source": "G4EMLOW7.3/fluor_Bearden/fl-tr-pr-30.dat"
+    },
+    {
+      "label": "Zn K-beta",
+      "energy_kev": 9.572,
+      "energy_mev": 0.009572,
+      "origin": "instrumental",
+      "source": "G4EMLOW7.3/fluor_Bearden/fl-tr-pr-30.dat"
+    },
+    {
+      "label": "Ge K-alpha1",
+      "energy_kev": 9.88642,
+      "energy_mev": 0.00988642,
+      "origin": "instrumental",
+      "source": "G4EMLOW7.3/fluor_Bearden/fl-tr-pr-32.dat"
+    },
+    {
+      "label": "Ge K-alpha2",
+      "energy_kev": 9.85532,
+      "energy_mev": 0.00985532,
+      "origin": "instrumental",
+      "source": "G4EMLOW7.3/fluor_Bearden/fl-tr-pr-32.dat"
+    },
+    {
+      "label": "Ge K-beta",
+      "energy_kev": 10.9821,
+      "energy_mev": 0.0109821,
+      "origin": "instrumental",
+      "source": "G4EMLOW7.3/fluor_Bearden/fl-tr-pr-32.dat"
+    },
+    {
+      "label": "Nb K-alpha1",
+      "energy_kev": 16.6151,
+      "energy_mev": 0.0166151,
+      "origin": "instrumental",
+      "source": "G4EMLOW7.3/fluor_Bearden/fl-tr-pr-41.dat"
+    },
+    {
+      "label": "Nb K-alpha2",
+      "energy_kev": 16.521,
+      "energy_mev": 0.016521,
+      "origin": "instrumental",
+      "source": "G4EMLOW7.3/fluor_Bearden/fl-tr-pr-41.dat"
+    },
+    {
+      "label": "Nb K-beta",
+      "energy_kev": 18.6225,
+      "energy_mev": 0.0186225,
+      "origin": "instrumental",
+      "source": "G4EMLOW7.3/fluor_Bearden/fl-tr-pr-41.dat"
+    },
+    {
+      "label": "Nb L-alpha",
+      "energy_kev": 2.16589,
+      "energy_mev": 0.00216589,
+      "origin": "instrumental",
+      "source": "G4EMLOW7.3/fluor_Bearden/fl-tr-pr-41.dat"
+    },
+    {
+      "label": "Nb L-beta",
+      "energy_kev": 2.2574,
+      "energy_mev": 0.0022574,
+      "origin": "instrumental",
+      "source": "G4EMLOW7.3/fluor_Bearden/fl-tr-pr-41.dat"
+    },
+    {
+      "label": "Mo K-alpha1",
+      "energy_kev": 17.47934,
+      "energy_mev": 0.01747934,
+      "origin": "instrumental",
+      "source": "G4EMLOW7.3/fluor_Bearden/fl-tr-pr-42.dat"
+    },
+    {
+      "label": "Mo K-alpha2",
+      "energy_kev": 17.3743,
+      "energy_mev": 0.0173743,
+      "origin": "instrumental",
+      "source": "G4EMLOW7.3/fluor_Bearden/fl-tr-pr-42.dat"
+    },
+    {
+      "label": "Mo K-beta",
+      "energy_kev": 19.6083,
+      "energy_mev": 0.0196083,
+      "origin": "instrumental",
+      "source": "G4EMLOW7.3/fluor_Bearden/fl-tr-pr-42.dat"
+    },
+    {
+      "label": "Mo L-alpha",
+      "energy_kev": 2.29316,
+      "energy_mev": 0.00229316,
+      "origin": "instrumental",
+      "source": "G4EMLOW7.3/fluor_Bearden/fl-tr-pr-42.dat"
+    },
+    {
+      "label": "Mo L-beta",
+      "energy_kev": 2.39481,
+      "energy_mev": 0.00239481,
+      "origin": "instrumental",
+      "source": "G4EMLOW7.3/fluor_Bearden/fl-tr-pr-42.dat"
+    },
+    {
+      "label": "Ag K-alpha1",
+      "energy_kev": 22.16292,
+      "energy_mev": 0.02216292,
+      "origin": "instrumental",
+      "source": "G4EMLOW7.3/fluor_Bearden/fl-tr-pr-47.dat"
+    },
+    {
+      "label": "Ag K-alpha2",
+      "energy_kev": 21.9903,
+      "energy_mev": 0.0219903,
+      "origin": "instrumental",
+      "source": "G4EMLOW7.3/fluor_Bearden/fl-tr-pr-47.dat"
+    },
+    {
+      "label": "Ag K-beta",
+      "energy_kev": 24.9424,
+      "energy_mev": 0.0249424,
+      "origin": "instrumental",
+      "source": "G4EMLOW7.3/fluor_Bearden/fl-tr-pr-47.dat"
+    },
+    {
+      "label": "Ag L-alpha",
+      "energy_kev": 2.98431,
+      "energy_mev": 0.00298431,
+      "origin": "instrumental",
+      "source": "G4EMLOW7.3/fluor_Bearden/fl-tr-pr-47.dat"
+    },
+    {
+      "label": "Ag L-beta",
+      "energy_kev": 3.15094,
+      "energy_mev": 0.00315094,
+      "origin": "instrumental",
+      "source": "G4EMLOW7.3/fluor_Bearden/fl-tr-pr-47.dat"
+    },
+    {
+      "label": "Sn K-alpha1",
+      "energy_kev": 25.2713,
+      "energy_mev": 0.0252713,
+      "origin": "instrumental",
+      "source": "G4EMLOW7.3/fluor_Bearden/fl-tr-pr-50.dat"
+    },
+    {
+      "label": "Sn K-alpha2",
+      "energy_kev": 25.044,
+      "energy_mev": 0.025044,
+      "origin": "instrumental",
+      "source": "G4EMLOW7.3/fluor_Bearden/fl-tr-pr-50.dat"
+    },
+    {
+      "label": "Sn K-beta",
+      "energy_kev": 28.486,
+      "energy_mev": 0.028486,
+      "origin": "instrumental",
+      "source": "G4EMLOW7.3/fluor_Bearden/fl-tr-pr-50.dat"
+    },
+    {
+      "label": "Sn L-alpha",
+      "energy_kev": 3.44398,
+      "energy_mev": 0.00344398,
+      "origin": "instrumental",
+      "source": "G4EMLOW7.3/fluor_Bearden/fl-tr-pr-50.dat"
+    },
+    {
+      "label": "Sn L-beta",
+      "energy_kev": 3.6628,
+      "energy_mev": 0.0036628,
+      "origin": "instrumental",
+      "source": "G4EMLOW7.3/fluor_Bearden/fl-tr-pr-50.dat"
+    },
+    {
+      "label": "Au K-alpha1",
+      "energy_kev": 68.8037,
+      "energy_mev": 0.0688037,
+      "origin": "instrumental",
+      "source": "G4EMLOW7.3/fluor_Bearden/fl-tr-pr-79.dat"
+    },
+    {
+      "label": "Au K-alpha2",
+      "energy_kev": 66.9895,
+      "energy_mev": 0.0669895,
+      "origin": "instrumental",
+      "source": "G4EMLOW7.3/fluor_Bearden/fl-tr-pr-79.dat"
+    },
+    {
+      "label": "Au K-beta",
+      "energy_kev": 77.984,
+      "energy_mev": 0.077984,
+      "origin": "instrumental",
+      "source": "G4EMLOW7.3/fluor_Bearden/fl-tr-pr-79.dat"
+    },
+    {
+      "label": "Au L-alpha",
+      "energy_kev": 9.7133,
+      "energy_mev": 0.0097133,
+      "origin": "instrumental",
+      "source": "G4EMLOW7.3/fluor_Bearden/fl-tr-pr-79.dat"
+    },
+    {
+      "label": "Au L-beta",
+      "energy_kev": 11.4423,
+      "energy_mev": 0.0114423,
+      "origin": "instrumental",
+      "source": "G4EMLOW7.3/fluor_Bearden/fl-tr-pr-79.dat"
+    },
+    {
+      "label": "Pb K-alpha1",
+      "energy_kev": 74.9694,
+      "energy_mev": 0.0749694,
+      "origin": "instrumental",
+      "source": "G4EMLOW7.3/fluor_Bearden/fl-tr-pr-82.dat"
+    },
+    {
+      "label": "Pb K-alpha2",
+      "energy_kev": 72.8042,
+      "energy_mev": 0.0728042,
+      "origin": "instrumental",
+      "source": "G4EMLOW7.3/fluor_Bearden/fl-tr-pr-82.dat"
+    },
+    {
+      "label": "Pb K-beta",
+      "energy_kev": 84.936,
+      "energy_mev": 0.084936,
+      "origin": "instrumental",
+      "source": "G4EMLOW7.3/fluor_Bearden/fl-tr-pr-82.dat"
+    },
+    {
+      "label": "Pb L-alpha",
+      "energy_kev": 10.5515,
+      "energy_mev": 0.0105515,
+      "origin": "instrumental",
+      "source": "G4EMLOW7.3/fluor_Bearden/fl-tr-pr-82.dat"
+    },
+    {
+      "label": "Pb L-beta",
+      "energy_kev": 12.6137,
+      "energy_mev": 0.0126137,
+      "origin": "instrumental",
+      "source": "G4EMLOW7.3/fluor_Bearden/fl-tr-pr-82.dat"
+    },
+    {
+      "label": "Ar-40",
+      "energy_kev": 1460.851,
+      "energy_mev": 1.460851,
+      "origin": "source:K-40",
+      "source": "PhotonEvaporation5.2/z18.a40",
+      "intensity": 100.0
+    },
+    {
+      "label": "Ar-40",
+      "energy_kev": 3918.8,
+      "energy_mev": 3.9188,
+      "origin": "source:K-40",
+      "source": "PhotonEvaporation5.2/z18.a40",
+      "intensity": 100.0
+    },
+    {
+      "label": "Ar-40",
+      "energy_kev": 3941.7,
+      "energy_mev": 3.9417,
+      "origin": "source:K-40",
+      "source": "PhotonEvaporation5.2/z18.a40",
+      "intensity": 100.0
+    },
+    {
+      "label": "Rn-222",
+      "energy_kev": 186.211,
+      "energy_mev": 0.186211,
+      "origin": "source:Ra-226 chain",
+      "source": "PhotonEvaporation5.2/z86.a222",
+      "intensity": 100.0
+    },
+    {
+      "label": "Rn-222",
+      "energy_kev": 600.66,
+      "energy_mev": 0.60066,
+      "origin": "source:Ra-226 chain",
+      "source": "PhotonEvaporation5.2/z86.a222",
+      "intensity": 100.0
+    },
+    {
+      "label": "Rn-222",
+      "energy_kev": 359.6,
+      "energy_mev": 0.3596,
+      "origin": "source:Ra-226 chain",
+      "source": "PhotonEvaporation5.2/z86.a222",
+      "intensity": 75.0
+    },
+    {
+      "label": "Po-218",
+      "energy_kev": 509.7,
+      "energy_mev": 0.5097,
+      "origin": "source:Ra-226 chain",
+      "source": "PhotonEvaporation5.2/z84.a218",
+      "intensity": 100.0
+    },
+    {
+      "label": "Po-218",
+      "energy_kev": 425.5,
+      "energy_mev": 0.4255,
+      "origin": "source:Ra-226 chain",
+      "source": "PhotonEvaporation5.2/z84.a218",
+      "intensity": 100.0
+    },
+    {
+      "label": "Po-218",
+      "energy_kev": 385.7,
+      "energy_mev": 0.3857,
+      "origin": "source:Ra-226 chain",
+      "source": "PhotonEvaporation5.2/z84.a218",
+      "intensity": 100.0
+    },
+    {
+      "label": "Pb-214",
+      "energy_kev": 53.2282,
+      "energy_mev": 0.0532282,
+      "origin": "source:Ra-226 chain",
+      "source": "PhotonEvaporation5.2/z83.a214",
+      "intensity": 100.0
+    },
+    {
+      "label": "Pb-214",
+      "energy_kev": 258.87,
+      "energy_mev": 0.25887,
+      "origin": "source:Ra-226 chain",
+      "source": "PhotonEvaporation5.2/z83.a214",
+      "intensity": 100.0
+    },
+    {
+      "label": "Pb-214",
+      "energy_kev": 295.2231,
+      "energy_mev": 0.2952231,
+      "origin": "source:Ra-226 chain",
+      "source": "PhotonEvaporation5.2/z83.a214",
+      "intensity": 100.0
+    },
+    {
+      "label": "Bi-214",
+      "energy_kev": 609.316,
+      "energy_mev": 0.609316,
+      "origin": "source:Ra-226 chain",
+      "source": "PhotonEvaporation5.2/z84.a214",
+      "intensity": 100.0
+    },
+    {
+      "label": "Bi-214",
+      "energy_kev": 1661.279,
+      "energy_mev": 1.661279,
+      "origin": "source:Ra-226 chain",
+      "source": "PhotonEvaporation5.2/z84.a214",
+      "intensity": 100.0
+    },
+    {
+      "label": "Bi-214",
+      "energy_kev": 1764.515,
+      "energy_mev": 1.764515,
+      "origin": "source:Ra-226 chain",
+      "source": "PhotonEvaporation5.2/z84.a214",
+      "intensity": 100.0
+    },
+    {
+      "label": "Po-218",
+      "energy_kev": 509.7,
+      "energy_mev": 0.5097,
+      "origin": "source:Rn-222 chain",
+      "source": "PhotonEvaporation5.2/z84.a218",
+      "intensity": 100.0
+    },
+    {
+      "label": "Po-218",
+      "energy_kev": 425.5,
+      "energy_mev": 0.4255,
+      "origin": "source:Rn-222 chain",
+      "source": "PhotonEvaporation5.2/z84.a218",
+      "intensity": 100.0
+    },
+    {
+      "label": "Po-218",
+      "energy_kev": 385.7,
+      "energy_mev": 0.3857,
+      "origin": "source:Rn-222 chain",
+      "source": "PhotonEvaporation5.2/z84.a218",
+      "intensity": 100.0
+    },
+    {
+      "label": "Pb-214",
+      "energy_kev": 53.2282,
+      "energy_mev": 0.0532282,
+      "origin": "source:Rn-222 chain",
+      "source": "PhotonEvaporation5.2/z83.a214",
+      "intensity": 100.0
+    },
+    {
+      "label": "Pb-214",
+      "energy_kev": 258.87,
+      "energy_mev": 0.25887,
+      "origin": "source:Rn-222 chain",
+      "source": "PhotonEvaporation5.2/z83.a214",
+      "intensity": 100.0
+    },
+    {
+      "label": "Pb-214",
+      "energy_kev": 295.2231,
+      "energy_mev": 0.2952231,
+      "origin": "source:Rn-222 chain",
+      "source": "PhotonEvaporation5.2/z83.a214",
+      "intensity": 100.0
+    },
+    {
+      "label": "Bi-214",
+      "energy_kev": 609.316,
+      "energy_mev": 0.609316,
+      "origin": "source:Rn-222 chain",
+      "source": "PhotonEvaporation5.2/z84.a214",
+      "intensity": 100.0
+    },
+    {
+      "label": "Bi-214",
+      "energy_kev": 1661.279,
+      "energy_mev": 1.661279,
+      "origin": "source:Rn-222 chain",
+      "source": "PhotonEvaporation5.2/z84.a214",
+      "intensity": 100.0
+    },
+    {
+      "label": "Bi-214",
+      "energy_kev": 1764.515,
+      "energy_mev": 1.764515,
+      "origin": "source:Rn-222 chain",
+      "source": "PhotonEvaporation5.2/z84.a214",
+      "intensity": 100.0
+    },
+    {
+      "label": "Ra-228",
+      "energy_kev": 6.28,
+      "energy_mev": 0.00628,
+      "origin": "source:Th-232 chain",
+      "source": "PhotonEvaporation5.2/z89.a228",
+      "intensity": 100.0
+    },
+    {
+      "label": "Ra-228",
+      "energy_kev": 6.67,
+      "energy_mev": 0.00667,
+      "origin": "source:Th-232 chain",
+      "source": "PhotonEvaporation5.2/z89.a228",
+      "intensity": 100.0
+    },
+    {
+      "label": "Ra-228",
+      "energy_kev": 13.52,
+      "energy_mev": 0.01352,
+      "origin": "source:Th-232 chain",
+      "source": "PhotonEvaporation5.2/z89.a228",
+      "intensity": 100.0
+    },
+    {
+      "label": "Ac-228",
+      "energy_kev": 57.773,
+      "energy_mev": 0.057773,
+      "origin": "source:Th-232 chain",
+      "source": "PhotonEvaporation5.2/z90.a228",
+      "intensity": 100.0
+    },
+    {
+      "label": "Ac-228",
+      "energy_kev": 944.205,
+      "energy_mev": 0.944205,
+      "origin": "source:Th-232 chain",
+      "source": "PhotonEvaporation5.2/z90.a228",
+      "intensity": 100.0
+    },
+    {
+      "label": "Ac-228",
+      "energy_kev": 1906.65,
+      "energy_mev": 1.90665,
+      "origin": "source:Th-232 chain",
+      "source": "PhotonEvaporation5.2/z90.a228",
+      "intensity": 100.0
+    },
+    {
+      "label": "Th-228",
+      "energy_kev": 84.373,
+      "energy_mev": 0.084373,
+      "origin": "source:Th-232 chain",
+      "source": "PhotonEvaporation5.2/z88.a224",
+      "intensity": 100.0
+    },
+    {
+      "label": "Th-228",
+      "energy_kev": 215.985,
+      "energy_mev": 0.215985,
+      "origin": "source:Th-232 chain",
+      "source": "PhotonEvaporation5.2/z88.a224",
+      "intensity": 100.0
+    },
+    {
+      "label": "Th-228",
+      "energy_kev": 1378.35,
+      "energy_mev": 1.37835,
+      "origin": "source:Th-232 chain",
+      "source": "PhotonEvaporation5.2/z88.a224",
+      "intensity": 100.0
+    },
+    {
+      "label": "Ra-224",
+      "energy_kev": 240.986,
+      "energy_mev": 0.240986,
+      "origin": "source:Th-232 chain",
+      "source": "PhotonEvaporation5.2/z86.a220",
+      "intensity": 100.0
+    },
+    {
+      "label": "Ra-224",
+      "energy_kev": 645.44,
+      "energy_mev": 0.64544,
+      "origin": "source:Th-232 chain",
+      "source": "PhotonEvaporation5.2/z86.a220",
+      "intensity": 100.0
+    },
+    {
+      "label": "Ra-224",
+      "energy_kev": 292.694,
+      "energy_mev": 0.292694,
+      "origin": "source:Th-232 chain",
+      "source": "PhotonEvaporation5.2/z86.a220",
+      "intensity": 100.0
+    },
+    {
+      "label": "Rn-220",
+      "energy_kev": 549.76,
+      "energy_mev": 0.54976,
+      "origin": "source:Th-232 chain",
+      "source": "PhotonEvaporation5.2/z84.a216",
+      "intensity": 100.0
+    },
+    {
+      "label": "Rn-220",
+      "energy_kev": 419.18,
+      "energy_mev": 0.41918,
+      "origin": "source:Th-232 chain",
+      "source": "PhotonEvaporation5.2/z84.a216",
+      "intensity": 100.0
+    },
+    {
+      "label": "Rn-220",
+      "energy_kev": 359.46,
+      "energy_mev": 0.35946,
+      "origin": "source:Th-232 chain",
+      "source": "PhotonEvaporation5.2/z84.a216",
+      "intensity": 100.0
+    },
+    {
+      "label": "Po-216",
+      "energy_kev": 804.9,
+      "energy_mev": 0.8049,
+      "origin": "source:Th-232 chain",
+      "source": "PhotonEvaporation5.2/z82.a212",
+      "intensity": 100.0
+    },
+    {
+      "label": "Pb-212",
+      "energy_kev": 115.183,
+      "energy_mev": 0.115183,
+      "origin": "source:Th-232 chain",
+      "source": "PhotonEvaporation5.2/z83.a212",
+      "intensity": 100.0
+    },
+    {
+      "label": "Pb-212",
+      "energy_kev": 238.632,
+      "energy_mev": 0.238632,
+      "origin": "source:Th-232 chain",
+      "source": "PhotonEvaporation5.2/z83.a212",
+      "intensity": 100.0
+    },
+    {
+      "label": "Pb-212",
+      "energy_kev": 417.9,
+      "energy_mev": 0.4179,
+      "origin": "source:Th-232 chain",
+      "source": "PhotonEvaporation5.2/z83.a212",
+      "intensity": 100.0
+    },
+    {
+      "label": "Tl-208",
+      "energy_kev": 2614.522,
+      "energy_mev": 2.614522,
+      "origin": "source:Th-232 chain",
+      "source": "PhotonEvaporation5.2/z82.a208",
+      "intensity": 100.0
+    },
+    {
+      "label": "Tl-208",
+      "energy_kev": 4085.52,
+      "energy_mev": 4.08552,
+      "origin": "source:Th-232 chain",
+      "source": "PhotonEvaporation5.2/z82.a208",
+      "intensity": 100.0
+    },
+    {
+      "label": "Tl-208",
+      "energy_kev": 5639.55,
+      "energy_mev": 5.63955,
+      "origin": "source:Th-232 chain",
+      "source": "PhotonEvaporation5.2/z82.a208",
+      "intensity": 100.0
+    }
+  ]
+}

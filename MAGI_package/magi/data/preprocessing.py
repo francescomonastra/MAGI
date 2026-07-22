@@ -23,45 +23,16 @@ SOURCE_TYPE_PRIMARY_DEFAULTS = {
 }
 
 
-# Candidate spectral lines expected in the CryoSphere energy spectrum, in the
-# same unit convention as `Energy` throughout this module (MeV - see
-# build_energy_bins). Two origins:
-#   - "instrumental": fluorescence / annihilation lines produced in or near
-#     the TES sensor itself (SensitiveDetector_Au001 -> gold absorber -> Au L
-#     lines), independent of which background/source component is active.
-#   - "source:<isotope/chain>": primary gamma decay lines of the K-40 /
-#     Th-232-chain / Ra-226-chain radioactive sources embedded in the
-#     concrete beneath the cryostat. These primary lines are frequently
-#     Compton-degraded before reaching the CryoSphere, so
-#     detect_energy_lines commonly reports them as "expected but not
-#     statistically detected" - that absence is itself informative, not a
-#     bug.
-# Reference energies are standard gamma-/X-ray-spectroscopy values (IAEA
-# gamma-ray energy standards for the source lines; Bearden X-ray emission
-# tables for the instrumental fluorescence lines), given in keV.
-CANDIDATE_ENERGY_LINES = [
-    # -- Instrumental (detector-material) lines --
+# Minimal, mass-model-independent default candidate line for detect_energy_lines()
+# when no experiment-specific table is supplied - just the one line that's true
+# regardless of detector/mass-model (positron annihilation). Real usage should
+# pass an experiment-specific table loaded via
+# magi.data.load_candidate_energy_lines(<path>)["lines"], generated for the
+# actual GDML mass model by tools/build_candidate_lines_from_geant4.py (which
+# sources fluorescence/decay-line energies from Geant4's own data, not values
+# hand-typed into this file - see that script's docstring for why).
+DEFAULT_CANDIDATE_ENERGY_LINES = [
     {"label": "e+e- annihilation", "energy_kev": 511.00, "energy_mev": 511.00 / 1000.0, "origin": "instrumental"},
-    {"label": "Al Kalpha", "energy_kev": 1.487, "energy_mev": 1.487 / 1000.0, "origin": "instrumental"},
-    {"label": "Cu Kalpha", "energy_kev": 8.048, "energy_mev": 8.048 / 1000.0, "origin": "instrumental"},
-    {"label": "Cu Kbeta", "energy_kev": 8.905, "energy_mev": 8.905 / 1000.0, "origin": "instrumental"},
-    {"label": "Au Lalpha", "energy_kev": 9.713, "energy_mev": 9.713 / 1000.0, "origin": "instrumental"},
-    {"label": "Au Lbeta", "energy_kev": 11.442, "energy_mev": 11.442 / 1000.0, "origin": "instrumental"},
-
-    # -- K-40 --
-    {"label": "K-40", "energy_kev": 1460.82, "energy_mev": 1460.82 / 1000.0, "origin": "source:K-40"},
-
-    # -- Ra-226 chain (via Pb-214 / Bi-214 equilibrium daughters) --
-    {"label": "Pb-214", "energy_kev": 295.22, "energy_mev": 295.22 / 1000.0, "origin": "source:Ra-226 chain"},
-    {"label": "Pb-214", "energy_kev": 351.93, "energy_mev": 351.93 / 1000.0, "origin": "source:Ra-226 chain"},
-    {"label": "Bi-214", "energy_kev": 609.32, "energy_mev": 609.32 / 1000.0, "origin": "source:Ra-226 chain"},
-    {"label": "Bi-214", "energy_kev": 1120.29, "energy_mev": 1120.29 / 1000.0, "origin": "source:Ra-226 chain"},
-    {"label": "Bi-214", "energy_kev": 1764.49, "energy_mev": 1764.49 / 1000.0, "origin": "source:Ra-226 chain"},
-
-    # -- Th-232 chain (via Ac-228 / Tl-208) --
-    {"label": "Ac-228", "energy_kev": 911.20, "energy_mev": 911.20 / 1000.0, "origin": "source:Th-232 chain"},
-    {"label": "Tl-208", "energy_kev": 583.19, "energy_mev": 583.19 / 1000.0, "origin": "source:Th-232 chain"},
-    {"label": "Tl-208", "energy_kev": 2614.51, "energy_mev": 2614.51 / 1000.0, "origin": "source:Th-232 chain"},
 ]
 
 
@@ -566,7 +537,10 @@ def detect_energy_lines(
     prominence_factor, window : see detect_line_bins.
     candidate_lines : list of dict or None
         Candidate line table to match against. Defaults to
-        CANDIDATE_ENERGY_LINES. Each entry must have "energy_mev".
+        DEFAULT_CANDIDATE_ENERGY_LINES (just the universal 511 keV
+        annihilation line) - for real, mass-model-specific matching, pass a
+        table loaded via magi.data.load_candidate_energy_lines(<path>)["lines"].
+        Each entry must have "energy_mev".
     match_tolerance_bins : float
         Matching tolerance for a candidate line, expressed as a multiple of
         the local bin width at that candidate's energy. Bin-width-relative
@@ -609,7 +583,7 @@ def detect_energy_lines(
         used_mode = "external"
 
     if candidate_lines is None:
-        candidate_lines = CANDIDATE_ENERGY_LINES
+        candidate_lines = DEFAULT_CANDIDATE_ENERGY_LINES
 
     counts = bin_counts(E, edges)
     peak_idx, local_med = detect_line_bins(
@@ -725,6 +699,111 @@ def print_detected_energy_lines(result):
         print(f"  bin={p['bin_index']:5d}  E={p['energy_mev']:.6f} MeV  count={p['count']:.0f}")
 
 
+def build_gate_targets(
+    E,
+    energy_bins,
+    matched_lines,
+    match_tolerance_bins=2.0,
+    resolution_mev=None,
+    continuum_floor=0.15,
+    max_bandwidth_frac_of_spacing=0.5,
+):
+    """
+    Soft per-event target distribution over {continuum, line_1..line_L},
+    based on each event's physical proximity (in MeV) to the known matched
+    line positions - NOT on anything the model itself learns.
+
+    This exists to fix a real degeneracy in the v0.8 mixture energy head
+    (CVAE_MixEnergy_ContPhi_TaskAdaptive): since the true energy is fed into
+    the encoder (as part of y_cont) and reconstructed by the decoder, the
+    encoder can leak "which line this event is near" into the latent z, and
+    the decoder's per-sample continuum mean can just chase that value -
+    reconstructing well without the discrete gate ever learning to route
+    events to the fixed line components. Supervising the gate directly from
+    physical proximity (independent of z) breaks that degeneracy.
+
+    Parameters
+    ----------
+    E : array-like
+        Physical energy values in MeV (real training data, NOT generated).
+    energy_bins : array-like
+        Bin edges, used only to compute the local bin width for the
+        per-line Gaussian bandwidth - same convention as
+        detect_energy_lines's matching tolerance.
+    matched_lines : list of dict
+        detect_energy_lines(...)["matched_lines"] entries (must have
+        "candidate_energy_mev"), in the same order used to build the
+        model's line_positions_y.
+    match_tolerance_bins : float
+        Gaussian bandwidth per line, as a multiple of the local bin width
+        at that line's energy.
+    resolution_mev : float or None
+        If given, widens the bandwidth to at least this value.
+    continuum_floor : float
+        Minimum unnormalized weight given to the continuum slot for every
+        event, so events far from every line get a target close to
+        all-continuum rather than an arbitrary near-zero-everywhere vector.
+        Also controls how strongly the auxiliary gate loss pulls toward the
+        line components vs. continuum - the default (0.15, paired with
+        CVAE_MixEnergy_ContPhi_TaskAdaptive's default w_gate_aux=0.3) was
+        tuned against a synthetic continuum+lines dataset with known
+        mixture weights (see the v0.8 verification notebook cells); a
+        smaller floor over-weights the lines relative to their true rate.
+    max_bandwidth_frac_of_spacing : float or None
+        Caps each line's bandwidth at this fraction of the distance to its
+        nearest OTHER matched line, so two close lines can't bleed gate
+        weight onto each other. Without this, `match_tolerance_bins *
+        local_bin_width` can exceed the line spacing outright in sparse
+        regions with fixed-count binning - confirmed on real CryoSphere-CR
+        data, where Ni K-beta (8.265 keV) and Cu K-beta (8.905 keV) are
+        0.032 dex apart but the uncapped bandwidth there was ~0.034 dex,
+        i.e. wider than the gap itself, so the far-more-abundant Ni K-beta
+        (13,385 real events) bled substantial gate_target weight onto Cu
+        K-beta's slot (1,915 real events), training the model to
+        over-generate the rarer line ~10x. Set to None to restore the old
+        unbounded behavior. No effect when only one line is matched.
+
+    Returns
+    -------
+    np.ndarray
+        Shape (len(E), 1 + len(matched_lines)), float32, each row summing
+        to 1 - column 0 is the continuum target, columns 1..L are the line
+        targets, in matched_lines order.
+    """
+    E = np.asarray(E, dtype=np.float64)
+    edges = np.asarray(energy_bins, dtype=np.float64)
+    n = E.size
+    n_lines = len(matched_lines)
+
+    line_positions = np.array(
+        [float(m["candidate_energy_mev"]) for m in matched_lines], dtype=np.float64
+    )
+
+    weights = np.zeros((n, n_lines), dtype=np.float64)
+    for l, line in enumerate(matched_lines):
+        E_c = line_positions[l]
+        bin_i = int(np.clip(np.searchsorted(edges, E_c) - 1, 0, len(edges) - 2))
+        local_width = float(edges[bin_i + 1] - edges[bin_i])
+        bandwidth = match_tolerance_bins * local_width
+        if resolution_mev is not None:
+            bandwidth = max(bandwidth, float(resolution_mev))
+
+        if max_bandwidth_frac_of_spacing is not None and n_lines > 1:
+            nearest_spacing = np.min(np.abs(np.delete(line_positions, l) - E_c))
+            bandwidth = min(bandwidth, max_bandwidth_frac_of_spacing * nearest_spacing)
+
+        weights[:, l] = np.exp(-0.5 * ((E - E_c) / bandwidth) ** 2)
+
+    continuum_w = np.full(n, float(continuum_floor))
+    total = continuum_w + weights.sum(axis=1)
+
+    targets = np.empty((n, n_lines + 1), dtype=np.float32)
+    targets[:, 0] = (continuum_w / total).astype(np.float32)
+    targets[:, 1:] = (weights / total[:, None]).astype(np.float32)
+
+    return targets
+
+
 def _fit_quantile_column(
     values,
     n_quantiles=10000,
@@ -755,6 +834,28 @@ def _fit_quantile_column(
     return transformed, qt
 
 
+def transform_quantile_values(transformer, values):
+    """
+    Map new scalar values through an already-fitted QuantileTransformer
+    (transform-only, no re-fit) - e.g. mapping a handful of physical line
+    energies into an existing energy y-space fitted on the full spectrum.
+
+    Parameters
+    ----------
+    transformer : sklearn.preprocessing.QuantileTransformer
+        A transformer previously returned by _fit_quantile_column.
+    values : array-like
+        New values to map through the transform.
+
+    Returns
+    -------
+    np.ndarray
+        Transformed values as float32.
+    """
+    values = np.asarray(values, dtype=np.float64).reshape(-1, 1)
+    return transformer.transform(values).reshape(-1).astype(np.float32)
+
+
 def build_feature_dataframe(
     prep,
     energy_binning_mode="log_fixed_count",
@@ -766,6 +867,9 @@ def build_feature_dataframe(
     geometry_transform="arctanh_uv_discrete",
     n_quantiles=10000,
     random_state=42,
+    energy_transform="none",
+    energy_n_quantiles=10000,
+    energy_random_state=42,
 ):
     """
     Build the final feature dataframe used before train/val/test splitting.
@@ -822,6 +926,21 @@ def build_feature_dataframe(
     random_state : int
         Random state for QuantileTransformer.
 
+    energy_transform : str
+        Continuum energy transform for the v0.8 mixture-density energy head
+        (unused by every other model version - default "none" leaves `feat`
+        byte-identical to prior behavior). One of:
+        - "none": no energy_y column is built (default).
+        - "log10": energy_y = log10(Energy). No fitted transformer.
+        - "quantile": fit a QuantileTransformer on the full Energy array
+            (via _fit_quantile_column), add "qt_energy" to the returned
+            quantile_transformers dict. Fit on all real energies (not a
+            continuum-only subset - there is no per-event line/continuum
+            label to split on).
+
+    energy_n_quantiles, energy_random_state :
+        Passed to _fit_quantile_column when energy_transform == "quantile".
+
     Returns
     -------
     dict
@@ -834,6 +953,7 @@ def build_feature_dataframe(
         - geometry_transform : str
         - quantile_transformers : dict
         - geometry_metadata : dict
+        - energy_transform : str
     """
     df = prep["dataframe"].copy()
     feat0 = prep["features"].copy()
@@ -994,6 +1114,29 @@ def build_feature_dataframe(
             "'arctanh_uv_discrete', 'quantile_u_r_u_v', or 'quantile_u_r_u_v_phi_r_phi_v'."
         )
 
+    energy_cols = {}
+
+    if energy_transform == "none":
+        pass
+
+    elif energy_transform == "log10":
+        energy_cols["energy_y"] = np.log10(E).astype(np.float32)
+
+    elif energy_transform == "quantile":
+        energy_y, qt_energy = _fit_quantile_column(
+            E,
+            n_quantiles=energy_n_quantiles,
+            random_state=energy_random_state,
+            output_distribution="normal",
+        )
+        energy_cols["energy_y"] = energy_y
+        quantile_transformers["qt_energy"] = qt_energy
+
+    else:
+        raise ValueError(
+            "Invalid energy_transform. Use 'none', 'log10', or 'quantile'."
+        )
+
     feat_dict = {
         "ParticleName": feat0["ParticleName"].astype(str).to_numpy(),
         "E_idx": energy_idx.astype(np.int32),
@@ -1011,6 +1154,7 @@ def build_feature_dataframe(
         })
 
     feat_dict.update(geom_cols)
+    feat_dict.update(energy_cols)
 
     if "PrimBool" in feat0.columns:
         feat_dict["PrimBool"] = feat0["PrimBool"].to_numpy()
@@ -1037,6 +1181,7 @@ def build_feature_dataframe(
         "geometry_transform": geometry_transform,
         "quantile_transformers": quantile_transformers,
         "geometry_metadata": geometry_metadata,
+        "energy_transform": energy_transform,
         "normalization": normalization,
         "energy_config": {
             "mode": energy_binning_mode,

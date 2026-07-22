@@ -30,6 +30,7 @@ setup(
         "pandas",
         "scikit-learn",
         "tensorflow",
+        "tensorflow_probability",
         "optuna",
         "astropy",
         "h5py",

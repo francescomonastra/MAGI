@@ -58,9 +58,16 @@ def generate_latent_outputs(
         Common keys:
             gen_type_idx
             gen_cond
-            energy_idx_gen
             y_cont_gen_s
             params
+
+        Categorical-energy models (v0.6/v0.7/v0.7.2), if produced by
+        model.generate():
+            energy_idx_gen
+
+        v0.8 mixture-energy models, if produced by model.generate():
+            energy_y_gen
+            energy_component_idx_gen
 
         v0.6-only keys, if produced by model.generate():
             uv_idx_gen
@@ -74,10 +81,16 @@ def generate_latent_outputs(
     out = {
         "gen_type_idx": gen_type_idx,
         "gen_cond": gen_cond,
-        "energy_idx_gen": gen_out["energy_idx"].numpy().astype(np.int32),
         "y_cont_gen_s": gen_out["y_cont"].numpy().astype(np.float32),
         "params": gen_out.get("params", None),
     }
+
+    if "energy_idx" in gen_out:
+        out["energy_idx_gen"] = gen_out["energy_idx"].numpy().astype(np.int32)
+
+    if "energy_y" in gen_out:
+        out["energy_y_gen"] = gen_out["energy_y"].numpy().astype(np.float32).reshape(-1)
+        out["energy_component_idx_gen"] = gen_out["energy_component_idx"].numpy().astype(np.int32)
 
     # Legacy v0.6 categorical u_v output
     if "uv_idx" in gen_out:

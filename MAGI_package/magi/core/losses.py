@@ -2,7 +2,11 @@
 Loss functions and low-level tensor utilities for MAGI.
 """
 
+import math
+
 import tensorflow as tf
+
+_LOG_2PI = float(math.log(2.0 * math.pi))
 
 
 def gaussian_nll(x, mu, log_sigma):
@@ -25,6 +29,99 @@ def gaussian_nll(x, mu, log_sigma):
     """
     sigma2 = tf.exp(2.0 * log_sigma)
     return 0.5 * ((tf.square(x - mu) / sigma2) + 2.0 * log_sigma)
+
+
+def gaussian_mixture_nll(y, gate_logits, comp_mu, comp_logsigma):
+    """
+    Mixture-of-Gaussians negative log-likelihood (up to an additive
+    constant, consistent with gaussian_nll's convention of dropping the
+    log(2*pi) term - that constant is identical across every component, so
+    it factors out of the log-sum-exp as a shared additive shift and can be
+    dropped the same way here without affecting gradients).
+
+    Parameters
+    ----------
+    y : tf.Tensor
+        True values, shape (batch,).
+    gate_logits : tf.Tensor
+        Unnormalized component logits, shape (batch, K).
+    comp_mu : tf.Tensor
+        Per-component means, shape (batch, K).
+    comp_logsigma : tf.Tensor
+        Per-component log standard deviations, shape (batch, K).
+
+    Returns
+    -------
+    tf.Tensor
+        Per-sample mixture NLL, shape (batch,).
+    """
+    log_pi = tf.nn.log_softmax(gate_logits, axis=-1)
+    sigma2 = tf.exp(2.0 * comp_logsigma)
+    log_normal = -0.5 * (tf.square(y[:, None] - comp_mu) / sigma2 + 2.0 * comp_logsigma)
+    return -tf.reduce_logsumexp(log_pi + log_normal, axis=-1)
+
+
+def gaussian_logpdf(y, mu, log_sigma):
+    """
+    Fully normalized Gaussian log density (with the log(2*pi) constant),
+    shape broadcast of the inputs.
+
+    Unlike gaussian_nll (which drops the shared constant), this keeps the
+    constant so the value is a true log density. Required when a Gaussian
+    component is mixed in a log-sum-exp with a normalizing flow's log_prob
+    (which is fully normalized) - the constant no longer factors out
+    because the flow term does not carry it.
+    """
+    sigma2 = tf.exp(2.0 * log_sigma)
+    return -0.5 * (tf.square(y - mu) / sigma2 + _LOG_2PI) - log_sigma
+
+
+def flow_line_mixture_nll(
+    y, gate_logits, flow_log_prob, line_mu, line_logsigma
+):
+    """
+    Negative log-likelihood of a mixture whose continuum component is a
+    normalizing flow and whose remaining components are fixed-position
+    Gaussian lines:
+
+        p(y) = pi_0 * f_flow(y)  +  sum_l pi_l * N(y; line_mu[l], sigma)
+
+    All component log densities are fully normalized (the flow's log_prob
+    and gaussian_logpdf both carry the log(2*pi) constant), so they combine
+    correctly in a single log-sum-exp - do NOT substitute gaussian_nll /
+    gaussian_mixture_nll here (those drop the constant, which is only valid
+    when every component is Gaussian and shares it).
+
+    Parameters
+    ----------
+    y : tf.Tensor
+        True values, shape (batch,).
+    gate_logits : tf.Tensor
+        Unnormalized logits over (1 + n_lines) slots - column 0 is the
+        continuum (flow) slot, columns 1..n_lines are the lines, matching
+        the {continuum, line_1..line_L} ordering used everywhere else.
+    flow_log_prob : tf.Tensor
+        The continuum flow's log density at y, shape (batch,).
+    line_mu : tf.Tensor
+        Fixed line positions in y-space, shape (n_lines,).
+    line_logsigma : tf.Tensor
+        Shared scalar log std for the lines (a 0-D tensor).
+
+    Returns
+    -------
+    tf.Tensor
+        Per-sample mixture NLL, shape (batch,).
+    """
+    log_pi = tf.nn.log_softmax(gate_logits, axis=-1)
+
+    line_logdens = gaussian_logpdf(
+        y[:, None], line_mu[None, :], line_logsigma
+    )  # (batch, n_lines)
+    comp_logdens = tf.concat(
+        [flow_log_prob[:, None], line_logdens], axis=-1
+    )  # (batch, 1 + n_lines)
+
+    return -tf.reduce_logsumexp(log_pi + comp_logdens, axis=-1)
 
 
 def normalize_2d_pair(pair, eps=1e-12):

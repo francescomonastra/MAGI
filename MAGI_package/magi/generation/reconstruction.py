@@ -21,7 +21,7 @@ def _inverse_quantile(transformer, x):
 
 def reconstruct_generated_features(
     gen_pack,
-    energy_bins,
+    energy_bins=None,
     energy_mode="uniform",
     rng=None,
 
@@ -37,6 +37,12 @@ def reconstruct_generated_features(
     qt_phi_v=None,
     geometry_mode=None,
     geometry_metadata=None,
+
+    # v0.8 mixture energy
+    energy_head_mode=None,
+    qt_energy=None,
+    energy_transform=None,
+    energy_metadata=None,
 ):
     """
     Convert raw generated model outputs into physical feature arrays.
@@ -54,6 +60,13 @@ def reconstruct_generated_features(
           y_cont = [u_r_q, u_v_q, phi_r_q, phi_v_q]
           u_r/u_v recovered through QuantileTransformer inverse_transform
           phi_r/phi_v recovered through QuantileTransformer inverse_transform
+
+    Energy reconstruction is an independent axis from geometry
+    (energy_head_mode, alongside geometry_mode):
+      - "categorical" (v0.6/v0.7/v0.7.2): energy_bins + energy_from_idx.
+      - "mixture" (v0.8): inverse the energy transform T on the model's raw
+          energy_y_gen sample - via qt_energy.inverse_transform if T was a
+          QuantileTransformer, or 10**y if T was log10 (energy_transform="log10").
     """
     from .sampling import energy_from_idx
 
@@ -84,12 +97,37 @@ def reconstruct_generated_features(
         else:
             geometry_mode = "legacy_sr_discrete_uv"
 
-    E_gen = energy_from_idx(
-        gen_pack["energy_idx_gen"],
-        energy_bins=energy_bins,
-        mode=energy_mode,
-        rng=rng,
-    )
+    if energy_metadata is not None:
+        energy_head_mode = energy_metadata.get("energy_head_mode", energy_head_mode)
+        qt_energy = energy_metadata.get("qt_energy", qt_energy)
+        energy_transform = energy_metadata.get("energy_transform", energy_transform)
+
+    if energy_head_mode is None:
+        energy_head_mode = "mixture" if "energy_y_gen" in gen_pack else "categorical"
+
+    if energy_head_mode == "categorical":
+        if energy_bins is None:
+            raise ValueError(
+                "energy_bins is required for categorical energy reconstruction."
+            )
+        E_gen = energy_from_idx(
+            gen_pack["energy_idx_gen"],
+            energy_bins=energy_bins,
+            mode=energy_mode,
+            rng=rng,
+        )
+    elif energy_head_mode == "mixture":
+        if qt_energy is not None:
+            E_gen = _inverse_quantile(qt_energy, gen_pack["energy_y_gen"])
+        elif energy_transform == "log10":
+            E_gen = 10.0 ** gen_pack["energy_y_gen"]
+        else:
+            raise ValueError(
+                "qt_energy or energy_transform='log10' is required for "
+                "mixture energy reconstruction."
+            )
+    else:
+        raise ValueError(f"Unknown energy_head_mode: {energy_head_mode}")
 
     logE_gen = np.log10(E_gen)
 

@@ -190,6 +190,41 @@ def load_normalization_summary(filepath):
         return json.load(f)
 
 
+def save_candidate_energy_lines(payload, filepath):
+    """
+    Save a candidate-energy-lines payload (as built by
+    tools/build_candidate_lines_from_geant4.py - a dict with a "lines" list
+    plus mass-model/dataset provenance) as a standalone JSON file, so the
+    experiment-specific line table lives as data rather than package source.
+    """
+    import json
+
+    if payload is None:
+        raise ValueError("payload is None - nothing to save.")
+
+    outdir = os.path.dirname(filepath)
+    if outdir:
+        os.makedirs(outdir, exist_ok=True)
+
+    with open(filepath, "w") as f:
+        json.dump(payload, f, indent=2)
+
+    print(f"Saved candidate energy lines to: {filepath}")
+
+    return filepath
+
+
+def load_candidate_energy_lines(filepath):
+    """
+    Load a candidate-energy-lines payload previously written by
+    save_candidate_energy_lines() / tools/build_candidate_lines_from_geant4.py.
+    """
+    import json
+
+    with open(filepath) as f:
+        return json.load(f)
+
+
 def save_detector_table(
     data,
     filepath,

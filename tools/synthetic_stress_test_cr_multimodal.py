@@ -1,0 +1,216 @@
+"""Harder synthetic stress test for CVAE_MixEnergy_ContPhi_TaskAdaptive (v0.8
+Part 3) - multi-modal continuum + a cluster of closely-spaced lines sitting
+in a genuinely sparse region, mimicking the real CR failure mode that the
+original clean synthetic test (single-hump continuum + well-separated,
+well-populated lines) did not catch. See docs/v0.8_fixing_plan.md for the
+full history and results this script produced.
+
+All physics is generated directly as E (MeV) so real preprocessing.py entry
+points (build_energy_bins, build_gate_targets) are exercised faithfully -
+these operate in E-space regardless of the model's energy_transform.
+
+Usage: python tools/synthetic_stress_test_cr_multimodal.py [w_continuum_repulsion] [continuum_repulsion_margin] [beta] [epochs]
+"""
+import sys
+import numpy as np
+import tensorflow as tf
+import magi
+
+magi.initialize_environment(seed=42, cpu_only=True)
+rng = np.random.default_rng(42)
+
+# ----------------------------------------------------------------------
+# 1. Synthesize E (MeV): 3-mode continuum (in log10(E) space) + a cluster
+#    of 4 closely-spaced lines at 5-10 keV sitting in/near the sparse low
+#    tail (mode C) - analogous to real CR/Small's K-lines living where the
+#    bulk continuum has already died off.
+# ----------------------------------------------------------------------
+N_TOTAL = 30_000
+LINE_FRAC_TOTAL = 0.03
+N_LINES = 4
+
+continuum_modes = [
+    # (weight within continuum, mu_log10E, sigma_log10E)
+    (0.65, -0.30, 0.35),   # bulk, E ~ 0.2-1.1 MeV
+    (0.27,  0.60, 0.30),   # secondary bump, E ~ 2-8 MeV
+    (0.05, -1.70, 0.30),   # sparse low tail, E ~ 0.01-0.04 MeV
+]
+cont_w = np.array([m[0] for m in continuum_modes])
+cont_w = cont_w / cont_w.sum()
+
+n_lines_total = int(round(N_TOTAL * LINE_FRAC_TOTAL))
+n_continuum = N_TOTAL - n_lines_total
+n_per_mode = np.round(n_continuum * cont_w).astype(int)
+n_per_mode[-1] = n_continuum - n_per_mode[:-1].sum()
+
+E_continuum = []
+for (w, mu, sigma), n in zip(continuum_modes, n_per_mode):
+    y = rng.normal(mu, sigma, size=n)
+    E_continuum.append(10.0 ** y)
+E_continuum = np.concatenate(E_continuum)
+
+# Line cluster: y = log10(E) positions, closely spaced (0.1 dex apart),
+# sitting 1-2 sigma below mode C's mean (i.e. in mode C's sparse tail, not
+# its core) - true physical widths are narrow (sigma_y = 0.02).
+line_positions_y_true = np.array([-2.30, -2.20, -2.10, -2.00], dtype=np.float64)
+line_energies_mev = 10.0 ** line_positions_y_true
+true_line_sigma_y = 0.02
+
+n_per_line = n_lines_total // N_LINES
+counts_per_line = [n_per_line] * (N_LINES - 1) + [n_lines_total - n_per_line * (N_LINES - 1)]
+
+E_lines = []
+for y0, n in zip(line_positions_y_true, counts_per_line):
+    y = rng.normal(y0, true_line_sigma_y, size=n)
+    E_lines.append(10.0 ** y)
+E_lines = np.concatenate(E_lines)
+
+E_all = np.concatenate([E_continuum, E_lines]).astype(np.float64)
+rng.shuffle(E_all)  # order doesn't matter downstream, but keep it honest
+
+print(f"N_TOTAL={E_all.size}  n_continuum={n_continuum}  n_lines_total={n_lines_total}  "
+      f"per-line counts={counts_per_line}")
+print(f"line energies (MeV): {line_energies_mev}")
+print(f"E range: [{E_all.min():.6f}, {E_all.max():.6f}] MeV")
+
+# ----------------------------------------------------------------------
+# 2. Real preprocessing entry points: energy bins, matched_lines (hand-built
+#    since we already know ground truth), gate_targets, log10 energy_y.
+# ----------------------------------------------------------------------
+energy_bins = magi.build_energy_bins(E_all, mode="log_fixed_count", n_bins=256, min_counts=20)
+
+matched_lines = []
+for i, (e_mev, cnt) in enumerate(zip(line_energies_mev, counts_per_line)):
+    matched_lines.append({
+        "label": f"synthetic_line_{i}",
+        "origin": "synthetic",
+        "candidate_energy_mev": float(e_mev),
+        "count": int(cnt),
+    })
+
+gate_targets = magi.build_gate_targets(E_all, energy_bins, matched_lines)
+print("gate_targets shape:", gate_targets.shape, " mean per column:", gate_targets.mean(axis=0))
+
+energy_y = np.log10(E_all).astype(np.float32)
+line_positions_y = np.log10(line_energies_mev).astype(np.float32)
+
+# ----------------------------------------------------------------------
+# 3. Dummy geometry columns (uniform noise - not under test here) + single
+#    particle type conditioning.
+# ----------------------------------------------------------------------
+n = E_all.size
+ur_q = rng.normal(0, 1, size=n).astype(np.float32)
+uv_q = rng.normal(0, 1, size=n).astype(np.float32)
+phi_r_q = rng.normal(0, 1, size=n).astype(np.float32)
+phi_v_q = rng.normal(0, 1, size=n).astype(np.float32)
+
+y_cont = np.concatenate(
+    [ur_q[:, None], uv_q[:, None], phi_r_q[:, None], phi_v_q[:, None],
+     energy_y[:, None], gate_targets.astype(np.float32)],
+    axis=1,
+).astype(np.float32)
+
+n_types = 1
+cond = np.ones((n, n_types), dtype=np.float32)
+E_idx_dummy = np.zeros((n,), dtype=np.int32)
+dummy_y = np.zeros((n, 1), dtype=np.float32)
+
+n_val = int(0.15 * n)
+idx = rng.permutation(n)
+val_idx, train_idx = idx[:n_val], idx[n_val:]
+
+def make_ds(idx_sel, batch_size, shuffle):
+    ds = tf.data.Dataset.from_tensor_slices(
+        ((y_cont[idx_sel], E_idx_dummy[idx_sel], cond[idx_sel]), dummy_y[idx_sel])
+    )
+    if shuffle:
+        ds = ds.shuffle(len(idx_sel), seed=42)
+    return ds.batch(batch_size)
+
+train_ds = make_ds(train_idx, 512, shuffle=True)
+val_ds = make_ds(val_idx, 512, shuffle=False)
+
+# ----------------------------------------------------------------------
+# 4. Train the redesigned model (log10 energy transform is implicit - we
+#    already fed log10(E) as energy_y).
+# ----------------------------------------------------------------------
+w_continuum_repulsion = float(sys.argv[1]) if len(sys.argv) > 1 else 0.3
+continuum_repulsion_margin = float(sys.argv[2]) if len(sys.argv) > 2 else 0.05
+beta = float(sys.argv[3]) if len(sys.argv) > 3 else 0.2
+epochs = int(sys.argv[4]) if len(sys.argv) > 4 else 150
+
+print(f"\nTraining with w_continuum_repulsion={w_continuum_repulsion}, "
+      f"continuum_repulsion_margin={continuum_repulsion_margin}, beta={beta}, epochs={epochs}")
+
+model = magi.CVAE_MixEnergy_ContPhi_TaskAdaptive(
+    n_types=n_types,
+    line_positions_y=line_positions_y,
+    latent_dim=8,
+    hidden=(128, 128, 64),
+    beta=beta,
+    w_continuum_repulsion=w_continuum_repulsion,
+    continuum_repulsion_margin=continuum_repulsion_margin,
+)
+magi.compile_model(model, learning_rate=2e-4)
+
+history = model.fit(train_ds, validation_data=val_ds, epochs=epochs, verbose=2)
+
+print("\nFinal metrics:",
+      {k: round(v[-1], 4) for k, v in history.history.items() if k.startswith("val_")})
+
+# ----------------------------------------------------------------------
+# 5. Generate + diagnostics.
+# ----------------------------------------------------------------------
+n_gen = n
+gen_cond = np.ones((n_gen, n_types), dtype=np.float32)
+gen_out = model.generate(tf.constant(gen_cond), n_gen)
+
+energy_y_gen = gen_out["energy_y"].numpy()
+comp_idx_gen = gen_out["energy_component_idx"].numpy()
+E_gen = 10.0 ** energy_y_gen
+
+print("\ngenerated component_idx value counts:", np.bincount(comp_idx_gen, minlength=N_LINES + 1))
+true_weights = np.concatenate([[1.0 - LINE_FRAC_TOTAL], np.full(N_LINES, LINE_FRAC_TOTAL / N_LINES)])
+gen_weights = np.bincount(comp_idx_gen, minlength=N_LINES + 1) / n_gen
+print("true mixture weights:     ", np.round(true_weights, 4))
+print("generated mixture weights:", np.round(gen_weights, 4))
+
+line_logsigma = float(model._line_logsigma_clipped().numpy())
+print(f"\nlearned line_logsigma = {line_logsigma:.4f} (true injected sigma_y = {true_line_sigma_y})")
+
+recovery = magi.compute_line_integral_recovery(
+    E_all, E_gen, matched_lines, energy_bins, energy_component_idx_gen=comp_idx_gen,
+)
+print("\nPer-line recovery:")
+for r in recovery:
+    print(f"  {r['label']:18s} n_real={r['n_real']:6d} n_gen={r['n_gen']:6d} "
+          f"recovery_ratio={r['recovery_ratio']:.3f} component_fraction={r['component_fraction']:.5f}")
+
+# ----------------------------------------------------------------------
+# 6. Spurious-hump check: windowed real-vs-generated counts across several
+#    E-space windows spanning the sparse line-cluster region and its
+#    immediate surroundings (not just on the lines themselves).
+# ----------------------------------------------------------------------
+print("\nSpurious-hump check (windowed real vs generated counts, log-E windows):")
+windows_log10 = [
+    (-2.6, -2.4, "just below cluster (sparse gap)"),
+    (-2.4, -2.32, "just below first line"),
+    (-2.32, -2.28, "line 0 window"),
+    (-2.28, -2.22, "between line 0/1"),
+    (-2.22, -2.18, "line 1 window"),
+    (-2.18, -2.12, "between line 1/2"),
+    (-2.12, -2.08, "line 2 window"),
+    (-2.08, -2.02, "between line 2/3"),
+    (-2.02, -1.98, "line 3 window"),
+    (-1.98, -1.85, "just above cluster"),
+    (-1.85, -1.55, "mode C core (legitimate continuum)"),
+]
+real_log10 = np.log10(E_all)
+gen_log10 = energy_y_gen
+for lo, hi, desc in windows_log10:
+    n_real = int(np.sum((real_log10 >= lo) & (real_log10 < hi)))
+    n_gen_w = int(np.sum((gen_log10 >= lo) & (gen_log10 < hi)))
+    ratio = (n_gen_w / n_real) if n_real > 0 else float("inf") if n_gen_w > 0 else 1.0
+    print(f"  y in [{lo:+.2f},{hi:+.2f}) {desc:35s} n_real={n_real:6d} n_gen={n_gen_w:6d} ratio={ratio:.3f}")
+
+print("\nDONE")
