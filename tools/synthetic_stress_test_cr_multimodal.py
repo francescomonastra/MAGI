@@ -9,12 +9,39 @@ All physics is generated directly as E (MeV) so real preprocessing.py entry
 points (build_energy_bins, build_gate_targets) are exercised faithfully -
 these operate in E-space regardless of the model's energy_transform.
 
-Usage: python tools/synthetic_stress_test_cr_multimodal.py [w_continuum_repulsion] [continuum_repulsion_margin] [beta] [epochs]
+Usage:
+  # Gaussian-continuum baseline (original behavior):
+  python tools/synthetic_stress_test_cr_multimodal.py
+  # Flow continuum + learned coupling prior (the v0.8 target config):
+  python tools/synthetic_stress_test_cr_multimodal.py \
+      --continuum-mode flow --energy-flow-condition z_cond --prior coupling \
+      --pin-line-width
 """
-import sys
+import argparse
 import numpy as np
 import tensorflow as tf
 import magi
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--epochs", type=int, default=150)
+parser.add_argument("--beta", type=float, default=0.2)
+parser.add_argument("--w-continuum-repulsion", type=float, default=0.3)
+parser.add_argument("--continuum-repulsion-margin", type=float, default=0.05)
+parser.add_argument("--continuum-mode", choices=["gaussian", "flow"], default="gaussian")
+parser.add_argument("--energy-flow-condition", choices=["z_cond", "cond"], default="z_cond",
+                    help="What the flow-mode energy head conditions on. 'z_cond' (default) "
+                         "preserves energy<->geometry coupling and needs a learned prior for "
+                         "faithful generation; 'cond' is the shape-capacity ablation.")
+parser.add_argument("--continuum-flow-bins", type=int, default=8)
+parser.add_argument("--continuum-flow-transforms", type=int, default=2)
+parser.add_argument("--prior", choices=["gaussian", "coupling"], default="gaussian",
+                    help="Latent prior. 'gaussian' = fixed N(0,I); 'coupling' = learned "
+                         "conditional coupling-flow prior p(z|cond).")
+parser.add_argument("--prior-n-layers", type=int, default=6)
+parser.add_argument("--prior-hidden", type=int, nargs="+", default=[64, 64])
+parser.add_argument("--pin-line-width", action="store_true",
+                    help="Pin the line width (non-trainable) to the true injected resolution.")
+args = parser.parse_args()
 
 magi.initialize_environment(seed=42, cpu_only=True)
 rng = np.random.default_rng(42)
@@ -134,26 +161,45 @@ val_ds = make_ds(val_idx, 512, shuffle=False)
 # 4. Train the redesigned model (log10 energy transform is implicit - we
 #    already fed log10(E) as energy_y).
 # ----------------------------------------------------------------------
-w_continuum_repulsion = float(sys.argv[1]) if len(sys.argv) > 1 else 0.3
-continuum_repulsion_margin = float(sys.argv[2]) if len(sys.argv) > 2 else 0.05
-beta = float(sys.argv[3]) if len(sys.argv) > 3 else 0.2
-epochs = int(sys.argv[4]) if len(sys.argv) > 4 else 150
+print(f"\nTraining with continuum_mode={args.continuum_mode}, "
+      f"energy_flow_condition={args.energy_flow_condition}, prior={args.prior}, "
+      f"w_continuum_repulsion={args.w_continuum_repulsion}, "
+      f"continuum_repulsion_margin={args.continuum_repulsion_margin}, "
+      f"beta={args.beta}, epochs={args.epochs}")
 
-print(f"\nTraining with w_continuum_repulsion={w_continuum_repulsion}, "
-      f"continuum_repulsion_margin={continuum_repulsion_margin}, beta={beta}, epochs={epochs}")
-
-model = magi.CVAE_MixEnergy_ContPhi_TaskAdaptive(
+model_kwargs = dict(
     n_types=n_types,
     line_positions_y=line_positions_y,
     latent_dim=8,
     hidden=(128, 128, 64),
-    beta=beta,
-    w_continuum_repulsion=w_continuum_repulsion,
-    continuum_repulsion_margin=continuum_repulsion_margin,
+    beta=args.beta,
+    w_continuum_repulsion=args.w_continuum_repulsion,
+    continuum_repulsion_margin=args.continuum_repulsion_margin,
+    prior=args.prior,
+    prior_n_layers=args.prior_n_layers,
+    prior_hidden=tuple(args.prior_hidden),
 )
+if args.pin_line_width:
+    model_kwargs["line_logsigma_init"] = float(np.log(true_line_sigma_y))
+    model_kwargs["line_logsigma_trainable"] = False
+if args.continuum_mode == "flow":
+    model_kwargs.update(
+        continuum_mode="flow",
+        energy_flow_condition=args.energy_flow_condition,
+        continuum_flow_bins=args.continuum_flow_bins,
+        continuum_flow_transforms=args.continuum_flow_transforms,
+        # Standardize the flow's working space from the training energy_y so
+        # the data bulk sits inside the spline interval [-B, B].
+        continuum_flow_y_mean=float(energy_y.mean()),
+        continuum_flow_y_scale=float(energy_y.std()),
+    )
+    print(f"  flow: bins={args.continuum_flow_bins} transforms={args.continuum_flow_transforms} "
+          f"prior={args.prior} n_layers={args.prior_n_layers} hidden={tuple(args.prior_hidden)}")
+
+model = magi.CVAE_MixEnergy_ContPhi_TaskAdaptive(**model_kwargs)
 magi.compile_model(model, learning_rate=2e-4)
 
-history = model.fit(train_ds, validation_data=val_ds, epochs=epochs, verbose=2)
+history = model.fit(train_ds, validation_data=val_ds, epochs=args.epochs, verbose=2)
 
 print("\nFinal metrics:",
       {k: round(v[-1], 4) for k, v in history.history.items() if k.startswith("val_")})
