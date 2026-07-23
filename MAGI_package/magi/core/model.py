@@ -16,6 +16,7 @@ from tensorflow.keras import layers
 
 from .losses import (
     gaussian_nll,
+    gaussian_logpdf,
     gaussian_mixture_nll,
     flow_line_mixture_nll,
     normalize_2d_pair,
@@ -23,6 +24,7 @@ from .losses import (
     smoothed_categorical_ce,
 )
 from .flows import ConditionalRQSFlow
+from .priors import ConditionalCouplingPrior
 from .geometry import (
     xy_from_sr_phi,
     vxvy_from_uv_phi,
@@ -2744,6 +2746,11 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
         continuum_flow_y_mean=None,
         continuum_flow_y_scale=None,
 
+        prior="gaussian",
+        prior_n_layers=6,
+        prior_hidden=(64, 64),
+        prior_log_scale_clamp=3.0,
+
         energy_sampling_temperature=1.0,
         line_logsigma_init=-2.0,
         line_logsigma_trainable=True,
@@ -2817,8 +2824,36 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
             1.0 if continuum_flow_y_scale is None else float(continuum_flow_y_scale)
         )
 
+        # Learnable prior p(z|cond). "gaussian" (default) keeps the fixed N(0,I)
+        # prior and the closed-form KL - byte-for-byte the current model.
+        # "coupling" learns the aggregated posterior with a conditional coupling
+        # flow, sampled at generation and scored via a Monte-Carlo KL, so that a
+        # z-conditioned energy flow (energy_flow_condition="z_cond") generates
+        # faithfully while keeping the energy<->geometry coupling. See
+        # core/priors.py and docs/v0.8_learnable_prior_plan.md.
+        if prior not in ("gaussian", "coupling"):
+            raise ValueError(
+                f"prior must be 'gaussian' or 'coupling', got {prior!r}."
+            )
+        self.prior_mode = str(prior)
+        self.prior_n_layers = int(prior_n_layers)
+        self.prior_hidden = tuple(prior_hidden)
+        self.prior_log_scale_clamp = float(prior_log_scale_clamp)
+
         self.latent_dim = latent_dim
         self.beta = beta
+
+        if self.prior_mode == "coupling":
+            self.prior = ConditionalCouplingPrior(
+                latent_dim=self.latent_dim,
+                cond_dim=self.n_types,
+                n_layers=self.prior_n_layers,
+                hidden=self.prior_hidden,
+                log_scale_clamp=self.prior_log_scale_clamp,
+                name="latent_prior",
+            )
+        else:
+            self.prior = None
 
         self.type_weights = type_weights
 
@@ -3388,6 +3423,25 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
         uniform = 1.0 / float(self.n_continuum_components)
         return tf.reduce_sum(tf.square(mean_usage - uniform))
 
+    def _kl_per(self, z, z_mean, z_logvar, cond):
+        """Per-event KL(q(z|x) || p(z)).
+
+        Closed form for the fixed N(0, I) prior (prior="gaussian"); a
+        single-sample Monte-Carlo estimate log q(z|x) - log p(z|cond) for the
+        learned coupling prior (prior="coupling"), reusing the z already
+        sampled in the step.
+        """
+        if self.prior_mode == "coupling":
+            log_qz = tf.reduce_sum(
+                gaussian_logpdf(z, z_mean, 0.5 * z_logvar), axis=1
+            )
+            log_pz = self.prior.log_prob(z, cond)
+            return log_qz - log_pz
+        return -0.5 * tf.reduce_sum(
+            1.0 + z_logvar - tf.square(z_mean) - tf.exp(z_logvar),
+            axis=1,
+        )
+
     def _reconstruction_terms(self, y_cont_true, params):
 
         ur_true = y_cont_true[:, 0:1]
@@ -3515,10 +3569,7 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
             rec = tf.reduce_mean(rec_per_weighted)
             nll = tf.reduce_mean(rec_per)
 
-            kl_per = -0.5 * tf.reduce_sum(
-                1.0 + z_logvar - tf.square(z_mean) - tf.exp(z_logvar),
-                axis=1,
-            )
+            kl_per = self._kl_per(z, z_mean, z_logvar, cond)
             kl = tf.reduce_mean(kl_per)
 
             sigma_reg = self._sigma_regularizer(params)
@@ -3592,10 +3643,7 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
         rec = tf.reduce_mean(rec_per_weighted)
         nll = tf.reduce_mean(rec_per)
 
-        kl_per = -0.5 * tf.reduce_sum(
-            1.0 + z_logvar - tf.square(z_mean) - tf.exp(z_logvar),
-            axis=1,
-        )
+        kl_per = self._kl_per(z, z_mean, z_logvar, cond)
         kl = tf.reduce_mean(kl_per)
 
         sigma_reg = self._sigma_regularizer(params)
@@ -3634,7 +3682,15 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
         return self._decode_params(z, cond, training=False)
 
     def generate(self, cond, n_samples):
-        z = tf.random.normal((n_samples, self.latent_dim))
+        if self.prior_mode == "coupling":
+            # Sample the learned prior p(z|cond) instead of N(0,I). This is the
+            # line that makes z-conditioned generation faithful: the decoded z
+            # now matches the aggregated posterior the decoder trained on, while
+            # the energy flow/gate keep reading z (energy<->geometry coupling
+            # preserved). cond already has n_samples rows.
+            z = self.prior.sample(cond)
+        else:
+            z = tf.random.normal((n_samples, self.latent_dim))
         params = self.decode(z, cond)
 
         gate_logits = params["energy_gate_logits"] / self.energy_sampling_temperature
