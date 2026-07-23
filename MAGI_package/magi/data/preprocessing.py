@@ -699,6 +699,47 @@ def print_detected_energy_lines(result):
         print(f"  bin={p['bin_index']:5d}  E={p['energy_mev']:.6f} MeV  count={p['count']:.0f}")
 
 
+def line_logsigma_from_resolution(line_energies_mev, resolution_ev, fwhm=True):
+    """Per-line log-widths (in log10(E) space) for a fixed detector resolution.
+
+    A constant instrumental energy resolution DE is a width in *linear* energy,
+    but the v0.8 mixture energy head models the lines in y = log10(E). Convert:
+
+        sigma_E = DE / 2.35482   (if DE is a FWHM, the usual convention)
+                = DE             (if DE is already a Gaussian sigma; fwhm=False)
+        sigma_y = sigma_E / (E * ln 10)
+
+    so a single DE maps to a *different* sigma_y at each line's energy E (lines
+    at higher energy are narrower in log space). Returns natural-log(sigma_y)
+    per line, ready to pass as `line_logsigma_init` (with
+    `line_logsigma_trainable=False`) to CVAE_MixEnergy_ContPhi_TaskAdaptive so
+    each line is pinned to the detector resolution at its own energy.
+
+    Parameters
+    ----------
+    line_energies_mev : array-like
+        Line energies in MeV (same units as line_positions_mev used to build
+        line_positions_y).
+    resolution_ev : float
+        Detector energy resolution DE in eV (e.g. 4.0 for X-IFU).
+    fwhm : bool
+        If True (default), resolution_ev is a FWHM and is divided by 2.35482 to
+        get the Gaussian sigma. If False, resolution_ev is already a sigma.
+
+    Returns
+    -------
+    np.ndarray
+        Natural log of sigma_y, one value per line, dtype float32.
+    """
+    E = np.asarray(line_energies_mev, dtype=np.float64)
+    if np.any(E <= 0):
+        raise ValueError("line_energies_mev must be positive (MeV).")
+    sigma_E_ev = float(resolution_ev) / 2.354820045 if fwhm else float(resolution_ev)
+    sigma_E_mev = sigma_E_ev * 1.0e-6
+    sigma_y = sigma_E_mev / (E * np.log(10.0))
+    return np.log(sigma_y).astype(np.float32)
+
+
 def build_gate_targets(
     E,
     energy_bins,

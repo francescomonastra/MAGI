@@ -105,7 +105,8 @@ def flow_line_mixture_nll(
     line_mu : tf.Tensor
         Fixed line positions in y-space, shape (n_lines,).
     line_logsigma : tf.Tensor
-        Shared scalar log std for the lines (a 0-D tensor).
+        Per-line log std, shape (n_lines,) (a scalar 0-D tensor is also
+        accepted and broadcasts to every line).
 
     Returns
     -------
@@ -115,7 +116,7 @@ def flow_line_mixture_nll(
     log_pi = tf.nn.log_softmax(gate_logits, axis=-1)
 
     line_logdens = gaussian_logpdf(
-        y[:, None], line_mu[None, :], line_logsigma
+        y[:, None], line_mu[None, :], tf.reshape(line_logsigma, (1, -1))
     )  # (batch, n_lines)
     comp_logdens = tf.concat(
         [flow_log_prob[:, None], line_logdens], axis=-1

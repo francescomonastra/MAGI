@@ -41,6 +41,16 @@ parser.add_argument("--prior-n-layers", type=int, default=6)
 parser.add_argument("--prior-hidden", type=int, nargs="+", default=[64, 64])
 parser.add_argument("--pin-line-width", action="store_true",
                     help="Pin the line width (non-trainable) to the true injected resolution.")
+parser.add_argument("--w-flow-line-repulsion", type=float, default=0.0,
+                    help="Weight of the flow-line repulsion (flow mode): penalizes the flow "
+                         "continuum from spiking at pinned line positions, so the gate routes "
+                         "line events to line slots. >0 to enable (fixes line under-generation "
+                         "on this multimodal cluster).")
+parser.add_argument("--w-gate-aux", type=float, default=None,
+                    help="Override the auxiliary gate-supervision weight (default 0.3). "
+                         "Higher values route more line-region events to the line slots "
+                         "without touching the continuum - the gate-side lever for line "
+                         "under-generation.")
 args = parser.parse_args()
 
 magi.initialize_environment(seed=42, cpu_only=True)
@@ -178,7 +188,10 @@ model_kwargs = dict(
     prior=args.prior,
     prior_n_layers=args.prior_n_layers,
     prior_hidden=tuple(args.prior_hidden),
+    w_flow_line_repulsion=args.w_flow_line_repulsion,
 )
+if args.w_gate_aux is not None:
+    model_kwargs["w_gate_aux"] = args.w_gate_aux
 if args.pin_line_width:
     model_kwargs["line_logsigma_init"] = float(np.log(true_line_sigma_y))
     model_kwargs["line_logsigma_trainable"] = False
@@ -221,8 +234,26 @@ gen_weights = np.bincount(comp_idx_gen, minlength=N_LINES + 1) / n_gen
 print("true mixture weights:     ", np.round(true_weights, 4))
 print("generated mixture weights:", np.round(gen_weights, 4))
 
-line_logsigma = float(model._line_logsigma_clipped().numpy())
-print(f"\nlearned line_logsigma = {line_logsigma:.4f} (true injected sigma_y = {true_line_sigma_y})")
+line_logsigma = np.round(model._line_logsigma_clipped().numpy(), 4)
+print(f"\nlearned line_logsigma (per line) = {line_logsigma} (true injected sigma_y = {true_line_sigma_y})")
+
+# Diagnostic: is the flow continuum spiking at the line centers (stealing line
+# events from the gate) or leaving the peaks to the line component? Report the
+# flow's log-density at each line center vs at nearby off-line points.
+if args.continuum_mode == "flow":
+    diag_cond = model._decode_params(
+        tf.constant(np.random.randn(3000, 8).astype(np.float32)),
+        tf.ones((3000, 1), np.float32),
+        training=False,
+    )["flow_cond"]
+    print("flow log-density diagnostic (mean over conditioners):")
+    for l, ly in enumerate(line_positions_y):
+        at = float(tf.reduce_mean(model.continuum_flow.log_prob(
+            tf.fill((3000,), float(ly)), diag_cond)))
+        off = float(tf.reduce_mean(model.continuum_flow.log_prob(
+            tf.fill((3000,), float(ly) - 0.15), diag_cond)))
+        print(f"  line {l} (y={ly:+.3f}): flow logp at line={at:+.3f}  "
+              f"at line-0.15={off:+.3f}  (spike if at>>off)")
 
 recovery = magi.compute_line_integral_recovery(
     E_all, E_gen, matched_lines, energy_bins, energy_component_idx_gen=comp_idx_gen,

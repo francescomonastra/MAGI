@@ -186,7 +186,8 @@ energy_y_gen = gen_out["energy_y"].numpy()
 comp_idx_gen = gen_out["energy_component_idx"].numpy()
 E_gen = 10.0 ** energy_y_gen
 
-print(f"\nlearned line_logsigma = {float(model._line_logsigma_clipped()):.4f} "
+print(f"\nlearned line_logsigma (per line) = "
+      f"{np.round(model._line_logsigma_clipped().numpy(), 4)} "
       f"(init {-2.0}, true injected line sigma_y = {true_line_sigma_y})")
 print("\ngenerated component_idx value counts:", np.bincount(comp_idx_gen, minlength=N_LINES + 1))
 true_weights = np.concatenate([[1.0 - LINE_FRAC_TOTAL], np.full(N_LINES, LINE_FRAC_TOTAL / N_LINES)])

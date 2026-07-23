@@ -469,6 +469,8 @@ def load_task_adaptive_model_for_generation(
         - CVAE_CatEnergy_CatUV_TaskAdaptive       v0.6
         - CVAE_CatEnergy_ContGeom_TaskAdaptive   v0.7
         - CVAE_CatEnergy_ContPhi_TaskAdaptive    v0.7.2
+        - CVAE_MixEnergy_ContPhi_TaskAdaptive    v0.8 (flow continuum +
+          fixed-line mixture; reconstructed from model.to_generation_config()).
     """
     import os
     import json
@@ -479,6 +481,7 @@ def load_task_adaptive_model_for_generation(
         CVAE_CatEnergy_CatUV_TaskAdaptive,
         CVAE_CatEnergy_ContGeom_TaskAdaptive,
         CVAE_CatEnergy_ContPhi_TaskAdaptive,
+        CVAE_MixEnergy_ContPhi_TaskAdaptive,
     )
 
     weights_path = os.path.join(save_dir, f"{model_name}.weights.h5")
@@ -681,6 +684,75 @@ def load_task_adaptive_model_for_generation(
             axis=1,
         )
 
+        _ = model.encoder(dummy_encoder_input, training=False)
+
+        dummy_z = tf.zeros((1, model.latent_dim), dtype=tf.float32)
+        _ = model.decode(dummy_z, dummy_cond)
+
+    elif model_class == "CVAE_MixEnergy_ContPhi_TaskAdaptive":
+        # v0.8 mixture energy head. Reconstruct from the config produced by
+        # model.to_generation_config() (persist that as model_config at save
+        # time). This class has no categorical energy head, so its encoder
+        # input is [y_cont, cond] (no one-hot energy) and y_cont carries the
+        # gate-target columns: y_cont_dim = 4 geometry + 1 energy_y +
+        # (n_lines + 1) gate targets.
+        line_positions_y = np.asarray(
+            model_config["line_positions_y"], dtype=np.float32
+        )
+        n_lines = int(line_positions_y.shape[0])
+        y_cont_dim = 4 + 1 + (n_lines + 1)
+
+        model = CVAE_MixEnergy_ContPhi_TaskAdaptive(
+            n_types=int(n_types),
+            line_positions_y=line_positions_y,
+            latent_dim=model_config["latent_dim"],
+            hidden=tuple(model_config["hidden"]),
+            beta=model_config["beta"],
+            type_weights=type_weights,
+
+            n_continuum_components=model_config.get("n_continuum_components", 1),
+            min_log_sigma=model_config.get("min_log_sigma", -6.0),
+            max_log_sigma=model_config.get("max_log_sigma", 1.5),
+            sigma_target=model_config.get("sigma_target", -2.0),
+            lambda_sigma=model_config.get("lambda_sigma", 1e-3),
+
+            continuum_mode=model_config.get("continuum_mode", "gaussian"),
+            energy_flow_condition=model_config.get("energy_flow_condition", "z_cond"),
+            continuum_flow_bins=model_config.get("continuum_flow_bins", 8),
+            continuum_flow_transforms=model_config.get("continuum_flow_transforms", 2),
+            continuum_flow_interval=model_config.get("continuum_flow_interval", 5.0),
+            continuum_flow_conditioner_hidden=tuple(
+                model_config.get("continuum_flow_conditioner_hidden", (64,))
+            ),
+            continuum_flow_y_mean=model_config.get("continuum_flow_y_mean", 0.0),
+            continuum_flow_y_scale=model_config.get("continuum_flow_y_scale", 1.0),
+
+            prior=model_config.get("prior", "gaussian"),
+            prior_n_layers=model_config.get("prior_n_layers", 6),
+            prior_hidden=tuple(model_config.get("prior_hidden", (64, 64))),
+            prior_log_scale_clamp=model_config.get("prior_log_scale_clamp", 3.0),
+
+            line_logsigma_trainable=model_config.get("line_logsigma_trainable", True),
+            energy_sampling_temperature=model_config.get(
+                "energy_sampling_temperature", 1.0
+            ),
+            stem_width=model_config.get("stem_width", 64),
+            deep_decoder_hidden=tuple(
+                model_config.get("deep_decoder_hidden", (128, 128, 64))
+            ),
+            energy_branch_hidden=tuple(
+                model_config.get("energy_branch_hidden", (48, 48))
+            ),
+            energy_cont_head_hidden=tuple(
+                model_config.get("energy_cont_head_hidden", (64, 32))
+            ),
+        )
+
+        dummy_y_cont = tf.zeros((1, y_cont_dim), dtype=tf.float32)
+        dummy_cond = tf.zeros((1, int(n_types)), dtype=tf.float32)
+
+        # This head's encoder takes [y_cont, cond] (no one-hot energy column).
+        dummy_encoder_input = tf.concat([dummy_y_cont, dummy_cond], axis=1)
         _ = model.encoder(dummy_encoder_input, training=False)
 
         dummy_z = tf.zeros((1, model.latent_dim), dtype=tf.float32)

@@ -2733,6 +2733,7 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
         w_gate_aux=0.3,
         w_continuum_repulsion=0.3,
         continuum_repulsion_margin=0.05,
+        w_flow_line_repulsion=0.0,
         n_continuum_components=1,
         w_continuum_balance=1.0,
         continuum_mu_init=None,
@@ -2797,6 +2798,7 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
         self.w_gate_aux = float(w_gate_aux)
         self.w_continuum_repulsion = float(w_continuum_repulsion)
         self.continuum_repulsion_margin = float(continuum_repulsion_margin)
+        self.w_flow_line_repulsion = float(w_flow_line_repulsion)
         self.w_continuum_balance = float(w_continuum_balance)
 
         if continuum_mu_init is None:
@@ -2839,6 +2841,15 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
         self.prior_n_layers = int(prior_n_layers)
         self.prior_hidden = tuple(prior_hidden)
         self.prior_log_scale_clamp = float(prior_log_scale_clamp)
+
+        # Architecture kwargs retained so the model is self-describing for
+        # checkpoint reload (see to_generation_config / the generation loader).
+        self.hidden = tuple(hidden)
+        self.stem_width = int(stem_width)
+        self.deep_decoder_hidden = tuple(deep_decoder_hidden)
+        self.energy_branch_hidden = tuple(energy_branch_hidden)
+        self.energy_cont_head_hidden = tuple(energy_cont_head_hidden)
+        self.line_logsigma_trainable = bool(line_logsigma_trainable)
 
         self.latent_dim = latent_dim
         self.beta = beta
@@ -3073,10 +3084,22 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
         # pin the width (line_logsigma_trainable=False, line_logsigma_init =
         # log(resolution_sigma_in_y)) so each line can only explain events at
         # its own position and the continuum term must own the rest.
+        # Per-line log-widths, shape (n_lines,). line_logsigma_init may be a
+        # scalar (shared, broadcast to every line) or an array of length
+        # n_lines. The array form is how a fixed detector resolution is pinned:
+        # a constant energy resolution DE maps to sigma_y = sigma_E/(E*ln10),
+        # which varies with each line's energy E, so different lines get
+        # different widths (see magi.line_logsigma_from_resolution). When pinned
+        # (line_logsigma_trainable=False) each line keeps exactly its width.
+        line_logsigma_init_arr = np.broadcast_to(
+            np.asarray(line_logsigma_init, dtype=np.float32), (self.n_lines,)
+        ).astype(np.float32)
         self.line_logsigma = self.add_weight(
             name="line_logsigma",
-            shape=(),
-            initializer=keras.initializers.Constant(line_logsigma_init),
+            shape=(self.n_lines,),
+            initializer=lambda shape, dtype=None: tf.constant(
+                line_logsigma_init_arr, dtype=dtype or tf.float32
+            ),
             trainable=bool(line_logsigma_trainable),
         )
 
@@ -3143,6 +3166,7 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
         self.energy_mixture_nll_tracker = keras.metrics.Mean(name="energy_mixture_nll")
         self.gate_aux_loss_tracker = keras.metrics.Mean(name="gate_aux_loss")
         self.continuum_repulsion_tracker = keras.metrics.Mean(name="continuum_repulsion")
+        self.flow_line_repulsion_tracker = keras.metrics.Mean(name="flow_line_repulsion")
         self.continuum_balance_tracker = keras.metrics.Mean(name="continuum_balance")
 
         self.ur_nll_tracker = keras.metrics.Mean(name="ur_nll")
@@ -3164,6 +3188,7 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
             self.energy_mixture_nll_tracker,
             self.gate_aux_loss_tracker,
             self.continuum_repulsion_tracker,
+            self.flow_line_repulsion_tracker,
             self.continuum_balance_tracker,
             self.ur_nll_tracker,
             self.uv_nll_tracker,
@@ -3208,6 +3233,14 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
         return z_mean + tf.exp(0.5 * z_logvar) * eps
 
     def _line_logsigma_clipped(self):
+        # The [min_log_sigma, max_log_sigma] clip only exists to keep a
+        # *learned* line width numerically sane. A pinned width
+        # (line_logsigma_trainable=False) is a physical value - e.g. a fine
+        # detector resolution can put sigma_y well below min_log_sigma (X-IFU's
+        # ~4 eV gives log-sigma_y ~ -9, below the -6 default) - so do NOT clip
+        # it, or the lines come out far too wide. It can't drift anyway.
+        if not self.line_logsigma.trainable:
+            return self.line_logsigma
         return tf.clip_by_value(
             self.line_logsigma, self.min_log_sigma, self.max_log_sigma
         )
@@ -3241,7 +3274,9 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
             )
 
         regs.append(
-            tf.square(tf.nn.relu(self._line_logsigma_clipped() - self.sigma_target))
+            tf.reduce_mean(
+                tf.square(tf.nn.relu(self._line_logsigma_clipped() - self.sigma_target))
+            )
         )
 
         return self.lambda_sigma * tf.add_n(regs)
@@ -3372,7 +3407,7 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
             self.line_positions_y[None, :], (batch, self.n_lines)
         )
         line_logsigma_b = tf.broadcast_to(
-            tf.reshape(line_logsigma_c, (1, 1)), (batch, self.n_lines)
+            tf.reshape(line_logsigma_c, (1, self.n_lines)), (batch, self.n_lines)
         )
 
         comp_mu = tf.concat([params["energy_cont_mu"], line_mu_b], axis=1)
@@ -3403,6 +3438,79 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
                 axis=[1, 2],
             )
         )
+
+    def _flow_line_repulsion(self, params):
+        """Discourage the flow continuum from building a spike at a pinned line
+        position (flow mode only).
+
+        The flow is flexible enough to grow a narrow peak right at a line
+        center and thereby explain line events with the continuum slot, which
+        starves the gate's line slots and under-generates the lines (seen on
+        the CR-multimodal test's dense 4-line cluster; docs/v0.8_fixing_plan.md
+        section 9). This penalizes the flow's log-density evaluated exactly at
+        each line center (per event's own conditioner): softplus(log p) is ~0
+        where the continuum is a smooth low baseline (density < 1, as it should
+        be under a line sitting in a sparse tail) and grows once the flow builds
+        a line-like spike there, so the line component - not the continuum -
+        owns the peak and the gate routes line events to line slots.
+
+        No-op unless in flow mode with w_flow_line_repulsion > 0 and >=1 line."""
+        if (self.continuum_mode != "flow" or self.n_lines == 0
+                or self.w_flow_line_repulsion <= 0.0):
+            return tf.constant(0.0, dtype=tf.float32)
+
+        flow_cond = params["flow_cond"]
+        batch = tf.shape(flow_cond)[0]
+        per_line = []
+        for l in range(self.n_lines):
+            y_l = tf.fill((batch,), self.line_positions_y[l])
+            per_line.append(self.continuum_flow.log_prob(y_l, flow_cond))
+        flow_lp_at_lines = tf.stack(per_line, axis=1)  # (batch, n_lines)
+        return tf.reduce_mean(tf.nn.softplus(flow_lp_at_lines))
+
+    def to_generation_config(self):
+        """Serializable dict to rebuild this model for generation.
+
+        This class is not Keras-serialized (the Model has no get_config), so a
+        checkpoint reload reconstructs it from constructor kwargs. This method
+        captures every architecture- and generation-affecting kwarg the loader
+        (training.checkpointing.load_task_adaptive_model_for_generation) needs;
+        persist it as the model_config at save time. Weight values (including
+        the pinned per-line line_logsigma) come from the .weights.h5 file, so
+        only the shapes/architecture and generation-time behavior flags (e.g.
+        line_logsigma_trainable, which controls the width clip) need to be here.
+        """
+        return {
+            "model_class": "CVAE_MixEnergy_ContPhi_TaskAdaptive",
+            "n_types": int(self.n_types),
+            "line_positions_y": [float(v) for v in self.line_positions_y.numpy()],
+            "latent_dim": int(self.latent_dim),
+            "hidden": list(self.hidden),
+            "beta": float(self.beta),
+            "n_continuum_components": int(self.n_continuum_components),
+            "min_log_sigma": float(self.min_log_sigma),
+            "max_log_sigma": float(self.max_log_sigma),
+            "sigma_target": float(self.sigma_target),
+            "lambda_sigma": float(self.lambda_sigma),
+            "continuum_mode": self.continuum_mode,
+            "energy_flow_condition": self.energy_flow_condition,
+            "continuum_flow_bins": int(self.continuum_flow_bins),
+            "continuum_flow_transforms": int(self.continuum_flow_transforms),
+            "continuum_flow_interval": float(self.continuum_flow_interval),
+            "continuum_flow_conditioner_hidden": list(self.continuum_flow_conditioner_hidden),
+            "continuum_flow_y_mean": float(self.continuum_flow_y_mean),
+            "continuum_flow_y_scale": float(self.continuum_flow_y_scale),
+            "prior": self.prior_mode,
+            "prior_n_layers": int(self.prior_n_layers),
+            "prior_hidden": list(self.prior_hidden),
+            "prior_log_scale_clamp": float(self.prior_log_scale_clamp),
+            "line_logsigma_trainable": bool(self.line_logsigma_trainable),
+            "energy_sampling_temperature": float(self.energy_sampling_temperature),
+            "stem_width": int(self.stem_width),
+            "deep_decoder_hidden": list(self.deep_decoder_hidden),
+            "energy_branch_hidden": list(self.energy_branch_hidden),
+            "energy_cont_head_hidden": list(self.energy_cont_head_hidden),
+        }
 
     def _continuum_balance(self, params):
         """Penalizes uneven batch-mean usage across the n_continuum_components
@@ -3574,11 +3682,13 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
 
             sigma_reg = self._sigma_regularizer(params)
             continuum_repulsion = self._continuum_repulsion(params)
+            flow_line_repulsion = self._flow_line_repulsion(params)
             continuum_balance = self._continuum_balance(params)
 
             loss = (
                 rec + self.beta * kl + sigma_reg
                 + self.w_continuum_repulsion * continuum_repulsion
+                + self.w_flow_line_repulsion * flow_line_repulsion
                 + self.w_continuum_balance * continuum_balance
             )
 
@@ -3610,6 +3720,7 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
         self.energy_mixture_nll_tracker.update_state(tf.reduce_mean(pieces["energy_mixture_nll"]))
         self.gate_aux_loss_tracker.update_state(tf.reduce_mean(pieces["gate_aux_loss"]))
         self.continuum_repulsion_tracker.update_state(continuum_repulsion)
+        self.flow_line_repulsion_tracker.update_state(flow_line_repulsion)
         self.continuum_balance_tracker.update_state(continuum_balance)
         self.ur_nll_tracker.update_state(tf.reduce_mean(pieces["ur_nll"]))
         self.uv_nll_tracker.update_state(tf.reduce_mean(pieces["uv_nll"]))
@@ -3648,11 +3759,13 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
 
         sigma_reg = self._sigma_regularizer(params)
         continuum_repulsion = self._continuum_repulsion(params)
+        flow_line_repulsion = self._flow_line_repulsion(params)
         continuum_balance = self._continuum_balance(params)
 
         loss = (
             rec + self.beta * kl + sigma_reg
             + self.w_continuum_repulsion * continuum_repulsion
+            + self.w_flow_line_repulsion * flow_line_repulsion
             + self.w_continuum_balance * continuum_balance
         )
 
@@ -3666,6 +3779,7 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
         self.energy_mixture_nll_tracker.update_state(tf.reduce_mean(pieces["energy_mixture_nll"]))
         self.gate_aux_loss_tracker.update_state(tf.reduce_mean(pieces["gate_aux_loss"]))
         self.continuum_repulsion_tracker.update_state(continuum_repulsion)
+        self.flow_line_repulsion_tracker.update_state(flow_line_repulsion)
         self.continuum_balance_tracker.update_state(continuum_balance)
         self.ur_nll_tracker.update_state(tf.reduce_mean(pieces["ur_nll"]))
         self.uv_nll_tracker.update_state(tf.reduce_mean(pieces["uv_nll"]))
@@ -3712,8 +3826,9 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
             chosen_line_mu = tf.gather_nd(
                 line_mu_b, tf.stack([tf.range(batch), line_idx], axis=1)
             )
+            chosen_line_logsigma = tf.gather(self._line_logsigma_clipped(), line_idx)
             energy_eps = tf.random.normal((batch,))
-            line_sample = chosen_line_mu + tf.exp(self._line_logsigma_clipped()) * energy_eps
+            line_sample = chosen_line_mu + tf.exp(chosen_line_logsigma) * energy_eps
 
             energy_y = tf.where(comp_idx == 0, flow_sample, line_sample)
         else:
