@@ -51,6 +51,25 @@ parser.add_argument("--w-gate-aux", type=float, default=None,
                          "Higher values route more line-region events to the line slots "
                          "without touching the continuum - the gate-side lever for line "
                          "under-generation.")
+parser.add_argument("--gate-class-balance-power", type=float, default=0.0,
+                    help="Cycle 2 imbalance-aware gate loss. Per-slot inverse-frequency "
+                         "weights w_c = (mass_continuum / mass_c)^power (continuum=1), "
+                         "computed from the gate_target column masses. 0 = off (uniform). "
+                         "~0.3-0.5 lifts rare-line routing without over-generating.")
+parser.add_argument("--gate-class-weight-cap", type=float, default=5.0,
+                    help="Cap on per-slot class weights, so rare lines don't blow up "
+                         "(mass_cont/mass_line)^power into an unstable, over-routing weight.")
+parser.add_argument("--gate-focal-gamma", type=float, default=0.0,
+                    help="Cycle 2 focal down-weighting of easy (well-classified) gate "
+                         "slots: multiply each slot's CE by (1-p)^gamma. 0 = off. Data-free "
+                         "alternative/complement to --gate-class-balance-power.")
+parser.add_argument("--continuum-warp", choices=["affine", "cdf"], default="affine",
+                    help="Continuum-flow standardization (flow mode). 'cdf' = CDF pre-warp "
+                         "(Cycle 1) for parity with the real run.")
+parser.add_argument("--line-frac", type=float, default=0.03,
+                    help="Total fraction of events in the 4 lines (default 0.03 = 0.75%%/line). "
+                         "Lower values (e.g. 0.008 = 0.2%%/line) mimic real CR's rare Al/Ni "
+                         "fluorescence, reproducing the under-routing the class-balance fixes.")
 args = parser.parse_args()
 
 magi.initialize_environment(seed=42, cpu_only=True)
@@ -63,7 +82,7 @@ rng = np.random.default_rng(42)
 #    bulk continuum has already died off.
 # ----------------------------------------------------------------------
 N_TOTAL = 30_000
-LINE_FRAC_TOTAL = 0.03
+LINE_FRAC_TOTAL = args.line_frac
 N_LINES = 4
 
 continuum_modes = [
@@ -192,6 +211,15 @@ model_kwargs = dict(
 )
 if args.w_gate_aux is not None:
     model_kwargs["w_gate_aux"] = args.w_gate_aux
+if args.gate_focal_gamma > 0.0:
+    model_kwargs["gate_focal_gamma"] = args.gate_focal_gamma
+if args.gate_class_balance_power > 0.0:
+    mass = gate_targets.mean(axis=0)  # [continuum, line_1..line_L] empirical masses
+    gcw = (mass[0] / np.maximum(mass, 1e-8)) ** args.gate_class_balance_power
+    gcw = np.minimum(gcw, args.gate_class_weight_cap)  # cap so rare lines don't blow up
+    gcw[0] = 1.0
+    model_kwargs["gate_class_weights"] = gcw.astype(np.float32)
+    print(f"  gate_class_weights (power={args.gate_class_balance_power}, cap={args.gate_class_weight_cap}): {np.round(gcw, 2)}")
 if args.pin_line_width:
     model_kwargs["line_logsigma_init"] = float(np.log(true_line_sigma_y))
     model_kwargs["line_logsigma_trainable"] = False
@@ -205,9 +233,13 @@ if args.continuum_mode == "flow":
         # the data bulk sits inside the spline interval [-B, B].
         continuum_flow_y_mean=float(energy_y.mean()),
         continuum_flow_y_scale=float(energy_y.std()),
+        continuum_flow_warp=args.continuum_warp,
     )
+    if args.continuum_warp == "cdf":
+        yk, zk = magi.fit_cdf_warp_knots(energy_y, n_knots=256, eps=1e-4)
+        model_kwargs.update(continuum_flow_warp_y_knots=yk, continuum_flow_warp_z_knots=zk)
     print(f"  flow: bins={args.continuum_flow_bins} transforms={args.continuum_flow_transforms} "
-          f"prior={args.prior} n_layers={args.prior_n_layers} hidden={tuple(args.prior_hidden)}")
+          f"warp={args.continuum_warp} prior={args.prior} n_layers={args.prior_n_layers} hidden={tuple(args.prior_hidden)}")
 
 model = magi.CVAE_MixEnergy_ContPhi_TaskAdaptive(**model_kwargs)
 magi.compile_model(model, learning_rate=2e-4)

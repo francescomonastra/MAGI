@@ -120,6 +120,11 @@ for name in args.sources:
         continuum_flow_warp="cdf",
         continuum_flow_warp_y_knots=warp_yk, continuum_flow_warp_z_knots=warp_zk,
         energy_flow_condition="z_cond", prior="coupling", w_gate_aux=2.0,
+        # Cycle 2: focal down-weighting of the easy ~99% continuum majority in the
+        # gate CE, so rare fluorescence lines (CR Al/Ni) get routed. gamma=2 lifted
+        # 0.2%-rare synthetic lines 0.79->1.13 (all 0.88-1.29) with only mild
+        # continuum cost; self-limiting (no blow-up, unlike inverse-freq weights).
+        gate_focal_gamma=2.0,
         line_logsigma_init=lls, line_logsigma_trainable=False)
     magi.compile_model(model, learning_rate=2e-4)
     log(f"training {args.epochs} epochs (warp=cdf {warp_yk.size} knots [{warp_yk[0]:.2f},{warp_yk[-1]:.2f}]; "

@@ -718,6 +718,8 @@ def load_task_adaptive_model_for_generation(
 
             continuum_mode=model_config.get("continuum_mode", "gaussian"),
             energy_flow_condition=model_config.get("energy_flow_condition", "z_cond"),
+            gate_focal_gamma=model_config.get("gate_focal_gamma", 0.0),
+            gate_class_weights=model_config.get("gate_class_weights"),
             continuum_flow_bins=model_config.get("continuum_flow_bins", 8),
             continuum_flow_transforms=model_config.get("continuum_flow_transforms", 2),
             continuum_flow_interval=model_config.get("continuum_flow_interval", 5.0),

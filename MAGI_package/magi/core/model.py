@@ -2731,6 +2731,8 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
         w_phi_r=1.0,
         w_phi_v=1.0,
         w_gate_aux=0.3,
+        gate_class_weights=None,
+        gate_focal_gamma=0.0,
         w_continuum_repulsion=0.3,
         continuum_repulsion_margin=0.05,
         w_flow_line_repulsion=0.0,
@@ -2799,6 +2801,23 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
         self.y_cont_dim = 4 + 1 + (self.n_lines + 1)
 
         self.w_gate_aux = float(w_gate_aux)
+        # Class-imbalance-aware gate supervision (Cycle 2): per-slot inverse-
+        # frequency weights [continuum, line_1..line_L] and/or a focal exponent,
+        # so the ~99% continuum majority stops drowning rare-line gate gradient.
+        # Both default to the identity (weights=None, gamma=0) -> original CE.
+        self.gate_focal_gamma = float(gate_focal_gamma)
+        if gate_class_weights is None:
+            self.gate_class_weights = None
+            self._gate_class_weights = None
+        else:
+            gcw = np.asarray(gate_class_weights, dtype=np.float32).reshape(-1)
+            if gcw.shape[0] != self.n_lines + 1:
+                raise ValueError(
+                    "gate_class_weights must have length n_lines+1 "
+                    f"({self.n_lines + 1}: [continuum, line_1..line_L]), got {gcw.shape[0]}."
+                )
+            self.gate_class_weights = gcw
+            self._gate_class_weights = tf.constant(gcw.reshape(1, -1), dtype=tf.float32)
         self.w_continuum_repulsion = float(w_continuum_repulsion)
         self.continuum_repulsion_margin = float(continuum_repulsion_margin)
         self.w_flow_line_repulsion = float(w_flow_line_repulsion)
@@ -3512,6 +3531,11 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
             "lambda_sigma": float(self.lambda_sigma),
             "continuum_mode": self.continuum_mode,
             "energy_flow_condition": self.energy_flow_condition,
+            "gate_focal_gamma": float(self.gate_focal_gamma),
+            "gate_class_weights": (
+                None if self.gate_class_weights is None
+                else self.gate_class_weights.tolist()
+            ),
             "continuum_flow_bins": int(self.continuum_flow_bins),
             "continuum_flow_transforms": int(self.continuum_flow_transforms),
             "continuum_flow_interval": float(self.continuum_flow_interval),
@@ -3625,7 +3649,19 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
         log_line_probs = params["energy_gate_logits"][:, self.n_continuum_components:] - log_norm
         log_pooled_gate = tf.concat([log_cont_prob, log_line_probs], axis=-1)
 
-        gate_aux_loss = -tf.reduce_sum(gate_target * log_pooled_gate, axis=-1)
+        # Cycle 2: reweight the per-slot cross-entropy so rare fluorescence
+        # lines are not drowned by the ~99% continuum majority. Defaults
+        # (gate_focal_gamma=0, gate_class_weights=None) reduce this to the
+        # original -sum(gate_target * log_pooled_gate).
+        gate_ce = gate_target * log_pooled_gate
+        if self.gate_focal_gamma > 0.0:
+            pooled_gate = tf.exp(log_pooled_gate)
+            gate_ce = gate_ce * tf.pow(
+                tf.maximum(1.0 - pooled_gate, 1e-7), self.gate_focal_gamma
+            )
+        if self._gate_class_weights is not None:
+            gate_ce = gate_ce * self._gate_class_weights
+        gate_aux_loss = -tf.reduce_sum(gate_ce, axis=-1)
 
         ur_nll = tf.squeeze(
             gaussian_nll(ur_true, params["ur_mu"], params["ur_logsigma"]),
