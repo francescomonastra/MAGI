@@ -2746,6 +2746,9 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
         continuum_flow_conditioner_hidden=(64,),
         continuum_flow_y_mean=None,
         continuum_flow_y_scale=None,
+        continuum_flow_warp="affine",
+        continuum_flow_warp_y_knots=None,
+        continuum_flow_warp_z_knots=None,
 
         prior="gaussian",
         prior_n_layers=6,
@@ -2824,6 +2827,18 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
         )
         self.continuum_flow_y_scale = (
             1.0 if continuum_flow_y_scale is None else float(continuum_flow_y_scale)
+        )
+        # Continuum-flow standardization: "affine" (default, (y-mean)/scale) or
+        # "cdf" (monotone empirical-CDF->N(0,1) warp; density-proportional knots).
+        # For "cdf", fit the knots once with magi.fit_cdf_warp_knots(energy_y).
+        self.continuum_flow_warp = str(continuum_flow_warp)
+        self.continuum_flow_warp_y_knots = (
+            None if continuum_flow_warp_y_knots is None
+            else np.asarray(continuum_flow_warp_y_knots, dtype=np.float32)
+        )
+        self.continuum_flow_warp_z_knots = (
+            None if continuum_flow_warp_z_knots is None
+            else np.asarray(continuum_flow_warp_z_knots, dtype=np.float32)
         )
 
         # Learnable prior p(z|cond). "gaussian" (default) keeps the fixed N(0,I)
@@ -3056,6 +3071,9 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
                 n_transforms=self.continuum_flow_transforms,
                 interval_half_width=self.continuum_flow_interval,
                 conditioner_hidden=self.continuum_flow_conditioner_hidden,
+                warp_mode=self.continuum_flow_warp,
+                warp_y_knots=self.continuum_flow_warp_y_knots,
+                warp_z_knots=self.continuum_flow_warp_z_knots,
                 name="continuum_flow",
             )
             self.energy_cont_mu_head = None
@@ -3500,6 +3518,15 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
             "continuum_flow_conditioner_hidden": list(self.continuum_flow_conditioner_hidden),
             "continuum_flow_y_mean": float(self.continuum_flow_y_mean),
             "continuum_flow_y_scale": float(self.continuum_flow_y_scale),
+            "continuum_flow_warp": self.continuum_flow_warp,
+            "continuum_flow_warp_y_knots": (
+                None if self.continuum_flow_warp_y_knots is None
+                else self.continuum_flow_warp_y_knots.tolist()
+            ),
+            "continuum_flow_warp_z_knots": (
+                None if self.continuum_flow_warp_z_knots is None
+                else self.continuum_flow_warp_z_knots.tolist()
+            ),
             "prior": self.prior_mode,
             "prior_n_layers": int(self.prior_n_layers),
             "prior_hidden": list(self.prior_hidden),

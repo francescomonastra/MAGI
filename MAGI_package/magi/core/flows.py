@@ -45,6 +45,7 @@ are also fully normalized - see core.losses.flow_line_mixture_nll /
 gaussian_logpdf.
 """
 
+import numpy as np
 import tensorflow as tf
 import tensorflow_probability as tfp
 from tensorflow import keras
@@ -52,6 +53,24 @@ from tensorflow.keras import layers
 
 tfb = tfp.bijectors
 tfd = tfp.distributions
+
+
+def _piecewise_linear(x, xk, yk):
+    """Monotone piecewise-linear map x -> y through knots (xk, yk), both 1-D
+    and strictly increasing. Returns (y, slope) where slope is the local
+    segment slope dy/dx at each x. Points outside [xk[0], xk[-1]] are
+    extrapolated with the nearest end-segment slope (still monotone)."""
+    x = tf.reshape(x, (-1,))
+    m = tf.shape(xk)[0]
+    idx = tf.searchsorted(xk, x, side="right") - 1
+    idx = tf.clip_by_value(idx, 0, m - 2)
+    x0 = tf.gather(xk, idx)
+    x1 = tf.gather(xk, idx + 1)
+    y0 = tf.gather(yk, idx)
+    y1 = tf.gather(yk, idx + 1)
+    slope = (y1 - y0) / (x1 - x0)
+    y = y0 + (x - x0) * slope
+    return y, slope
 
 
 class ConditionalRQSFlow(keras.layers.Layer):
@@ -93,6 +112,9 @@ class ConditionalRQSFlow(keras.layers.Layer):
         conditioner_hidden=(64,),
         min_bin=1e-3,
         min_slope=1e-3,
+        warp_mode="affine",
+        warp_y_knots=None,
+        warp_z_knots=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -102,6 +124,44 @@ class ConditionalRQSFlow(keras.layers.Layer):
         self.y_scale = float(y_scale)
         if self.y_scale <= 0.0:
             raise ValueError(f"y_scale must be positive, got {self.y_scale}.")
+
+        # Standardization of y into the spline's working space.
+        #   "affine": w = (y - y_mean) / y_scale  (constant Jacobian; default,
+        #             byte-for-byte the original behavior).
+        #   "cdf":    w = monotone piecewise-linear map fit so the training
+        #             energy_y marginal becomes ~N(0,1) (knots = data quantiles
+        #             -> standard-normal quantiles). This makes the spline knots
+        #             density-proportional, so a broad multi-scale spectrum (CR:
+        #             sharp low-E Compton edge under a huge muon tail) and a
+        #             narrow bulk with a far low-E tail (Small) both land inside
+        #             [-B, B] with resolution where the events are. See
+        #             docs/v0.8_v072_comparison.md section 6(b).
+        self.warp_mode = str(warp_mode)
+        if self.warp_mode not in ("affine", "cdf"):
+            raise ValueError(
+                f"warp_mode must be 'affine' or 'cdf', got {self.warp_mode!r}."
+            )
+        if self.warp_mode == "cdf":
+            if warp_y_knots is None or warp_z_knots is None:
+                raise ValueError(
+                    "warp_mode='cdf' requires warp_y_knots and warp_z_knots "
+                    "(fit with magi.fit_cdf_warp_knots)."
+                )
+            yk = np.asarray(warp_y_knots, dtype=np.float64).reshape(-1)
+            zk = np.asarray(warp_z_knots, dtype=np.float64).reshape(-1)
+            if yk.shape != zk.shape or yk.shape[0] < 2:
+                raise ValueError(
+                    "warp_y_knots and warp_z_knots must be 1-D of equal length >= 2."
+                )
+            if np.any(np.diff(yk) <= 0.0) or np.any(np.diff(zk) <= 0.0):
+                raise ValueError("warp knots must be strictly increasing.")
+            self.warp_y_knots_np = yk
+            self.warp_z_knots_np = zk
+            self._yk = tf.constant(yk, dtype=tf.float32)
+            self._zk = tf.constant(zk, dtype=tf.float32)
+        else:
+            self.warp_y_knots_np = None
+            self.warp_z_knots_np = None
 
         self.n_bins = int(n_bins)
         self.n_transforms = int(n_transforms)
@@ -171,25 +231,44 @@ class ConditionalRQSFlow(keras.layers.Layer):
 
         return tfb.Chain(bijectors)
 
+    def _warp_forward(self, y):
+        """Map y -> standardized working coordinate w, returning
+        (w, log|dw/dy|), both shape (batch,)."""
+        y = tf.reshape(y, (-1,))
+        if self.warp_mode == "affine":
+            w = (y - self.y_mean) / self.y_scale
+            log_dwdy = -tf.math.log(tf.constant(self.y_scale, dtype=w.dtype))
+            return w, log_dwdy
+        w, slope = _piecewise_linear(y, self._yk, self._zk)
+        return w, tf.math.log(slope)
+
+    def _warp_inverse(self, w):
+        """Map standardized working coordinate w -> y, shape (batch,)."""
+        if self.warp_mode == "affine":
+            return tf.reshape(w, (-1,)) * self.y_scale + self.y_mean
+        y, _ = _piecewise_linear(w, self._zk, self._yk)
+        return y
+
     def log_prob(self, y, feat):
         """Fully normalized log density log p(y | feat), shape (batch,)."""
-        y_std = (tf.reshape(y, (-1,)) - self.y_mean) / self.y_scale
+        w, log_dwdy = self._warp_forward(y)
         bijector = self._build_bijector(feat)
 
-        u = bijector.inverse(y_std)
+        u = bijector.inverse(w)
         log_prob_std = self.base.log_prob(u) + bijector.inverse_log_det_jacobian(
-            y_std, event_ndims=0
+            w, event_ndims=0
         )
-        # Change of variables for the standardization: p_Y(y) = p_std(y_std)/y_scale.
-        return log_prob_std - tf.math.log(self.y_scale)
+        # Change of variables for the standardization: p_Y(y) = p_W(w) |dw/dy|.
+        # affine: log_dwdy = -log(y_scale) (constant) -> identical to before.
+        return log_prob_std + log_dwdy
 
     def sample(self, feat):
         """Draw one y per row of feat, shape (batch,)."""
         n = tf.shape(feat)[0]
         u = self.base.sample(n)
         bijector = self._build_bijector(feat)
-        y_std = bijector.forward(u)
-        return y_std * self.y_scale + self.y_mean
+        w = bijector.forward(u)
+        return self._warp_inverse(w)
 
     def get_config(self):
         config = super().get_config()
@@ -203,6 +282,15 @@ class ConditionalRQSFlow(keras.layers.Layer):
                 "interval_half_width": self.B,
                 "min_bin": self.min_bin,
                 "min_slope": self.min_slope,
+                "warp_mode": self.warp_mode,
+                "warp_y_knots": (
+                    None if self.warp_y_knots_np is None
+                    else self.warp_y_knots_np.tolist()
+                ),
+                "warp_z_knots": (
+                    None if self.warp_z_knots_np is None
+                    else self.warp_z_knots_np.tolist()
+                ),
             }
         )
         return config

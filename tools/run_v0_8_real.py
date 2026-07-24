@@ -106,16 +106,24 @@ for name in args.sources:
 
     ey = feat["energy_y"].to_numpy()
     lls = magi.line_logsigma_from_resolution(10.0**line_positions_y, X_IFU_RESOLUTION_EV, fwhm=True)
+    # Cycle 1: CDF pre-warp for the continuum flow. A monotone empirical-CDF->N(0,1)
+    # standardization makes the spline knots density-proportional, so CR's sharp
+    # low-E Compton edge (buried under the huge muon tail) AND Small's far, rare
+    # low-E tail both land inside [-B,B] with resolution where the events are.
+    # Validated on the --sparse-tail synthetic (deep-tail window 0.00 affine ->
+    # 0.96 cdf). See docs/v0.8_v072_comparison.md sec 6(b).
+    warp_yk, warp_zk = magi.fit_cdf_warp_knots(ey, n_knots=256, eps=1e-4)
     model = magi.CVAE_MixEnergy_ContPhi_TaskAdaptive(
         n_types=dataset_pack["n_types"], line_positions_y=line_positions_y, latent_dim=8,
         hidden=(128,128,64), beta=0.2, continuum_mode="flow",
-        # higher flow resolution to sharpen the continuum edges/peaks
         continuum_flow_bins=24, continuum_flow_transforms=3,
-        continuum_flow_y_mean=float(ey.mean()), continuum_flow_y_scale=float(ey.std()),
+        continuum_flow_warp="cdf",
+        continuum_flow_warp_y_knots=warp_yk, continuum_flow_warp_z_knots=warp_zk,
         energy_flow_condition="z_cond", prior="coupling", w_gate_aux=2.0,
         line_logsigma_init=lls, line_logsigma_trainable=False)
     magi.compile_model(model, learning_rate=2e-4)
-    log(f"training {args.epochs} epochs (pinned logsigma {np.round(model._line_logsigma_clipped().numpy(),2)})")
+    log(f"training {args.epochs} epochs (warp=cdf {warp_yk.size} knots [{warp_yk[0]:.2f},{warp_yk[-1]:.2f}]; "
+        f"pinned logsigma {np.round(model._line_logsigma_clipped().numpy(),2)})")
 
     # Full run: validation + v0.7.2 callbacks (early stop + LR anneal on val_loss).
     # verbose=2 prints one line per epoch (captured in the log for monitoring).

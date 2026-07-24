@@ -726,6 +726,9 @@ def load_task_adaptive_model_for_generation(
             ),
             continuum_flow_y_mean=model_config.get("continuum_flow_y_mean", 0.0),
             continuum_flow_y_scale=model_config.get("continuum_flow_y_scale", 1.0),
+            continuum_flow_warp=model_config.get("continuum_flow_warp", "affine"),
+            continuum_flow_warp_y_knots=model_config.get("continuum_flow_warp_y_knots"),
+            continuum_flow_warp_z_knots=model_config.get("continuum_flow_warp_z_knots"),
 
             prior=model_config.get("prior", "gaussian"),
             prior_n_layers=model_config.get("prior_n_layers", 6),

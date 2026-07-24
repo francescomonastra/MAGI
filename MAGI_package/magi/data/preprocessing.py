@@ -740,6 +740,58 @@ def line_logsigma_from_resolution(line_energies_mev, resolution_ev, fwhm=True):
     return np.log(sigma_y).astype(np.float32)
 
 
+def fit_cdf_warp_knots(y, n_knots=256, eps=1.0e-4, min_gap=1.0e-6):
+    """Fit a monotone empirical-CDF -> standard-normal warp for the continuum
+    flow's standardization (ConditionalRQSFlow warp_mode='cdf').
+
+    Returns knot arrays (y_knots, z_knots) such that mapping the training
+    energy_y through the piecewise-linear interpolation y_knots -> z_knots takes
+    the marginal distribution of y to approximately N(0, 1). This makes the
+    RQS spline's knots density-proportional instead of uniform in a linear
+    (mean/std) standardization, so both a broad multi-scale spectrum (CR) and a
+    narrow bulk with a far low-E tail (Small) are represented inside [-B, B]
+    with resolution where the events actually are. See
+    docs/v0.8_v072_comparison.md section 6(b).
+
+    Parameters
+    ----------
+    y : array-like
+        Training energy_y values (e.g. log10(E)); NaNs/infs are dropped.
+    n_knots : int
+        Number of quantile anchor points. More knots = finer warp.
+    eps : float
+        Smallest/largest probability level used for the outermost knots; the
+        knot grid is linspace(eps, 1-eps, n_knots). Smaller eps reaches further
+        into the tails (eps=1e-4 covers down to the 0.01th percentile).
+    min_gap : float
+        Minimum spacing enforced between successive y_knots so the map stays
+        strictly increasing (flat/degenerate quantiles are nudged apart).
+
+    Returns
+    -------
+    (np.ndarray, np.ndarray)
+        y_knots, z_knots, both float32, 1-D, strictly increasing.
+    """
+    from scipy.special import ndtri
+
+    y = np.asarray(y, dtype=np.float64).reshape(-1)
+    y = y[np.isfinite(y)]
+    if y.size < 2:
+        raise ValueError("y must have >= 2 finite values to fit a warp.")
+
+    p = np.linspace(float(eps), 1.0 - float(eps), int(n_knots))
+    z = ndtri(p)                       # standard-normal quantiles (strictly incr.)
+    yk = np.quantile(y, p)             # data quantiles
+
+    # Enforce strictly increasing y_knots (quantiles can repeat on flat regions).
+    yk = np.maximum.accumulate(yk)
+    for i in range(1, yk.size):
+        if yk[i] <= yk[i - 1]:
+            yk[i] = yk[i - 1] + float(min_gap)
+
+    return yk.astype(np.float32), z.astype(np.float32)
+
+
 def build_gate_targets(
     E,
     energy_bins,

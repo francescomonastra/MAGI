@@ -33,6 +33,15 @@ parser.add_argument("--energy-flow-condition", choices=["z_cond", "cond"], defau
                          "passes this (noise-geometry) synthetic test at convergence.")
 parser.add_argument("--continuum-flow-bins", type=int, default=8)
 parser.add_argument("--continuum-flow-transforms", type=int, default=2)
+parser.add_argument("--continuum-warp", choices=["affine", "cdf"], default="affine",
+                    help="Continuum-flow standardization. 'affine' = (y-mean)/std "
+                         "(uniform knots). 'cdf' = monotone empirical-CDF->N(0,1) warp "
+                         "(density-proportional knots; brings a far sparse tail inside "
+                         "the spline interval). Only used with --continuum-mode flow.")
+parser.add_argument("--sparse-tail", action="store_true",
+                    help="Make the low-E tail far and rare (mimics real Small: a "
+                         "<1%% population many sigma below the bulk, outside [-B,B] "
+                         "under affine standardization) so the CDF warp is exercised.")
 parser.add_argument("--w-gate-aux", type=float, default=None,
                     help="Override the model's default auxiliary gate-supervision weight.")
 parser.add_argument("--pin-line-width", action="store_true",
@@ -52,8 +61,15 @@ N_LINES = 2
 # + a sparse broad low-energy tail (mimics Small's near-empty low-E region)
 # + 2 closely-spaced lines (0.032 dex apart, mimicking real Cu K-alpha1/
 # Cu K-beta separation) sitting inside that sparse tail.
-PEAK_WEIGHT, PEAK_MU, PEAK_SIGMA = 0.90, -0.60, 0.20
-TAIL_WEIGHT, TAIL_MU, TAIL_SIGMA = 0.10, -2.30, 0.60
+if args.sparse_tail:
+    # Far, rare tail: bulk tight at -0.6, tail centered ~4-8 sigma below with a
+    # tiny weight, so under affine (y-mean)/std standardization it lands near or
+    # beyond [-B,B] and collapses - the regime the CDF warp is meant to fix.
+    PEAK_WEIGHT, PEAK_MU, PEAK_SIGMA = 0.985, -0.60, 0.12
+    TAIL_WEIGHT, TAIL_MU, TAIL_SIGMA = 0.015, -3.00, 0.45
+else:
+    PEAK_WEIGHT, PEAK_MU, PEAK_SIGMA = 0.90, -0.60, 0.20
+    TAIL_WEIGHT, TAIL_MU, TAIL_SIGMA = 0.10, -2.30, 0.60
 
 cont_w = np.array([PEAK_WEIGHT, TAIL_WEIGHT])
 cont_w = cont_w / cont_w.sum() * (1.0 - LINE_FRAC_TOTAL)
@@ -166,9 +182,16 @@ if args.continuum_mode == "flow":
         # the data bulk sits inside the spline interval [-B, B].
         continuum_flow_y_mean=float(energy_y.mean()),
         continuum_flow_y_scale=float(energy_y.std()),
+        continuum_flow_warp=args.continuum_warp,
     )
-    print(f"  flow: bins={args.continuum_flow_bins} transforms={args.continuum_flow_transforms} "
-          f"y_mean={energy_y.mean():.3f} y_scale={energy_y.std():.3f}")
+    if args.continuum_warp == "cdf":
+        yk, zk = magi.fit_cdf_warp_knots(energy_y, n_knots=256, eps=1e-4)
+        model_kwargs.update(continuum_flow_warp_y_knots=yk, continuum_flow_warp_z_knots=zk)
+        print(f"  flow: bins={args.continuum_flow_bins} transforms={args.continuum_flow_transforms} "
+              f"warp=cdf ({yk.size} knots, y_knots range [{yk[0]:.2f},{yk[-1]:.2f}])")
+    else:
+        print(f"  flow: bins={args.continuum_flow_bins} transforms={args.continuum_flow_transforms} "
+              f"warp=affine y_mean={energy_y.mean():.3f} y_scale={energy_y.std():.3f}")
 
 model = magi.CVAE_MixEnergy_ContPhi_TaskAdaptive(**model_kwargs)
 magi.compile_model(model, learning_rate=2e-4)
