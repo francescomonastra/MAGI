@@ -9,7 +9,14 @@ def print_model_structure(model):
     print(f"Model class   = {model.__class__.__name__}")
     print(f"latent_dim    = {model.latent_dim}")
     print(f"n_types       = {model.n_types}")
-    print(f"n_energy_bins = {model.n_energy_bins}")
+    if hasattr(model, "n_energy_bins"):
+        print(f"n_energy_bins = {model.n_energy_bins}")
+    if hasattr(model, "n_lines"):
+        # v0.8 mixture energy head: continuum + fixed lines instead of bins
+        print(f"n_lines       = {model.n_lines} (mixture energy head)")
+        print(f"continuum     = {getattr(model, 'continuum_mode', 'gaussian')}"
+              f" (warp={getattr(model, 'continuum_flow_warp', '-')})")
+        print(f"prior         = {getattr(model, 'prior_mode', 'gaussian')}")
     if hasattr(model, "n_uv_bins"):
         print(f"n_uv_bins     = {model.n_uv_bins}")
 
@@ -510,7 +517,16 @@ def print_model_tree_with_params(model):
     # ------------------------------------------------------
     print("│")
     print("├── Losses")
-    print("│   ├── energy : categorical CE")
+    if hasattr(model, "n_lines"):
+        # v0.8 mixture energy head
+        print(f"│   ├── energy : mixture NLL "
+              f"({getattr(model, 'continuum_mode', 'gaussian')} continuum "
+              f"+ {model.n_lines} fixed lines)")
+        print(f"│   ├── gate   : auxiliary CE "
+              f"(w={getattr(model, 'w_gate_aux', 0.0)}, "
+              f"focal_gamma={getattr(model, 'gate_focal_gamma', 0.0)})")
+    else:
+        print("│   ├── energy : categorical CE")
 
     if hasattr(model, "ur_mu_head"):
         print("│   ├── ur_q   : Gaussian NLL")
