@@ -40,7 +40,11 @@ def main():
     if isinstance(idx_to_type, dict):
         idx_to_type = {int(k): v for k, v in idx_to_type.items()}
 
-    energy_bins = np.asarray(preprocessing["energy_bins"], dtype=np.float64)
+    # Only categorical-energy models (v0.6/v0.7/v0.7.2) need the bins.
+    energy_bins = preprocessing.get("energy_bins", None)
+    if energy_bins is not None:
+        energy_bins = np.asarray(energy_bins, dtype=np.float64)
+
     type_probs = np.asarray(preprocessing["type_probs"], dtype=np.float64)
 
     geometry_transform = preprocessing.get(
@@ -50,32 +54,60 @@ def main():
 
     geometry_metadata = dict(preprocessing.get("geometry_metadata", {}))
 
-    # ------------------------------------------------------
-    # v0.7 / v0.7.2 quantile transformers
-    # ------------------------------------------------------
-    if geometry_transform in [
+    model_class = model_config.get(
+        "model_class",
+        model_config.get("class_name", "CVAE_CatEnergy_CatUV_TaskAdaptive"),
+    )
+
+    energy_transform = preprocessing.get(
+        "energy_transform",
+        metadata.get("training_metadata", {}).get("energy_transform", None),
+    )
+
+    # v0.8 mixture head: energy is a continuous target, not a bin index.
+    energy_head_mode = (
+        "mixture" if model_class.startswith("CVAE_MixEnergy") else None
+    )
+
+    transformers_file = args.transformers_file
+
+    if transformers_file is None:
+        transformers_file = os.path.join(
+            args.save_dir,
+            f"{args.model_name}_quantile_transformers.joblib",
+        )
+
+    quantile_geometry = geometry_transform in [
         "quantile_u_r_u_v",
         "quantile_u_r_u_v_phi_r_phi_v",
-    ]:
-        transformers_file = args.transformers_file
+    ]
+    quantile_energy = (energy_transform == "quantile")
 
-        if transformers_file is None:
-            transformers_file = os.path.join(
-                args.save_dir,
-                f"{args.model_name}_quantile_transformers.joblib",
-            )
+    quantile_transformers = {}
 
+    if quantile_geometry or quantile_energy:
         if not os.path.exists(transformers_file):
             raise FileNotFoundError(
-                "This model uses quantile geometry, but the QuantileTransformer "
-                f"file was not found: {transformers_file}"
+                "This model uses quantile transforms "
+                f"(geometry={geometry_transform}, energy={energy_transform}), "
+                "but the QuantileTransformer file was not found: "
+                f"{transformers_file}"
             )
 
         quantile_transformers = joblib.load(transformers_file)
+        print(f"[MAGI] Loaded quantile transformers: {transformers_file}")
+
+    # ------------------------------------------------------
+    # v0.7 / v0.7.2 quantile geometry
+    # ------------------------------------------------------
+    if quantile_geometry:
         geometry_metadata.update(quantile_transformers)
         geometry_metadata["geometry_transform"] = geometry_transform
 
-        print(f"[MAGI] Loaded quantile transformers: {transformers_file}")
+    # ------------------------------------------------------
+    # v0.8 quantile energy
+    # ------------------------------------------------------
+    qt_energy = quantile_transformers.get("qt_energy", None)
 
     # ------------------------------------------------------
     # Legacy v0.6 compatibility
@@ -120,6 +152,9 @@ def main():
         idx_to_type=idx_to_type,
         s_r_mean=s_r_mean,
         s_r_std=s_r_std,
+        energy_head_mode=energy_head_mode,
+        energy_transform=energy_transform,
+        qt_energy=qt_energy,
         output_file=args.output_file,
         n_events=args.n_events,
         radius=radius,

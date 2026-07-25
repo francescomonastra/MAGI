@@ -314,11 +314,18 @@ def generate_detector_table_to_file(
     type_probs,
     n_types,
     idx_to_type,
-    energy_bins,
+    energy_bins=None,
     geometry_metadata=None,
     s_r_mean=None,
     s_r_std=None,
     u_v_bins=None,
+
+    # v0.8 mixture energy
+    energy_head_mode=None,
+    energy_transform=None,
+    qt_energy=None,
+    energy_metadata=None,
+
     center=(0.0, 0.0, 0.0),
     radius=1.0,
     energy_mode="uniform",
@@ -341,6 +348,17 @@ def generate_detector_table_to_file(
 
       - binary / bin:
           compact MAGI binary format
+
+    Supported energy heads:
+      - categorical (v0.6/v0.7/v0.7.2):
+          energy_bins is required and generated bin indices are converted back
+          to physical energies with energy_mode.
+
+      - mixture (v0.8):
+          the model returns a continuous energy target y instead of a bin index,
+          so energy_bins is unused and the energy transform must be supplied:
+          energy_transform="log10" or a fitted qt_energy (equivalently through
+          energy_metadata, mirroring geometry_metadata).
 
     Parameters
     ----------
@@ -413,6 +431,10 @@ def generate_detector_table_to_file(
             s_r_std=s_r_std,
             u_v_bins=u_v_bins,
             energy_mode=energy_mode,
+            energy_head_mode=energy_head_mode,
+            energy_transform=energy_transform,
+            qt_energy=qt_energy,
+            energy_metadata=energy_metadata,
             rng=rng,
         )
 
@@ -487,7 +509,7 @@ def generate_detector_input_file(
     save_dir,
     model_name,
     model_config,
-    energy_bins,
+    energy_bins=None,
     n_types,
     type_weights,
     type_probs,
@@ -496,6 +518,13 @@ def generate_detector_input_file(
     u_v_bins=None,
     s_r_mean=None,
     s_r_std=None,
+
+    # v0.8 mixture energy
+    energy_head_mode=None,
+    energy_transform=None,
+    qt_energy=None,
+    energy_metadata=None,
+
     output_file,
     n_events,
     radius,
@@ -510,6 +539,10 @@ def generate_detector_input_file(
 ):
     """
     Generate a Geant4-ready particle input file from a trained MAGI model.
+
+    energy_bins is only needed by categorical-energy models (v0.6/v0.7/v0.7.2).
+    v0.8 mixture-energy models instead need the energy transform, supplied
+    through energy_transform / qt_energy / energy_metadata.
     """
     from magi.training.checkpointing import load_task_adaptive_model_for_generation
 
@@ -541,6 +574,10 @@ def generate_detector_input_file(
         s_r_mean=s_r_mean,
         s_r_std=s_r_std,
         u_v_bins=u_v_bins,
+        energy_head_mode=energy_head_mode,
+        energy_transform=energy_transform,
+        qt_energy=qt_energy,
+        energy_metadata=energy_metadata,
         center=center,
         radius=radius,
         energy_mode=energy_mode,

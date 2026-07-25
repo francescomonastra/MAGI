@@ -453,7 +453,7 @@ def load_task_adaptive_model_for_generation(
     save_dir,
     model_name,
     model_config,
-    energy_bins,
+    energy_bins=None,
     u_v_bins=None,
     n_types=None,
     type_weights=None,
@@ -487,12 +487,21 @@ def load_task_adaptive_model_for_generation(
     weights_path = os.path.join(save_dir, f"{model_name}.weights.h5")
     task_weights_path = os.path.join(save_dir, f"{model_name}_task_weights.json")
 
-    n_energy_bins = len(energy_bins) - 1
-
     model_class = model_config.get(
         "model_class",
         model_config.get("class_name", "CVAE_CatEnergy_CatUV_TaskAdaptive"),
     )
+
+    # The v0.8 mixture head has no categorical energy output, so energy_bins is
+    # optional there. Every other class sizes its energy head from the bins.
+    if energy_bins is None:
+        if model_class != "CVAE_MixEnergy_ContPhi_TaskAdaptive":
+            raise ValueError(
+                f"energy_bins is required to load {model_class}."
+            )
+        n_energy_bins = 0
+    else:
+        n_energy_bins = len(energy_bins) - 1
 
     if model_class == "CVAE_CatEnergy_CatUV_TaskAdaptive":
         if u_v_bins is None:
