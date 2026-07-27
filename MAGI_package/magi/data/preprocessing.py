@@ -508,6 +508,73 @@ def detect_line_bins(counts, prominence_factor=3.0, window=5):
     return lines, local_med
 
 
+def refine_peak_energy(
+    E,
+    bin_lo,
+    bin_hi,
+    sub_bin_width_mev=None,
+    n_sub_bins_default=500,
+    min_events=20,
+    prominence=3.0,
+    centroid_halfwidth_sub_bins=2,
+):
+    """
+    Refine a detected peak's energy to sub-bin precision.
+
+    A detection bin on a log grid is orders of magnitude wider than a physical
+    line (~21 keV at 511 keV, ~166 eV at 8 keV for CryoSphere-CR at 1024 bins),
+    so the bin centre is a poor estimate of where the line actually is - and if
+    those centres are used to match candidates or to pin mixture components, the
+    error is many line widths. This re-histograms the raw events inside the bin
+    at `sub_bin_width_mev` and returns the centroid of the winning sub-bin and
+    its neighbours.
+
+    Returns None when the bin has too few events or no sub-bin stands out
+    (i.e. the "peak" is a continuum fluctuation, not a line).
+
+    Parameters
+    ----------
+    E : array-like
+        All physical energies, in MeV.
+    bin_lo, bin_hi : float
+        Edges of the detected peak's bin, in MeV.
+    sub_bin_width_mev : float or None
+        Sub-histogram resolution. Defaults to (bin_hi - bin_lo) /
+        n_sub_bins_default. Pass the detector resolution to refine to the
+        precision the line widths are pinned at.
+    min_events : int
+        Minimum events inside the bin for a refinement to be attempted.
+    prominence : float
+        The winning sub-bin must hold at least `prominence` times the median
+        sub-bin count to be accepted as a line.
+    centroid_halfwidth_sub_bins : int
+        Number of sub-bins either side of the winner included in the centroid.
+    """
+    E = np.asarray(E, dtype=np.float64)
+    sub = E[(E >= bin_lo) & (E < bin_hi)]
+    if sub.size < min_events:
+        return None
+
+    width = float(bin_hi - bin_lo)
+    if sub_bin_width_mev is not None and sub_bin_width_mev > 0:
+        n_sub = int(np.clip(round(width / float(sub_bin_width_mev)), 4, 200_000))
+    else:
+        n_sub = int(n_sub_bins_default)
+
+    hist, sub_edges = np.histogram(sub, bins=n_sub, range=(bin_lo, bin_hi))
+    k = int(np.argmax(hist))
+    med = float(np.median(hist[hist > 0])) if np.any(hist > 0) else 0.0
+    if hist[k] < max(min_events / 2.0, prominence * max(med, 1.0)):
+        return None
+
+    lo_i = max(k - centroid_halfwidth_sub_bins, 0)
+    hi_i = min(k + centroid_halfwidth_sub_bins + 1, n_sub)
+    window = sub[(sub >= sub_edges[lo_i]) & (sub < sub_edges[hi_i])]
+    if window.size == 0:
+        return None
+    return float(window.mean())
+
+
 def detect_energy_lines(
     E,
     energy_bins=None,
@@ -520,6 +587,9 @@ def detect_energy_lines(
     candidate_lines=None,
     match_tolerance_bins=2.0,
     resolution_mev=None,
+    max_match_tolerance_mev=None,
+    refine_peaks=True,
+    refine_bin_width_mev=None,
 ):
     """
     Detect statistically significant spectral lines in an energy spectrum and
@@ -551,6 +621,27 @@ def detect_energy_lines(
         If given, the matching tolerance is widened to at least this value
         (detector energy resolution) - matching can never be tighter than
         the instrument's own resolution allows.
+    max_match_tolerance_mev : float or None
+        Hard upper bound on the matching tolerance, applied after the two rules
+        above. On a log grid spanning many decades the bin-width tolerance can
+        reach hundreds of eV (~333 eV at 8 keV for CryoSphere-CR at 1024 bins),
+        which is wide enough for the wrong element's transition to be the match.
+        Cap it when the line positions will be used as *pinned* mixture
+        components, where being a few line widths off is fatal.
+    refine_peaks : bool
+        Refine each detected peak's energy to sub-bin precision with
+        refine_peak_energy() before matching, and report it as
+        `energy_mev_refined` (the coarse value stays in `bin_center_mev`).
+    refine_bin_width_mev : float or None
+        Sub-histogram resolution for the refinement; defaults to 1/500 of the
+        detection bin. Pass the detector resolution to refine to the precision
+        the mixture head's line widths are pinned at.
+
+    Notes
+    -----
+    Candidates and detected peaks are assigned closest-pair-first, so the result
+    does not depend on the order of `candidate_lines` (see the comment at the
+    assignment loop for the CR Ni-K-beta/Cu-K-alpha case that motivated this).
 
     Returns
     -------
@@ -591,20 +682,42 @@ def detect_energy_lines(
     )
     centres = 0.5 * (edges[:-1] + edges[1:])
 
-    detected_peaks = [
-        {
+    detected_peaks = []
+    for b in peak_idx:
+        peak = {
             "bin_index": int(b),
             "energy_mev": float(centres[b]),
+            "bin_center_mev": float(centres[b]),
             "count": float(counts[b]),
             "local_median": float(local_med[b]),
         }
-        for b in peak_idx
-    ]
+        if refine_peaks:
+            refined = refine_peak_energy(
+                E, float(edges[b]), float(edges[b + 1]),
+                sub_bin_width_mev=refine_bin_width_mev,
+            )
+            peak["energy_mev_refined"] = refined
+            if refined is not None:
+                # Match on the refined energy: a detection bin is up to 21 keV
+                # wide at 511 keV on CryoSphere-CR's log grid, so its centre can
+                # sit 1.5 keV from the line and hand the match to the wrong
+                # candidate (Po-218 at 509.7 keV instead of the 511 keV
+                # annihilation line - observed).
+                peak["energy_mev"] = refined
+        detected_peaks.append(peak)
 
-    matched_lines = []
-    matched_peak_bins = set()
-    unmatched_candidates = []
-
+    # Candidate <-> peak assignment, closest pair first.
+    #
+    # This is deliberately NOT a per-candidate greedy loop in list order: with a
+    # bin-width tolerance that is hundreds of eV wide on a log grid spanning many
+    # decades, an earlier candidate can claim a peak that belongs to a later,
+    # much closer one. On CryoSphere-CR that is exactly what happened - Ni K-beta
+    # (JSON index 27, 194 eV away) claimed the ~8.0 keV Cu K-alpha peak before
+    # Cu K-alpha1 (index 28, 23 eV away) was ever tried, so the mixture head was
+    # then trained with a line pinned where no real events are. Sorting all
+    # admissible pairs by distance and assigning closest-first removes the
+    # list-order dependence.
+    tols = []
     for cand in candidate_lines:
         E_c = float(cand["energy_mev"])
         bin_i = int(np.clip(np.searchsorted(edges, E_c) - 1, 0, len(edges) - 2))
@@ -612,26 +725,47 @@ def detect_energy_lines(
         tol = match_tolerance_bins * local_width
         if resolution_mev is not None:
             tol = max(tol, float(resolution_mev))
+        if max_match_tolerance_mev is not None:
+            tol = min(tol, float(max_match_tolerance_mev))
+        tols.append(tol)
 
-        best_peak = None
-        best_dist = None
-        for peak in detected_peaks:
-            if peak["bin_index"] in matched_peak_bins:
-                continue
+    pairs = []
+    for ci, cand in enumerate(candidate_lines):
+        E_c = float(cand["energy_mev"])
+        for pi, peak in enumerate(detected_peaks):
             dist = abs(peak["energy_mev"] - E_c)
-            if dist <= tol and (best_dist is None or dist < best_dist):
-                best_peak, best_dist = peak, dist
+            if dist <= tols[ci]:
+                pairs.append((dist, ci, pi))
+    pairs.sort(key=lambda t: (t[0], t[1], t[2]))
 
-        if best_peak is not None:
-            matched_peak_bins.add(best_peak["bin_index"])
+    assigned_cand = {}
+    matched_peak_bins = set()
+    used_peaks = set()
+    for dist, ci, pi in pairs:
+        if ci in assigned_cand or pi in used_peaks:
+            continue
+        assigned_cand[ci] = pi
+        used_peaks.add(pi)
+        matched_peak_bins.add(detected_peaks[pi]["bin_index"])
+
+    matched_lines = []
+    unmatched_candidates = []
+    for ci, cand in enumerate(candidate_lines):
+        E_c = float(cand["energy_mev"])
+        pi = assigned_cand.get(ci)
+        if pi is not None:
+            peak = detected_peaks[pi]
             matched_lines.append({
                 "label": cand["label"],
                 "origin": cand["origin"],
                 "candidate_energy_mev": E_c,
-                "detected_energy_mev": best_peak["energy_mev"],
-                "bin_index": best_peak["bin_index"],
-                "count": best_peak["count"],
-                "delta_mev": best_peak["energy_mev"] - E_c,
+                "detected_energy_mev": peak["energy_mev"],
+                "detected_bin_center_mev": peak["bin_center_mev"],
+                "detected_energy_refined_mev": peak.get("energy_mev_refined"),
+                "bin_index": peak["bin_index"],
+                "count": peak["count"],
+                "delta_mev": peak["energy_mev"] - E_c,
+                "match_tolerance_mev": tols[ci],
             })
         else:
             unmatched_candidates.append({
@@ -652,6 +786,8 @@ def detect_energy_lines(
         "window": int(window),
         "match_tolerance_bins": float(match_tolerance_bins),
         "resolution_mev": (float(resolution_mev) if resolution_mev is not None else None),
+        "max_match_tolerance_mev": (float(max_match_tolerance_mev)
+                                    if max_match_tolerance_mev is not None else None),
         "detected_peaks": detected_peaks,
         "matched_lines": matched_lines,
         "unmatched_detected_peaks": unmatched_detected_peaks,

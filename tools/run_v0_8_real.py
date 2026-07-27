@@ -26,9 +26,18 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--epochs", type=int, default=40)
 parser.add_argument("--gen-chunk", type=int, default=1_000_000)
 parser.add_argument("--sources", nargs="+", default=["CR", "Small"])
+parser.add_argument("--seed", type=int, default=42,
+                    help="RNG seed; runs with seed != 42 checkpoint to a _seed<N> "
+                         "directory so the reference run is never overwritten.")
+parser.add_argument("--n-gen", type=int, default=0,
+                    help="Events to generate for validation. 0 (default) = the real "
+                         "event count. Generating fewer used to silently deflate the "
+                         "line-recovery ratio; compute_line_integral_recovery now "
+                         "normalizes for it, but matching the real count keeps the "
+                         "spectra and the sparse-tail Poisson noise honest.")
 args = parser.parse_args()
 
-magi.initialize_environment(seed=42, cpu_only=True)
+magi.initialize_environment(seed=args.seed, cpu_only=True)
 print("magi:", magi.__file__, flush=True)
 print("visible GPUs:", tf.config.get_visible_devices("GPU"), flush=True)
 
@@ -42,7 +51,9 @@ X_IFU_RESOLUTION_EV = 4.0
 os.makedirs("Plots", exist_ok=True)
 
 CANDIDATE_LINES_FILE = ("/Volumes/X10Pro/MAGI/CandidateLines/"
-    "CANDIDATE_ENERGY_LINES_SRON_CCNwithXFDM_NoShield_FlowerCryoAC_fixed.json")
+    # v0.8.1: EADL energies (what Geant4 actually emitted). The Bearden table
+    # this replaced put every fluorescence line 4-11 detector FWHM off.
+    "CANDIDATE_ENERGY_LINES_SRON_CCNwithXFDM_NoShield_FlowerCryoAC_fixed_EADL.json")
 candidate_lines = magi.load_candidate_energy_lines(CANDIDATE_LINES_FILE)["lines"]
 
 T0 = time.time()
@@ -81,7 +92,11 @@ for name in args.sources:
     log(f"loaded {E.size:,} events")
 
     res = magi.detect_energy_lines(E, binning_mode="log_fixed_count", n_bins=1024,
-                                  prominence_factor=3.0, window=5, candidate_lines=candidate_lines)
+                                  prominence_factor=3.0, window=5, candidate_lines=candidate_lines,
+                                  # v0.8.1: refine each peak to the pinned line
+                                  # width before matching - a detection bin is
+                                  # 21 keV wide at 511 keV on CR's log grid.
+                                  refine_bin_width_mev=X_IFU_RESOLUTION_EV * 1e-6)
     matched = [m for m in res["matched_lines"] if m["count"] >= 100]
     log(f"matched lines: {[m['label'] for m in matched]}")
 
@@ -144,25 +159,35 @@ for name in args.sources:
         f"val_gate_aux={h.history['val_gate_aux_loss'][-1]:.3f} "
         f"val_kl={h.history['val_kl'][-1]:.2f}")
 
-    # Checkpoint
-    save_dir = f"trained_models/v0_8_{name}"
+    # Checkpoint (seed-tagged unless this is the reference seed 42, so multi-seed
+    # runs never clobber the reference checkpoint)
+    suffix = "" if args.seed == 42 else f"_seed{args.seed}"
+    save_dir = f"trained_models/v0_8_{name}{suffix}"
     magi.save_final_trained_model(model=model, save_dir=save_dir, model_name=f"mix_{name}",
                                   model_config=model.to_generation_config())
     log(f"checkpoint saved -> {save_dir}/")
 
-    # Generate + validate (chunked). Cap at 1M generated events - recovery uses
-    # fractions so it stays valid, and this keeps the end-of-run "check" fast.
-    n_gen = min(dataset_pack["E_idx"].size, 1_000_000)
+    # Generate + validate (chunked). Default n_gen = the real event count.
+    n_gen = args.n_gen if args.n_gen > 0 else int(dataset_pack["E_idx"].size)
     E_gen, comp_idx = chunked_generate(model, n_gen, dataset_pack["type_probs"],
                                        dataset_pack["n_types"], dataset_pack["idx_to_type"],
                                        feature_pack, args.gen_chunk)
     E_real = feature_pack["filtered_prep"]["features"]["Energy"].to_numpy()
+    # Resolution-scaled window (+/-5 sigma at the pinned 4 eV FWHM) + local
+    # continuum subtraction + size normalization: the legacy bin-width window was
+    # ~190x the line width, so it measured continuum, not lines.
     recovery = magi.compute_line_integral_recovery(
-        E_real, E_gen, matched, feature_pack["energy_bins"], energy_component_idx_gen=comp_idx)
-    log(f"{name} line-integral recovery:")
+        E_real, E_gen, matched, feature_pack["energy_bins"],
+        energy_component_idx_gen=comp_idx,
+        resolution_ev=X_IFU_RESOLUTION_EV)
+    log(f"{name} line-integral recovery (window +/-5sigma @ {X_IFU_RESOLUTION_EV} eV FWHM, "
+        f"continuum-subtracted, N_real/N_gen={recovery[0]['gen_scale']:.3f}):")
     for r in recovery:
-        log(f"    {r['label']:18s} n_real={r['n_real']:7d} n_gen={r['n_gen']:7d} "
-            f"recovery={r['recovery_ratio']:.3f} comp_frac={r['component_fraction']:.5f}")
+        rec = "  n/a" if r["recovery_ratio"] is None else f"{r['recovery_ratio']:.3f}"
+        warn = f"  OVERLAPS {r['overlaps_lines']}" if r["overlaps_lines"] else ""
+        log(f"    {r['label']:18s} n_real={r['n_real']:7d} (line {r['n_real_line']:9.1f}) "
+            f"n_gen={r['n_gen']:7d} (line {r['n_gen_line']:9.1f}) "
+            f"recovery={rec} comp_rec={r['component_recovery'] or float('nan'):.3f}{warn}")
 
     # Spectrum plot
     fig, ax = plt.subplots(figsize=(10, 4.5))
@@ -178,7 +203,7 @@ for name in args.sources:
     ax.set_xlabel("Energy [MeV]"); ax.set_ylabel("counts / bin")
     ax.set_title(f"{name}: real vs generated (v0.8 flow + coupling prior, {args.epochs} ep)")
     ax.legend(fontsize=8)
-    out = f"Plots/v0_8_real_{name}_spectrum.png"
+    out = f"Plots/v0_8_real_{name}{suffix}_spectrum.png"
     fig.savefig(out, dpi=140, bbox_inches="tight"); plt.close(fig)
     log(f"spectrum saved -> {out}")
 

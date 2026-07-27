@@ -33,12 +33,19 @@ import magi
 parser = argparse.ArgumentParser()
 parser.add_argument("--sources", nargs="+", default=["CR", "Small"])
 parser.add_argument("--n-gen", type=int, default=400_000,
-                    help="events to generate for the covariance (capped at n_real)")
+                    help="events to generate for the covariance (capped at n_real); "
+                         "0 = match the real event count")
 parser.add_argument("--n-scatter", type=int, default=8000,
                     help="points per class in the corner scatter")
+parser.add_argument("--seed", type=int, default=42,
+                    help="RNG seed; must match the seed the checkpoint was trained "
+                         "with, so the rebuilt pipeline (bins, type_probs, quantile "
+                         "transformers) is identical")
+parser.add_argument("--save-dir-suffix", default="",
+                    help="e.g. _seed7, to score a multi-seed checkpoint")
 args = parser.parse_args()
 
-magi.initialize_environment(seed=42, cpu_only=True)
+magi.initialize_environment(seed=args.seed, cpu_only=True)
 
 TRAINING_DATA_DIR = "/Volumes/X10Pro/MAGI/TrainingData"
 SOURCE_FILES = {
@@ -49,7 +56,9 @@ center = (0.0, 0.0, -507.66); R = 100.0
 os.makedirs("Plots", exist_ok=True)
 
 CANDIDATE_LINES_FILE = ("/Volumes/X10Pro/MAGI/CandidateLines/"
-    "CANDIDATE_ENERGY_LINES_SRON_CCNwithXFDM_NoShield_FlowerCryoAC_fixed.json")
+    # v0.8.1: EADL energies (what Geant4 actually emitted). The Bearden table
+    # this replaced put every fluorescence line 4-11 detector FWHM off.
+    "CANDIDATE_ENERGY_LINES_SRON_CCNwithXFDM_NoShield_FlowerCryoAC_fixed_EADL.json")
 candidate_lines = magi.load_candidate_energy_lines(CANDIDATE_LINES_FILE)["lines"]
 
 VARS = ["logE", "u_r", "u_v", "phi_r", "phi_v"]
@@ -68,7 +77,8 @@ def rebuild_pipeline(name):
     E = prep["features"]["Energy"].to_numpy()
 
     res = magi.detect_energy_lines(E, binning_mode="log_fixed_count", n_bins=1024,
-                                   prominence_factor=3.0, window=5, candidate_lines=candidate_lines)
+                                   prominence_factor=3.0, window=5, candidate_lines=candidate_lines,
+                                   refine_bin_width_mev=4.0e-6)
     matched = [m for m in res["matched_lines"] if m["count"] >= 100]
 
     feature_pack = magi.build_feature_dataframe(
@@ -193,7 +203,7 @@ def plot_matrix_triptych(real, gen, name, kind):
 for name in args.sources:
     log("=" * 56)
     log(f"SOURCE: {name}")
-    save_dir = f"trained_models/v0_8_{name}"; model_name = f"mix_{name}"
+    save_dir = f"trained_models/v0_8_{name}{args.save_dir_suffix}"; model_name = f"mix_{name}"
     cfg_path = os.path.join(save_dir, f"{model_name}_config.json")
     if not os.path.exists(cfg_path):
         log(f"  SKIP: no checkpoint at {cfg_path}")
@@ -210,7 +220,7 @@ for name in args.sources:
 
     real = real_dataframe(feature_pack)
     n_real = real["logE"].size
-    n_gen = min(args.n_gen, n_real)
+    n_gen = n_real if args.n_gen <= 0 else min(args.n_gen, n_real)
     gen = gen_dataframe(model, n_gen, dataset_pack, feature_pack)
     log(f"  n_real={n_real:,} n_gen={n_gen:,}; building plots")
 

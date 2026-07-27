@@ -43,6 +43,9 @@ def compute_wasserstein_scores(real_pack, gen_pack):
 
     return scores
 
+FWHM_TO_SIGMA = 1.0 / 2.3548200450309493   # 1 / (2 sqrt(2 ln 2))
+
+
 def compute_line_integral_recovery(
     E_real,
     E_gen,
@@ -52,11 +55,35 @@ def compute_line_integral_recovery(
     match_tolerance_bins=2.0,
     resolution_mev=None,
     n_continuum_components=1,
+    resolution_ev=None,
+    window_sigma=5.0,
+    continuum_subtract=True,
+    sideband_scale=(2.0, 3.0),
 ):
     """
     Per-line real-vs-generated recovery check for the v0.8 mixture energy
     head: for each matched candidate line, compare how many real vs
     generated events fall within a small window around its energy.
+
+    Three things make the raw in-window count ratio a poor line metric, and
+    all three are corrected here (see docs/v0.8.1_improvement_plan.md and the
+    v0.8.1 assessment):
+
+    1. **Sample size.** Generation is routinely capped below the real event
+       count (e.g. 1e6 generated vs 3.44e6 real for CryoSphere-CR), so a raw
+       n_gen/n_real ratio is deflated by exactly that factor. `recovery_ratio`
+       is therefore normalized by N_real/N_gen. The uncorrected value is still
+       reported as `recovery_ratio_raw` for continuity with earlier runs.
+    2. **Window width.** The legacy window is a multiple of the local bin
+       width, which on a log grid spanning CR's ~9 decades is ~750 eV at
+       9 keV - about 190x the pinned 4 eV line width, so the count is
+       dominated by continuum and adjacent lines' windows overlap. Pass
+       `resolution_ev` (the detector FWHM the line widths are pinned to) to
+       use a resolution-scaled window of +/- `window_sigma` sigma instead.
+    3. **Continuum under the line.** Even a narrow window contains continuum.
+       With `continuum_subtract=True` the local continuum is estimated from
+       symmetric side-bands just outside the window and subtracted from both
+       the real and the generated count, so the ratio compares *line* events.
 
     Uses the same bin-width-relative tolerance convention as
     magi.data.preprocessing.detect_energy_lines (deliberately not reusing
@@ -83,20 +110,44 @@ def compute_line_integral_recovery(
         as an independent cross-check against the windowed count ratio.
         Large disagreement between the two suggests the model routes to a
         line component but samples far from its center (line_logsigma
-        converged too large).
+        converged too large), or that the line is pinned away from where the
+        real events actually are.
     match_tolerance_bins : float
         Window half-width, as a multiple of the local bin width at the
-        line's energy.
+        line's energy. Used only when `resolution_ev` is None.
     resolution_mev : float or None
         If given, widens the window to at least this value.
+    resolution_ev : float or None
+        Detector energy resolution (FWHM, in eV) that the model's line widths
+        are pinned to. When given, the window half-width becomes
+        `window_sigma * sigma_E` with `sigma_E = resolution_ev / 2.3548`,
+        i.e. it tracks the physical line width instead of the binning.
+    window_sigma : float
+        Window half-width in units of the line sigma, when `resolution_ev`
+        is given. 5 sigma captures ~1 - 6e-7 of a Gaussian line.
+    continuum_subtract : bool
+        Subtract the locally estimated continuum from both counts.
+    sideband_scale : (float, float)
+        Inner and outer edge of the continuum side-bands, in units of the
+        window half-width, on each side of the line. The default (2, 3)
+        gives two bands whose total width equals the window width, so the
+        in-window continuum estimate is just the side-band count.
 
     Returns
     -------
     list of dict
         One entry per line: label, origin, candidate_energy_mev, n_real,
-        n_gen, recovery_ratio (n_gen / n_real, target ~= 1), real_fraction
-        (n_real / len(E_real)), and component_fraction (if
-        energy_component_idx_gen was given).
+        n_gen (raw in-window counts), n_real_line / n_gen_line
+        (continuum-subtracted), gen_scale, recovery_ratio (size-normalized
+        and, when enabled, continuum-subtracted - target ~= 1),
+        recovery_ratio_window (size-normalized, no subtraction),
+        recovery_ratio_raw (the legacy uncorrected n_gen/n_real),
+        window_half_width_mev, window_mode, overlaps_lines (labels whose
+        centre falls inside this window - the ratio is not trustworthy when
+        this is non-empty), real_fraction, real_fraction_line, and, if
+        energy_component_idx_gen was given, component_fraction plus
+        component_recovery (routing fraction / real line fraction, a
+        window-free cross-check).
     """
     E_real = np.asarray(E_real, dtype=np.float64)
     E_gen = np.asarray(E_gen, dtype=np.float64)
@@ -108,31 +159,94 @@ def compute_line_integral_recovery(
         else None
     )
 
-    results = []
-    for i, line in enumerate(matched_lines):
-        E_c = float(line["candidate_energy_mev"])
-        bin_i = int(np.clip(np.searchsorted(edges, E_c) - 1, 0, len(edges) - 2))
-        local_width = float(edges[bin_i + 1] - edges[bin_i])
-        tol = match_tolerance_bins * local_width
+    gen_scale = (E_real.size / E_gen.size) if E_gen.size else float("nan")
+    sb_in, sb_out = float(sideband_scale[0]), float(sideband_scale[1])
+
+    # Window half-widths first, so overlaps between adjacent lines can be
+    # flagged before any counting.
+    centres = [float(line["candidate_energy_mev"]) for line in matched_lines]
+    tols = []
+    for E_c in centres:
+        if resolution_ev is not None:
+            sigma_e = float(resolution_ev) * 1e-6 * FWHM_TO_SIGMA   # eV -> MeV
+            tol = float(window_sigma) * sigma_e
+            mode = f"{window_sigma:g}sigma@{resolution_ev:g}eV"
+        else:
+            bin_i = int(np.clip(np.searchsorted(edges, E_c) - 1, 0, len(edges) - 2))
+            tol = match_tolerance_bins * float(edges[bin_i + 1] - edges[bin_i])
+            mode = f"{match_tolerance_bins:g}bins"
         if resolution_mev is not None:
             tol = max(tol, float(resolution_mev))
+        tols.append((tol, mode))
 
-        n_real = int(np.sum(np.abs(E_real - E_c) <= tol))
-        n_gen = int(np.sum(np.abs(E_gen - E_c) <= tol))
+    def _count(E, lo, hi):
+        return int(np.sum((E >= lo) & (E <= hi)))
+
+    results = []
+    for i, line in enumerate(matched_lines):
+        E_c = centres[i]
+        tol, mode = tols[i]
+
+        n_real = _count(E_real, E_c - tol, E_c + tol)
+        n_gen = _count(E_gen, E_c - tol, E_c + tol)
+
+        # Local continuum from the two side-bands, whose combined width is
+        # (sb_out - sb_in) * 2 * tol per side; scale it to the window width.
+        n_real_cont = n_gen_cont = 0.0
+        if continuum_subtract and sb_out > sb_in:
+            band_w = (sb_out - sb_in) * tol
+            sb_real = (_count(E_real, E_c - sb_out * tol, E_c - sb_in * tol)
+                       + _count(E_real, E_c + sb_in * tol, E_c + sb_out * tol))
+            sb_gen = (_count(E_gen, E_c - sb_out * tol, E_c - sb_in * tol)
+                      + _count(E_gen, E_c + sb_in * tol, E_c + sb_out * tol))
+            scale_to_window = (2.0 * tol) / (2.0 * band_w)
+            n_real_cont = sb_real * scale_to_window
+            n_gen_cont = sb_gen * scale_to_window
+
+        n_real_line = max(n_real - n_real_cont, 0.0)
+        n_gen_line = max(n_gen - n_gen_cont, 0.0)
+
+        overlaps = [
+            matched_lines[j]["label"]
+            for j in range(len(centres))
+            if j != i and abs(centres[j] - E_c) <= tol
+        ]
+
+        if continuum_subtract:
+            recovery = (n_gen_line * gen_scale / n_real_line) if n_real_line > 0 else None
+        else:
+            recovery = (n_gen * gen_scale / n_real) if n_real else None
 
         entry = {
             "label": line["label"],
             "origin": line["origin"],
             "candidate_energy_mev": E_c,
+            "window_half_width_mev": tol,
+            "window_mode": mode,
+            "overlaps_lines": overlaps,
+
             "n_real": n_real,
             "n_gen": n_gen,
-            "recovery_ratio": (n_gen / n_real if n_real else None),
+            "n_real_continuum": float(n_real_cont),
+            "n_gen_continuum": float(n_gen_cont),
+            "n_real_line": float(n_real_line),
+            "n_gen_line": float(n_gen_line),
+
+            "gen_scale": float(gen_scale),
+            "recovery_ratio": recovery,
+            "recovery_ratio_window": (n_gen * gen_scale / n_real) if n_real else None,
+            "recovery_ratio_raw": (n_gen / n_real if n_real else None),
+
             "real_fraction": (n_real / E_real.size if E_real.size else None),
+            "real_fraction_line": (n_real_line / E_real.size if E_real.size else None),
         }
 
         if comp_idx is not None:
-            entry["component_fraction"] = float(
-                np.mean(comp_idx == (n_continuum_components + i))
+            comp_frac = float(np.mean(comp_idx == (n_continuum_components + i)))
+            entry["component_fraction"] = comp_frac
+            real_frac_line = entry["real_fraction_line"]
+            entry["component_recovery"] = (
+                comp_frac / real_frac_line if real_frac_line else None
             )
 
         results.append(entry)

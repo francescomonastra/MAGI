@@ -124,23 +124,113 @@ def parse_gdml_elements(gdml_path):
     return sorted(elements.items(), key=lambda kv: kv[1])
 
 
-def parse_fluor_lines(fluor_dir, z):
-    """
-    Extract K-alpha1, K-alpha2, K-beta (and, for high-Z elements, L-alpha,
-    L-beta) transition energies for element Z from a Geant4 fluor_Bearden
-    fl-tr-pr-<Z>.commented.dat file.
+def parse_gdml_volume_elements(gdml_path):
+    """Map each logical volume to the elements of its material.
 
-    Returns a list of (label_suffix, energy_kev) tuples, e.g.
-    [("K-alpha1", 8.04778), ("K-alpha2", 8.02765), ("K-beta", 8.90529)].
+    Returns (volume_to_elements, element_z) where volume_to_elements is
+    {volume_name: [symbol, ...]} and element_z is {symbol: Z}. Needed to tell
+    *detector* materials from the surrounding structure, which is what decides
+    whose fluorescence can produce an escape peak.
     """
-    path = os.path.join(fluor_dir, f"fl-tr-pr-{z}.commented.dat")
-    if not os.path.exists(path):
-        return []
+    with open(gdml_path) as f:
+        text = f.read()
 
+    # element ref name ("Cu_element") -> (symbol, Z)
+    ref_to_element = {}
+    element_z = {}
+    for tag in re.finditer(r"<element\b([^>]*)>", text):
+        attrs = dict(re.findall(r'(\w+)="([^"]*)"', tag.group(1)))
+        if "name" in attrs and "formula" in attrs and "Z" in attrs:
+            ref_to_element[attrs["name"]] = attrs["formula"]
+            element_z[attrs["formula"]] = int(attrs["Z"])
+
+    # material -> [symbols], from <composite ref=...> / <fraction ref=...>
+    material_to_elements = {}
+    for block in re.finditer(r'<material\b[^>]*name="([^"]+)"[^>]*>(.*?)</material>',
+                             text, flags=re.S):
+        name, body = block.group(1), block.group(2)
+        syms = []
+        for ref in re.findall(r'<(?:composite|fraction)\b[^>]*ref="([^"]+)"', body):
+            sym = ref_to_element.get(ref)
+            if sym is None and ref in element_z:      # material referring to an element by symbol
+                sym = ref
+            if sym and sym not in syms:
+                syms.append(sym)
+        material_to_elements[name] = syms
+
+    # volume -> material -> elements
+    volume_to_elements = {}
+    for block in re.finditer(r'<volume\b[^>]*name="([^"]+)"[^>]*>(.*?)</volume>',
+                             text, flags=re.S):
+        name, body = block.group(1), block.group(2)
+        m = re.search(r'<materialref\b[^>]*ref="([^"]+)"', body)
+        if not m:
+            continue
+        volume_to_elements[name] = {
+            "material": m.group(1),
+            "elements": material_to_elements.get(m.group(1), []),
+        }
+
+    return volume_to_elements, element_z
+
+
+def build_escape_peak_lines(parent_lines, detector_elements, fluor_dir,
+                            fluor_energy_dir=None, min_energy_kev=1.0,
+                            max_lines=None):
+    """Escape-peak candidates: parent line energy minus a detector-material
+    fluorescence photon that leaves without depositing.
+
+    These are *candidates only*. In this project the training data is the
+    spectrum of particles CROSSING a virtual sphere around the cryostat, not
+    energy deposited in the detector, so classical escape peaks need not be
+    present at all - tools/line_centroid_audit.py --all-candidates is what
+    decides which (if any) are really there before one becomes a mixture
+    component.
+
+    parent_lines : the strong lines an escape peak can be built from.
+    detector_elements : [(symbol, Z), ...] of the detector / near-detector
+        materials, from parse_gdml_volume_elements.
+    """
+    escapes = []
+    for symbol, z in detector_elements:
+        for rec in parse_fluor_lines(fluor_dir, z, energy_dir=fluor_energy_dir):
+            e_f = rec["energy_kev"]
+            for parent in parent_lines:
+                e_esc = parent["energy_kev"] - e_f
+                if e_esc < min_energy_kev:
+                    continue
+                escapes.append({
+                    "label": f"{parent['label']} escape {symbol} {rec['suffix']}",
+                    "energy_kev": round(e_esc, 5),
+                    "energy_mev": round(e_esc / 1000.0, 8),
+                    "origin": f"escape:{parent['label']}-{symbol}{rec['suffix']}",
+                    "source": (f"{parent.get('source', 'parent')} minus "
+                               f"{symbol} {rec['suffix']} fluorescence"),
+                    "parent_label": parent["label"],
+                    "parent_energy_kev": parent["energy_kev"],
+                    "escape_element": symbol,
+                    "escape_transition": rec["suffix"],
+                    "escape_energy_kev": round(e_f, 5),
+                    "confirmed": None,   # set by the centroid audit against real data
+                })
+
+    escapes.sort(key=lambda l: l["energy_kev"])
+    return escapes[:max_lines] if max_lines else escapes
+
+
+def _parse_fluor_file(path):
+    """Parse one Geant4 fl-tr-pr-<Z>[.commented].dat into
+    {group_header: [(transition_index, probability, energy_kev, comment), ...]}.
+
+    File layout: a group starts with a repeated-id line, each data row is
+    "<transition index> <probability> <energy in MeV>" (optionally followed by a
+    "* alpha1 K Liii" comment in the .commented.dat variant), and "-1 -1 -1"
+    closes the group.
+    """
     with open(path) as f:
         raw = f.read()
 
-    groups = []
+    groups = {}
     current_header = None
     current_rows = []
     for line in raw.splitlines():
@@ -153,7 +243,7 @@ def parse_fluor_lines(fluor_dir, z):
         nums = [float(x) for x in data_part]
         if len(nums) >= 3 and nums[0] == -1:
             if current_header is not None:
-                groups.append((current_header, current_rows))
+                groups[current_header] = current_rows
             current_header = None
             current_rows = []
             continue
@@ -163,35 +253,106 @@ def parse_fluor_lines(fluor_dir, z):
             continue
 
         if len(nums) >= 3:
-            prob, energy_mev = nums[1], nums[2]
-            current_rows.append((prob, energy_mev * 1000.0, comment))
+            trans_idx, prob, energy_mev = int(nums[0]), nums[1], nums[2]
+            current_rows.append((trans_idx, prob, energy_mev * 1000.0, comment))
 
     if current_header is not None:
-        groups.append((current_header, current_rows))
+        groups[current_header] = current_rows
+
+    return groups
+
+
+def parse_fluor_lines(fluor_dir, z, energy_dir=None):
+    """
+    Extract K-alpha1, K-alpha2, K-beta (and, for high-Z elements, L-alpha,
+    L-beta) transitions for element Z from Geant4's atomic-relaxation data.
+
+    Transition *names* always come from `fluor_dir`'s `.commented.dat` files
+    (only the Bearden directory ships the "* alpha1 K Liii" comments that
+    identify which row is which line).
+
+    Transition *energies* come from `energy_dir` when given, joined row-for-row
+    on (group header, transition index). This matters: Geant4 emits the energies
+    of whichever fluorescence directory the application selected, and the
+    default is EADL (`fluor`), not Bearden. On the CryoSphere data the two
+    differ by 17-43 eV - 4-11x the X-IFU 4 eV FWHM the v0.8 line widths are
+    pinned to - so a table built from the wrong directory puts every line
+    outside its own real peak. Measured CR peaks match EADL to <1 eV.
+
+    Returns a list of dicts:
+      {"suffix", "energy_kev", "energy_kev_labels_dir", "energy_kev_energy_dir",
+       "delta_ev", "intensity"}
+    where "energy_kev" is the value to use (from energy_dir if given).
+    """
+    label_path = os.path.join(fluor_dir, f"fl-tr-pr-{z}.commented.dat")
+    if not os.path.exists(label_path):
+        return []
+
+    label_groups = _parse_fluor_file(label_path)
+
+    energy_lookup = None
+    if energy_dir is not None:
+        for cand in (f"fl-tr-pr-{z}.commented.dat", f"fl-tr-pr-{z}.dat"):
+            energy_path = os.path.join(energy_dir, cand)
+            if os.path.exists(energy_path):
+                energy_lookup = {
+                    (hdr, row[0]): row[2]
+                    for hdr, rows in _parse_fluor_file(energy_path).items()
+                    for row in rows
+                }
+                break
+        if energy_lookup is None:
+            raise FileNotFoundError(
+                f"No fl-tr-pr-{z}[.commented].dat in energy dir {energy_dir}"
+            )
+
+    def _emit(suffix, hdr, row):
+        trans_idx, prob, energy_label, _comment = row
+        energy_alt = None
+        if energy_lookup is not None:
+            energy_alt = energy_lookup.get((hdr, trans_idx))
+            if energy_alt is None:
+                raise KeyError(
+                    f"Z={z}: transition (group {hdr}, index {trans_idx}) present in "
+                    f"the label directory but absent from the energy directory - "
+                    f"the two fluorescence datasets are not row-compatible."
+                )
+        chosen = energy_alt if energy_alt is not None else energy_label
+        return {
+            "suffix": suffix,
+            "energy_kev": chosen,
+            "energy_kev_labels_dir": energy_label,
+            "energy_kev_energy_dir": energy_alt,
+            "delta_ev": (None if energy_alt is None
+                         else round((energy_alt - energy_label) * 1000.0, 3)),
+            "intensity": prob,
+        }
 
     lines = []
 
     # K-shell group (header id 1).
-    k_group = next((rows for hdr, rows in groups if hdr == 1), [])
-    kalpha1 = [r for r in k_group if "alpha1" in r[2] and "alpha2" not in r[2]]
-    kalpha2 = [r for r in k_group if "alpha2" in r[2]]
-    kbeta = sorted((r for r in k_group if "beta" in r[2]), key=lambda r: -r[0])
+    k_group = label_groups.get(1, [])
+    kalpha1 = [r for r in k_group if "alpha1" in r[3] and "alpha2" not in r[3]]
+    kalpha2 = [r for r in k_group if "alpha2" in r[3]]
+    kbeta = sorted((r for r in k_group if "beta" in r[3]), key=lambda r: -r[1])
     if kalpha1:
-        lines.append(("K-alpha1", kalpha1[0][1]))
+        lines.append(_emit("K-alpha1", 1, kalpha1[0]))
     if kalpha2:
-        lines.append(("K-alpha2", kalpha2[0][1]))
+        lines.append(_emit("K-alpha2", 1, kalpha2[0]))
     if kbeta:
-        lines.append(("K-beta", kbeta[0][1]))
+        lines.append(_emit("K-beta", 1, kbeta[0]))
 
     # L-shell groups (header ids 3=LI, 5=LII, 6=LIII), high-Z only.
     if z >= L_LINE_MIN_Z:
-        l_rows = [r for hdr, rows in groups if hdr in (3, 5, 6) for r in rows]
-        lalpha = sorted((r for r in l_rows if "alpha" in r[2]), key=lambda r: -r[0])
-        lbeta = sorted((r for r in l_rows if "beta" in r[2]), key=lambda r: -r[0])
+        l_rows = [(hdr, r) for hdr in (3, 5, 6) for r in label_groups.get(hdr, [])]
+        lalpha = sorted((hr for hr in l_rows if "alpha" in hr[1][3]),
+                        key=lambda hr: -hr[1][1])
+        lbeta = sorted((hr for hr in l_rows if "beta" in hr[1][3]),
+                       key=lambda hr: -hr[1][1])
         if lalpha:
-            lines.append(("L-alpha", lalpha[0][1]))
+            lines.append(_emit("L-alpha", lalpha[0][0], lalpha[0][1]))
         if lbeta:
-            lines.append(("L-beta", lbeta[0][1]))
+            lines.append(_emit("L-beta", lbeta[0][0], lbeta[0][1]))
 
     return lines
 
@@ -255,7 +416,32 @@ def parse_photoevap_lines(photoevap_dir, z, a):
     return kept
 
 
-def build_candidate_lines(gdml_path, fluor_dir, photoevap_dir):
+DEFAULT_DETECTOR_VOLUME_PATTERNS = (
+    "SensitiveDetector",   # X-IFU Au absorber
+    "DetectorPlate",       # Si plate under it
+    "CryoAC",              # Si anticoincidence
+    "Thermistor",          # Ge thermistor
+)
+
+
+def select_detector_elements(gdml_path, patterns):
+    """Elements of every volume whose name matches one of `patterns`."""
+    volume_to_elements, element_z = parse_gdml_volume_elements(gdml_path)
+    picked, matched_volumes = {}, []
+    for vol, info in volume_to_elements.items():
+        if not any(p.lower() in vol.lower() for p in patterns):
+            continue
+        matched_volumes.append((vol, info["material"]))
+        for sym in info["elements"]:
+            if sym in element_z:
+                picked[sym] = element_z[sym]
+    return sorted(picked.items(), key=lambda kv: kv[1]), matched_volumes
+
+
+def build_candidate_lines(gdml_path, fluor_dir, photoevap_dir, fluor_energy_dir=None,
+                          escape_peaks=False,
+                          detector_volume_patterns=DEFAULT_DETECTOR_VOLUME_PATTERNS,
+                          escape_min_kev=1.0):
     elements = parse_gdml_elements(gdml_path)
     lines = []
 
@@ -272,16 +458,27 @@ def build_candidate_lines(gdml_path, fluor_dir, photoevap_dir):
         "source": "physical constant (electron rest mass)",
     })
 
-    # -- Instrumental fluorescence lines, one entry per element/transition --
+    # -- Instrumental fluorescence lines, one entry per element/transition.
+    # Labels come from fluor_dir's commented files; energies from
+    # fluor_energy_dir when given (Geant4's default is EADL `fluor`, and the
+    # Bearden values are 17-43 eV away - several line widths). Both are kept in
+    # the record so a later run can tell which dataset the simulation used. --
+    energy_dir_name = (os.path.basename(os.path.normpath(fluor_energy_dir))
+                       if fluor_energy_dir else os.path.basename(os.path.normpath(fluor_dir)))
     for symbol, z in elements:
-        for suffix, energy_kev in parse_fluor_lines(fluor_dir, z):
-            lines.append({
-                "label": f"{symbol} {suffix}",
-                "energy_kev": round(energy_kev, 5),
-                "energy_mev": round(energy_kev / 1000.0, 8),
+        for rec in parse_fluor_lines(fluor_dir, z, energy_dir=fluor_energy_dir):
+            entry = {
+                "label": f"{symbol} {rec['suffix']}",
+                "energy_kev": round(rec["energy_kev"], 5),
+                "energy_mev": round(rec["energy_kev"] / 1000.0, 8),
                 "origin": "instrumental",
-                "source": f"G4EMLOW7.3/fluor_Bearden/fl-tr-pr-{z}.dat",
-            })
+                "source": f"G4EMLOW7.3/{energy_dir_name}/fl-tr-pr-{z}.dat",
+                "intensity": rec["intensity"],
+            }
+            if rec["energy_kev_energy_dir"] is not None:
+                entry["energy_kev_bearden"] = round(rec["energy_kev_labels_dir"], 5)
+                entry["bearden_minus_used_ev"] = -rec["delta_ev"]
+            lines.append(entry)
 
     # -- Source decay lines, one entry per daughter-nuclide transition --
     for chain_name, daughters in DECAY_CHAINS.items():
@@ -296,6 +493,25 @@ def build_candidate_lines(gdml_path, fluor_dir, photoevap_dir):
                     "intensity": intensity,
                 })
 
+    # -- Escape-peak candidates (opt-in): a parent line minus a fluorescence
+    # photon of the detector material that escapes. Candidates only - the
+    # centroid audit against the real spectrum decides which exist. --
+    if escape_peaks:
+        detector_elements, matched_volumes = select_detector_elements(
+            gdml_path, detector_volume_patterns)
+        parents = [l for l in lines
+                   if l["origin"] == "instrumental" and l["energy_kev"] > escape_min_kev]
+        escapes = build_escape_peak_lines(
+            parents, detector_elements, fluor_dir,
+            fluor_energy_dir=fluor_energy_dir, min_energy_kev=escape_min_kev)
+        print(f"Detector volumes matched: "
+              f"{sorted({m for _, m in matched_volumes})} "
+              f"({len(matched_volumes)} volumes) -> elements "
+              f"{[s for s, _ in detector_elements]}")
+        print(f"Escape-peak candidates generated: {len(escapes)} "
+              f"(from {len(parents)} parent lines)")
+        lines.extend(escapes)
+
     return lines
 
 
@@ -306,18 +522,44 @@ def build_parser():
     )
     p.add_argument("--gdml", required=True, help="Path to the GDML mass model file.")
     p.add_argument("--fluor-dir", required=True,
-                   help="Path to G4EMLOW's fluor_Bearden directory.")
+                   help="Path to G4EMLOW's fluor_Bearden directory (supplies the "
+                        "transition LABELS - only this directory ships the "
+                        "'.commented.dat' files that name each transition).")
+    p.add_argument("--fluor-energy-dir", default=None,
+                   help="Path to the fluorescence directory whose ENERGIES the "
+                        "simulation actually emitted, joined row-for-row to "
+                        "--fluor-dir. Geant4's default is G4EMLOW's 'fluor' (EADL); "
+                        "pass it here unless the application called "
+                        "SetFluoDirectory(\"fluor_Bearden\"). Omit to use the "
+                        "Bearden energies (the pre-v0.8.1 behaviour).")
     p.add_argument("--photoevap-dir", required=True,
                    help="Path to Geant4's PhotonEvaporation directory.")
     p.add_argument("--out-dir", default="CandidateLines",
                    help="Output directory for the JSON file.")
+    p.add_argument("--escape-peaks", action="store_true",
+                   help="Also emit escape-peak CANDIDATES (parent line minus a "
+                        "detector-material fluorescence photon). Candidates only: "
+                        "confirm them against the real spectrum with "
+                        "tools/line_centroid_audit.py --all-candidates before "
+                        "feeding any of them to the mixture head.")
+    p.add_argument("--detector-volume", nargs="+",
+                   default=list(DEFAULT_DETECTOR_VOLUME_PATTERNS),
+                   help="Substrings identifying the detector / near-detector "
+                        "logical volumes in the GDML, whose materials' "
+                        "fluorescence can escape.")
+    p.add_argument("--escape-min-kev", type=float, default=1.0,
+                   help="Drop escape candidates below this energy.")
     return p
 
 
 def main(argv=None):
     args = build_parser().parse_args(argv)
 
-    lines = build_candidate_lines(args.gdml, args.fluor_dir, args.photoevap_dir)
+    lines = build_candidate_lines(args.gdml, args.fluor_dir, args.photoevap_dir,
+                                  fluor_energy_dir=args.fluor_energy_dir,
+                                  escape_peaks=args.escape_peaks,
+                                  detector_volume_patterns=args.detector_volume,
+                                  escape_min_kev=args.escape_min_kev)
 
     mass_model_name = os.path.basename(args.gdml)
     mass_model_basename = os.path.splitext(mass_model_name)[0]
@@ -327,6 +569,10 @@ def main(argv=None):
         "mass_model_path": os.path.abspath(args.gdml),
         "sources": list(DECAY_CHAINS.keys()),
         "fluor_dataset_path": os.path.abspath(args.fluor_dir),
+        "fluor_label_dataset_path": os.path.abspath(args.fluor_dir),
+        "fluor_energy_dataset_path": (os.path.abspath(args.fluor_energy_dir)
+                                      if args.fluor_energy_dir else
+                                      os.path.abspath(args.fluor_dir)),
         "photoevap_dataset_path": os.path.abspath(args.photoevap_dir),
         "generated_by": "tools/build_candidate_lines_from_geant4.py",
         "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
@@ -334,8 +580,21 @@ def main(argv=None):
         "lines": lines,
     }
 
+    # Tag the filename with the energy dataset when it isn't the label dataset,
+    # so a Bearden-energy table and an EADL-energy table for the same mass model
+    # never overwrite each other (the earlier v0.8 checkpoints were trained
+    # against the Bearden one).
+    tag = ""
+    if args.fluor_energy_dir and (os.path.abspath(args.fluor_energy_dir)
+                                  != os.path.abspath(args.fluor_dir)):
+        dir_name = os.path.basename(os.path.normpath(args.fluor_energy_dir))
+        tag = "_EADL" if dir_name == "fluor" else f"_{dir_name}"
+    if args.escape_peaks:
+        tag += "_escape"
+
     os.makedirs(args.out_dir, exist_ok=True)
-    out_path = os.path.join(args.out_dir, f"CANDIDATE_ENERGY_LINES_{mass_model_basename}.json")
+    out_path = os.path.join(
+        args.out_dir, f"CANDIDATE_ENERGY_LINES_{mass_model_basename}{tag}.json")
     with open(out_path, "w") as f:
         json.dump(payload, f, indent=2)
 
