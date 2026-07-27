@@ -43,6 +43,9 @@ parser.add_argument("--seed", type=int, default=42,
                          "transformers) is identical")
 parser.add_argument("--save-dir-suffix", default="",
                     help="e.g. _seed7, to score a multi-seed checkpoint")
+parser.add_argument("--run-tag", default="v0_8",
+                    help="checkpoint dir prefix and plot filename prefix, e.g. v0_8_1 "
+                         "for the v0.8.1 run - keeps each run's figures separate")
 args = parser.parse_args()
 
 magi.initialize_environment(seed=args.seed, cpu_only=True)
@@ -87,7 +90,9 @@ def rebuild_pipeline(name):
         random_state=42, energy_transform="log10")
 
     E_full = feature_pack["filtered_prep"]["features"]["Energy"].to_numpy()
-    gate_targets = magi.build_gate_targets(E_full, feature_pack["energy_bins"], matched, resolution_mev=None)
+    gate_targets = magi.build_gate_targets(
+        E_full, feature_pack["energy_bins"], matched,
+        bandwidth_mode="resolution", bandwidth_fwhm_mev=4.0e-6)   # v0.8.1
     feat = feature_pack["feat"].copy()
     for j in range(gate_targets.shape[1]):
         feat[f"gate_target_{j}"] = gate_targets[:, j]
@@ -163,7 +168,7 @@ def plot_pairgrid(real, gen, name, n_scatter):
             ax.tick_params(labelsize=6)
     fig.suptitle(f"{name}: real (blue) vs generated (orange) — v0.8 flow+coupling", fontsize=12)
     fig.tight_layout(rect=[0, 0, 1, 0.98])
-    out = f"Plots/v0_8_real_{name}_pairgrid.png"
+    out = f"Plots/{args.run_tag}_real_{name}_pairgrid.png"
     fig.savefig(out, dpi=130, bbox_inches="tight"); plt.close(fig)
     log(f"  pairgrid -> {out}")
 
@@ -195,7 +200,7 @@ def plot_matrix_triptych(real, gen, name, kind):
         fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
     fig.suptitle(f"{name}: {title} — real vs generated (v0.8 flow+coupling)", fontsize=12)
     fig.tight_layout(rect=[0, 0, 1, 0.96])
-    out = f"Plots/v0_8_real_{name}_{kind}.png"
+    out = f"Plots/{args.run_tag}_real_{name}_{kind}.png"
     fig.savefig(out, dpi=130, bbox_inches="tight"); plt.close(fig)
     log(f"  {kind} triptych -> {out}")
 
@@ -203,7 +208,7 @@ def plot_matrix_triptych(real, gen, name, kind):
 for name in args.sources:
     log("=" * 56)
     log(f"SOURCE: {name}")
-    save_dir = f"trained_models/v0_8_{name}{args.save_dir_suffix}"; model_name = f"mix_{name}"
+    save_dir = f"trained_models/{args.run_tag}_{name}{args.save_dir_suffix}"; model_name = f"mix_{name}"
     cfg_path = os.path.join(save_dir, f"{model_name}_config.json")
     if not os.path.exists(cfg_path):
         log(f"  SKIP: no checkpoint at {cfg_path}")

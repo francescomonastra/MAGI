@@ -26,6 +26,11 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--epochs", type=int, default=40)
 parser.add_argument("--gen-chunk", type=int, default=1_000_000)
 parser.add_argument("--sources", nargs="+", default=["CR", "Small"])
+parser.add_argument("--run-tag", default="v0_8",
+                    help="prefix for checkpoint dirs and plot filenames "
+                         "(trained_models/<tag>_<source>/, Plots/<tag>_real_<source>_*). "
+                         "Use a new tag per configuration - a run with the same tag "
+                         "OVERWRITES the previous checkpoint's weights.")
 parser.add_argument("--seed", type=int, default=42,
                     help="RNG seed; runs with seed != 42 checkpoint to a _seed<N> "
                          "directory so the reference run is never overwritten.")
@@ -107,7 +112,15 @@ for name in args.sources:
 
     line_positions_y = np.log10([m["candidate_energy_mev"] for m in matched]).astype(np.float32)
     E_full = feature_pack["filtered_prep"]["features"]["Energy"].to_numpy()
-    gate_targets = magi.build_gate_targets(E_full, feature_pack["energy_bins"], matched, resolution_mev=None)
+    # v0.8.1 Phase 2: gate-target bandwidth from the pinned line width, not the
+    # detection bin width. The bin-width bandwidth was +/-43 keV at 511 keV and
+    # +/-320 eV at 8.9 keV (31-10000 detector FWHM), labelling 3.5-4.6x too many
+    # events as line events and training the gate to over-route by that factor.
+    # Resolution mode labels 0.98x the true line fraction on both sources.
+    gate_targets = magi.build_gate_targets(
+        E_full, feature_pack["energy_bins"], matched,
+        bandwidth_mode="resolution",
+        bandwidth_fwhm_mev=X_IFU_RESOLUTION_EV * 1e-6)
     feat = feature_pack["feat"].copy()
     for j in range(gate_targets.shape[1]):
         feat[f"gate_target_{j}"] = gate_targets[:, j]
@@ -135,11 +148,13 @@ for name in args.sources:
         continuum_flow_warp="cdf",
         continuum_flow_warp_y_knots=warp_yk, continuum_flow_warp_z_knots=warp_zk,
         energy_flow_condition="z_cond", prior="coupling", w_gate_aux=2.0,
-        # Cycle 2: focal down-weighting of the easy ~99% continuum majority in the
-        # gate CE, so rare fluorescence lines (CR Al/Ni) get routed. gamma=2 lifted
-        # 0.2%-rare synthetic lines 0.79->1.13 (all 0.88-1.29) with only mild
-        # continuum cost; self-limiting (no blow-up, unlike inverse-freq weights).
-        gate_focal_gamma=2.0,
+        # Focal down-weighting of the easy ~99% continuum majority in the gate CE.
+        # v0.8.1 lowers gamma 2 -> 1: with the gate targets no longer over-labelling
+        # (Phase 2 above), gamma=2 over-boosts and digs the continuum beside the
+        # lines. On the narrow-line synthetic, gamma=1 gave lines 1.05-1.57 (vs
+        # 1.08-2.57), between-line continuum 0.97/0.81/0.59 (vs 0.43/0.16/0.30) and
+        # continuum core 0.807 (vs 0.655).
+        gate_focal_gamma=1.0,
         line_logsigma_init=lls, line_logsigma_trainable=False)
     magi.compile_model(model, learning_rate=2e-4)
     log(f"training {args.epochs} epochs (warp=cdf {warp_yk.size} knots [{warp_yk[0]:.2f},{warp_yk[-1]:.2f}]; "
@@ -162,7 +177,7 @@ for name in args.sources:
     # Checkpoint (seed-tagged unless this is the reference seed 42, so multi-seed
     # runs never clobber the reference checkpoint)
     suffix = "" if args.seed == 42 else f"_seed{args.seed}"
-    save_dir = f"trained_models/v0_8_{name}{suffix}"
+    save_dir = f"trained_models/{args.run_tag}_{name}{suffix}"
     magi.save_final_trained_model(model=model, save_dir=save_dir, model_name=f"mix_{name}",
                                   model_config=model.to_generation_config())
     log(f"checkpoint saved -> {save_dir}/")
@@ -203,7 +218,7 @@ for name in args.sources:
     ax.set_xlabel("Energy [MeV]"); ax.set_ylabel("counts / bin")
     ax.set_title(f"{name}: real vs generated (v0.8 flow + coupling prior, {args.epochs} ep)")
     ax.legend(fontsize=8)
-    out = f"Plots/v0_8_real_{name}{suffix}_spectrum.png"
+    out = f"Plots/{args.run_tag}_real_{name}{suffix}_spectrum.png"
     fig.savefig(out, dpi=140, bbox_inches="tight"); plt.close(fig)
     log(f"spectrum saved -> {out}")
 

@@ -59,6 +59,7 @@ def compute_line_integral_recovery(
     window_sigma=5.0,
     continuum_subtract=True,
     sideband_scale=(2.0, 3.0),
+    min_significance=3.0,
 ):
     """
     Per-line real-vs-generated recovery check for the v0.8 mixture energy
@@ -117,11 +118,12 @@ def compute_line_integral_recovery(
         line's energy. Used only when `resolution_ev` is None.
     resolution_mev : float or None
         If given, widens the window to at least this value.
-    resolution_ev : float or None
+    resolution_ev : float, sequence of float, or None
         Detector energy resolution (FWHM, in eV) that the model's line widths
         are pinned to. When given, the window half-width becomes
         `window_sigma * sigma_E` with `sigma_E = resolution_ev / 2.3548`,
-        i.e. it tracks the physical line width instead of the binning.
+        i.e. it tracks the physical line width instead of the binning. A
+        sequence of length n_lines gives a per-line width.
     window_sigma : float
         Window half-width in units of the line sigma, when `resolution_ev`
         is given. 5 sigma captures ~1 - 6e-7 of a Gaussian line.
@@ -132,6 +134,13 @@ def compute_line_integral_recovery(
         window half-width, on each side of the line. The default (2, 3)
         gives two bands whose total width equals the window width, so the
         in-window continuum estimate is just the side-band count.
+    min_significance : float
+        A continuum-subtracted line count must exceed this many Poisson sigma
+        of the counts that went into it to be reported; otherwise the line is
+        marked `low_significance` and `recovery_ratio` is None. Without this a
+        window dominated by continuum returns meaningless ratios (0.0, 6.7,
+        ...) driven by side-band noise - which is what a too-wide window on a
+        weak line produces.
 
     Returns
     -------
@@ -165,12 +174,15 @@ def compute_line_integral_recovery(
     # Window half-widths first, so overlaps between adjacent lines can be
     # flagged before any counting.
     centres = [float(line["candidate_energy_mev"]) for line in matched_lines]
+    res_ev = (None if resolution_ev is None else
+              np.broadcast_to(np.asarray(resolution_ev, dtype=np.float64).reshape(-1),
+                              (len(centres),)))
     tols = []
-    for E_c in centres:
-        if resolution_ev is not None:
-            sigma_e = float(resolution_ev) * 1e-6 * FWHM_TO_SIGMA   # eV -> MeV
+    for i_c, E_c in enumerate(centres):
+        if res_ev is not None:
+            sigma_e = float(res_ev[i_c]) * 1e-6 * FWHM_TO_SIGMA   # eV -> MeV
             tol = float(window_sigma) * sigma_e
-            mode = f"{window_sigma:g}sigma@{resolution_ev:g}eV"
+            mode = f"{window_sigma:g}sigma@{res_ev[i_c]:g}eV"
         else:
             bin_i = int(np.clip(np.searchsorted(edges, E_c) - 1, 0, len(edges) - 2))
             tol = match_tolerance_bins * float(edges[bin_i + 1] - edges[bin_i])
@@ -212,8 +224,16 @@ def compute_line_integral_recovery(
             if j != i and abs(centres[j] - E_c) <= tol
         ]
 
+        # Poisson significance of the subtracted real line count. A window
+        # dominated by continuum gives a small difference of two large noisy
+        # numbers - report nothing rather than a spurious ratio.
+        sigma_line = np.sqrt(max(n_real, 0) + max(n_real_cont, 0.0))
+        significance = (n_real_line / sigma_line) if sigma_line > 0 else 0.0
+        low_significance = bool(continuum_subtract and significance < min_significance)
+
         if continuum_subtract:
-            recovery = (n_gen_line * gen_scale / n_real_line) if n_real_line > 0 else None
+            recovery = (None if (low_significance or n_real_line <= 0)
+                        else n_gen_line * gen_scale / n_real_line)
         else:
             recovery = (n_gen * gen_scale / n_real) if n_real else None
 
@@ -233,6 +253,8 @@ def compute_line_integral_recovery(
             "n_gen_line": float(n_gen_line),
 
             "gen_scale": float(gen_scale),
+            "line_significance": float(significance),
+            "low_significance": low_significance,
             "recovery_ratio": recovery,
             "recovery_ratio_window": (n_gen * gen_scale / n_real) if n_real else None,
             "recovery_ratio_raw": (n_gen / n_real if n_real else None),

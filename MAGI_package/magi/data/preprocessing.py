@@ -934,8 +934,11 @@ def build_gate_targets(
     matched_lines,
     match_tolerance_bins=2.0,
     resolution_mev=None,
-    continuum_floor=0.15,
+    continuum_floor=None,
     max_bandwidth_frac_of_spacing=0.5,
+    bandwidth_mode="bins",
+    bandwidth_fwhm_mev=None,
+    bandwidth_sigma=3.0,
 ):
     """
     Soft per-event target distribution over {continuum, line_1..line_L},
@@ -965,19 +968,54 @@ def build_gate_targets(
         model's line_positions_y.
     match_tolerance_bins : float
         Gaussian bandwidth per line, as a multiple of the local bin width
-        at that line's energy.
+        at that line's energy. Used only when bandwidth_mode="bins".
     resolution_mev : float or None
-        If given, widens the bandwidth to at least this value.
-    continuum_floor : float
+        If given, widens the bandwidth to at least this value
+        (bandwidth_mode="bins" only).
+    bandwidth_mode : {"bins", "resolution"}
+        How the per-line Gaussian bandwidth is set.
+
+        "bins" (legacy) scales it with the local *detection bin* width, which
+        has nothing to do with how wide a line is. On a log grid spanning many
+        decades that is catastrophic: for CryoSphere-CR it gives +/-125 eV at
+        1.49 keV, +/-320 eV at 8.9 keV and **+/-43 keV at 511 keV** - 31 to
+        10,000 times the 4 eV detector FWHM the mixture head pins its line
+        components to. Every event in that neighbourhood is then labelled a
+        line event, so the gate is *supervised* to over-route by roughly the
+        ratio of the bandwidth to the true line width, and the mixture packs
+        all of it into a 4 eV spike while evacuating the continuum beside it.
+        Measured consequence on the Cycle-2 checkpoints: the 511 keV component
+        over-generated 5.8x (CR) / 6.3x (Small).
+
+        "resolution" sets the bandwidth from the physical line width instead:
+        `bandwidth_sigma * bandwidth_fwhm_mev / 2.3548`, independent of the
+        binning. This is the mode to use whenever the line widths are pinned to
+        a detector resolution.
+    bandwidth_fwhm_mev : float, sequence of float, or None
+        Line FWHM in MeV, required by bandwidth_mode="resolution" (e.g. 4e-6
+        for X-IFU's 4 eV). A sequence of length n_lines gives a per-line width,
+        for cases where the physical widths differ between lines.
+    bandwidth_sigma : float
+        Bandwidth in units of the line sigma, for bandwidth_mode="resolution".
+        3 sigma keeps essentially all true line events while limiting the
+        mislabelled continuum to the few events within a few eV of the line.
+    continuum_floor : float or None
         Minimum unnormalized weight given to the continuum slot for every
         event, so events far from every line get a target close to
         all-continuum rather than an arbitrary near-zero-everywhere vector.
         Also controls how strongly the auxiliary gate loss pulls toward the
-        line components vs. continuum - the default (0.15, paired with
-        CVAE_MixEnergy_ContPhi_TaskAdaptive's default w_gate_aux=0.3) was
-        tuned against a synthetic continuum+lines dataset with known
-        mixture weights (see the v0.8 verification notebook cells); a
-        smaller floor over-weights the lines relative to their true rate.
+        line components vs. continuum.
+
+        None (default) picks a value from `bandwidth_mode`:
+          - "bins": 0.15, the value tuned against a synthetic continuum+lines
+            dataset with known mixture weights (paired with
+            CVAE_MixEnergy_ContPhi_TaskAdaptive's default w_gate_aux=0.3);
+            with a wide bandwidth a smaller floor over-weights the lines.
+          - "resolution": 0.02. With a bandwidth of a few eV, events far from
+            every line already normalize to an all-continuum target whatever
+            the floor, so its only remaining effect is to dilute genuine line
+            events by 1/(1 + floor) - 0.15 would label every true line event
+            as 13% continuum and systematically under-route the lines.
     max_bandwidth_frac_of_spacing : float or None
         Caps each line's bandwidth at this fraction of the distance to its
         nearest OTHER matched line, so two close lines can't bleed gate
@@ -1008,14 +1046,35 @@ def build_gate_targets(
         [float(m["candidate_energy_mev"]) for m in matched_lines], dtype=np.float64
     )
 
+    if bandwidth_mode not in ("bins", "resolution"):
+        raise ValueError("bandwidth_mode must be 'bins' or 'resolution'")
+    fwhm_per_line = None
+    if bandwidth_mode == "resolution":
+        if bandwidth_fwhm_mev is None:
+            raise ValueError(
+                "bandwidth_mode='resolution' requires bandwidth_fwhm_mev "
+                "(the line FWHM in MeV, e.g. 4e-6 for X-IFU's 4 eV)."
+            )
+        fwhm_per_line = np.broadcast_to(
+            np.asarray(bandwidth_fwhm_mev, dtype=np.float64).reshape(-1), (n_lines,)
+        )
+        if not np.all(fwhm_per_line > 0):
+            raise ValueError("bandwidth_fwhm_mev values must be > 0")
+    if continuum_floor is None:
+        continuum_floor = 0.02 if bandwidth_mode == "resolution" else 0.15
+
     weights = np.zeros((n, n_lines), dtype=np.float64)
     for l, line in enumerate(matched_lines):
         E_c = line_positions[l]
-        bin_i = int(np.clip(np.searchsorted(edges, E_c) - 1, 0, len(edges) - 2))
-        local_width = float(edges[bin_i + 1] - edges[bin_i])
-        bandwidth = match_tolerance_bins * local_width
-        if resolution_mev is not None:
-            bandwidth = max(bandwidth, float(resolution_mev))
+        if bandwidth_mode == "resolution":
+            bandwidth = (float(bandwidth_sigma) * float(fwhm_per_line[l])
+                         / 2.3548200450309493)
+        else:
+            bin_i = int(np.clip(np.searchsorted(edges, E_c) - 1, 0, len(edges) - 2))
+            local_width = float(edges[bin_i + 1] - edges[bin_i])
+            bandwidth = match_tolerance_bins * local_width
+            if resolution_mev is not None:
+                bandwidth = max(bandwidth, float(resolution_mev))
 
         if max_bandwidth_frac_of_spacing is not None and n_lines > 1:
             nearest_spacing = np.min(np.abs(np.delete(line_positions, l) - E_c))

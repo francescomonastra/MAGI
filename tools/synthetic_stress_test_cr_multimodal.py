@@ -66,6 +66,16 @@ parser.add_argument("--gate-focal-gamma", type=float, default=0.0,
 parser.add_argument("--continuum-warp", choices=["affine", "cdf"], default="affine",
                     help="Continuum-flow standardization (flow mode). 'cdf' = CDF pre-warp "
                          "(Cycle 1) for parity with the real run.")
+parser.add_argument("--line-sigma-y", type=float, default=0.02,
+                    help="Injected line width in log10(E). The default 0.02 dex is ~500-1000 eV "
+                         "at these energies - far BROADER than the 4 eV lines of the real data, "
+                         "so the lines sit on a dense continuum and any proximity labelling "
+                         "over-labels. Use ~0.002 for a delta-line regime like the real spectra.")
+parser.add_argument("--gate-bandwidth-mode", choices=["bins", "resolution"], default="bins",
+                    help="v0.8.1: 'resolution' sets the gate-target bandwidth from the "
+                         "physical line width instead of the detection bin width (which "
+                         "is 31-10000x too wide on real data and trains the gate to "
+                         "over-route by that factor).")
 parser.add_argument("--line-frac", type=float, default=0.03,
                     help="Total fraction of events in the 4 lines (default 0.03 = 0.75%%/line). "
                          "Lower values (e.g. 0.008 = 0.2%%/line) mimic real CR's rare Al/Ni "
@@ -110,7 +120,7 @@ E_continuum = np.concatenate(E_continuum)
 # its core) - true physical widths are narrow (sigma_y = 0.02).
 line_positions_y_true = np.array([-2.30, -2.20, -2.10, -2.00], dtype=np.float64)
 line_energies_mev = 10.0 ** line_positions_y_true
-true_line_sigma_y = 0.02
+true_line_sigma_y = args.line_sigma_y
 
 n_per_line = n_lines_total // N_LINES
 counts_per_line = [n_per_line] * (N_LINES - 1) + [n_lines_total - n_per_line * (N_LINES - 1)]
@@ -144,7 +154,21 @@ for i, (e_mev, cnt) in enumerate(zip(line_energies_mev, counts_per_line)):
         "count": int(cnt),
     })
 
-gate_targets = magi.build_gate_targets(E_all, energy_bins, matched_lines)
+if args.gate_bandwidth_mode == "resolution":
+    # Per-line FWHM in MeV for the injected dex-width lines: a constant width in
+    # log10(E) is a different width in eV at every line energy.
+    fwhm_per_line = 2.3548200450309493 * true_line_sigma_y * np.log(10.0) * line_energies_mev
+    gate_targets = magi.build_gate_targets(
+        E_all, energy_bins, matched_lines,
+        bandwidth_mode="resolution", bandwidth_fwhm_mev=fwhm_per_line)
+    print(f"gate-target bandwidth: resolution mode, per-line FWHM (eV) = "
+          f"{np.round(fwhm_per_line * 1e6, 1)}")
+else:
+    gate_targets = magi.build_gate_targets(E_all, energy_bins, matched_lines)
+    print("gate-target bandwidth: legacy bin-width mode")
+true_line_frac = np.array([c / E_all.size for c in counts_per_line])
+print("gate-target line mass vs true line fraction: "
+      f"{np.round(gate_targets[:, 1:].mean(axis=0) / true_line_frac, 3)}")
 print("gate_targets shape:", gate_targets.shape, " mean per column:", gate_targets.mean(axis=0))
 
 energy_y = np.log10(E_all).astype(np.float32)
@@ -287,13 +311,21 @@ if args.continuum_mode == "flow":
         print(f"  line {l} (y={ly:+.3f}): flow logp at line={at:+.3f}  "
               f"at line-0.15={off:+.3f}  (spike if at>>off)")
 
+# Window scaled to the injected line width (per line: a constant dex width is a
+# different eV width at each energy), continuum-subtracted and size-normalized.
+fwhm_ev_per_line = (2.3548200450309493 * true_line_sigma_y * np.log(10.0)
+                    * line_energies_mev * 1e6)
 recovery = magi.compute_line_integral_recovery(
     E_all, E_gen, matched_lines, energy_bins, energy_component_idx_gen=comp_idx_gen,
+    resolution_ev=fwhm_ev_per_line,
 )
-print("\nPer-line recovery:")
+print("\nPer-line recovery (+/-5 sigma of the injected width, continuum-subtracted):")
 for r in recovery:
-    print(f"  {r['label']:18s} n_real={r['n_real']:6d} n_gen={r['n_gen']:6d} "
-          f"recovery_ratio={r['recovery_ratio']:.3f} component_fraction={r['component_fraction']:.5f}")
+    rec = "  n/a" if r["recovery_ratio"] is None else f"{r['recovery_ratio']:.3f}"
+    flag = "  (low significance)" if r.get("low_significance") else ""
+    print(f"  {r['label']:18s} n_real={r['n_real']:6d} (line {r['n_real_line']:7.1f}) "
+          f"n_gen={r['n_gen']:6d} (line {r['n_gen_line']:7.1f}) "
+          f"recovery_ratio={rec} component_fraction={r['component_fraction']:.5f}{flag}")
 
 # ----------------------------------------------------------------------
 # 6. Spurious-hump check: windowed real-vs-generated counts across several

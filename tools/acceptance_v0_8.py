@@ -88,8 +88,11 @@ def rebuild_pipeline(name, candidate_lines):
         random_state=42, energy_transform="log10")
 
     E_full = feature_pack["filtered_prep"]["features"]["Energy"].to_numpy()
-    gate_targets = magi.build_gate_targets(E_full, feature_pack["energy_bins"],
-                                           matched, resolution_mev=None)
+    # Must match the training-time construction (v0.8.1: resolution bandwidth),
+    # so the rebuilt y_cont has the same columns the checkpoint was trained on.
+    gate_targets = magi.build_gate_targets(
+        E_full, feature_pack["energy_bins"], matched,
+        bandwidth_mode="resolution", bandwidth_fwhm_mev=args.resolution_ev * 1e-6)
     feat = feature_pack["feat"].copy()
     for j in range(gate_targets.shape[1]):
         feat[f"gate_target_{j}"] = gate_targets[:, j]
