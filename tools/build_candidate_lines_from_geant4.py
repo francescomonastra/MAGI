@@ -109,28 +109,66 @@ L_LINE_MIN_Z = 40
 MIN_GAMMA_INTENSITY = 5.0
 MAX_LINES_PER_NUCLIDE = 3
 
-
-def parse_gdml_elements(gdml_path):
-    """Return sorted [(symbol, Z), ...] for every <element> in the GDML."""
-    with open(gdml_path) as f:
-        text = f.read()
-
-    elements = {}
-    for tag in re.finditer(r"<element\b([^>]*)/?>", text):
-        attrs = dict(re.findall(r'(\w+)="([^"]*)"', tag.group(1)))
-        if "Z" in attrs and "formula" in attrs:
-            elements[attrs["formula"]] = int(attrs["Z"])
-
-    return sorted(elements.items(), key=lambda kv: kv[1])
+# ----------------------------------------------------------------------------
+# NIST predefined materials, for GDML files that reference a Geant4 built-in
+# material by name (<materialref ref="G4_Al"/>) with no inline <material>
+# definition at all. Geant4's own GDML writer always bakes in full
+# <material>/<element> blocks (the SRON mass model was built this way, so it
+# never needs this table), but a GDML exported from a CAD/mesh tool can rely
+# entirely on G4NistManager resolving "G4_*" names at load time - confirmed on
+# CriostatoDM1_2_Richiesta11_06_2026-worldVOL.gdml, which has no <materials>
+# section whatsoever despite 7 distinct materialrefs across its 52 volumes.
+#
+# Every entry is copied from G4NistMaterialBuilder.cc (Geant4 10.4.3,
+# source/materials/src/), i.e. the actual AddMaterial()/AddElementBy*() calls
+# that build these names - not textbook compositions, since Geant4's NIST
+# tables occasionally differ from nominal (e.g. G4_BRASS includes 3% Pb).
+# Extend this table, sourced the same way, if a new mass model references a
+# NIST material not listed here - parse_gdml_volume_elements warns when that
+# happens instead of silently returning zero elements.
+# ----------------------------------------------------------------------------
+_NIST_MATERIAL_ELEMENTS = {
+    # single-element (AddMaterial(name, density, Z, ...))
+    "G4_Al": [("Al", 13)],
+    "G4_Si": [("Si", 14)],
+    "G4_Ti": [("Ti", 22)],
+    "G4_Fe": [("Fe", 26)],
+    "G4_Ni": [("Ni", 28)],
+    "G4_Cu": [("Cu", 29)],
+    "G4_W":  [("W", 74)],
+    "G4_Au": [("Au", 79)],
+    "G4_Pb": [("Pb", 82)],
+    # compounds (AddElementByAtomCount / AddElementByWeightFraction)
+    "G4_BRASS": [("Cu", 29), ("Zn", 30), ("Pb", 82)],
+    "G4_STAINLESS-STEEL": [("Fe", 26), ("Cr", 24), ("Ni", 28)],
+    "G4_POLYPROPYLENE": [("C", 6), ("H", 1)],
+    "G4_TEFLON": [("C", 6), ("F", 9)],
+    "G4_MYLAR": [("C", 6), ("H", 1), ("O", 8)],
+    "G4_KAPTON": [("C", 6), ("H", 1), ("N", 7), ("O", 8)],
+    "G4_WATER": [("H", 1), ("O", 8)],
+    "G4_AIR": [("C", 6), ("N", 7), ("O", 8), ("Ar", 18)],
+    # vacuum: Geant4 models it internally as an extremely rarefied gas (with
+    # a placeholder Z=1), but physically it has no elements - candidate lines
+    # from "vacuum fluorescence" would be meaningless, so this is deliberately
+    # empty rather than [("H", 1)].
+    "G4_Galactic": [],
+}
 
 
 def parse_gdml_volume_elements(gdml_path):
     """Map each logical volume to the elements of its material.
 
     Returns (volume_to_elements, element_z) where volume_to_elements is
-    {volume_name: [symbol, ...]} and element_z is {symbol: Z}. Needed to tell
-    *detector* materials from the surrounding structure, which is what decides
-    whose fluorescence can produce an escape peak.
+    {volume_name: {"material": ..., "elements": [symbol, ...]}} and element_z
+    is {symbol: Z}. Needed to tell *detector* materials from the surrounding
+    structure, which is what decides whose fluorescence can produce an escape
+    peak.
+
+    A material is resolved, in order: from the GDML's own inline <material>
+    definition; else from the _NIST_MATERIAL_ELEMENTS fallback table above (a
+    material referenced by name with no inline definition - see that table's
+    docstring); else left with no elements, which is reported so it is never
+    a silent gap.
     """
     with open(gdml_path) as f:
         text = f.read()
@@ -160,18 +198,57 @@ def parse_gdml_volume_elements(gdml_path):
 
     # volume -> material -> elements
     volume_to_elements = {}
+    nist_fallback_used = set()
+    unresolved_materials = set()
     for block in re.finditer(r'<volume\b[^>]*name="([^"]+)"[^>]*>(.*?)</volume>',
                              text, flags=re.S):
         name, body = block.group(1), block.group(2)
         m = re.search(r'<materialref\b[^>]*ref="([^"]+)"', body)
         if not m:
             continue
-        volume_to_elements[name] = {
-            "material": m.group(1),
-            "elements": material_to_elements.get(m.group(1), []),
-        }
+        material = m.group(1)
+
+        if material_to_elements.get(material):
+            syms = material_to_elements[material]
+        elif material in _NIST_MATERIAL_ELEMENTS:
+            syms_z = _NIST_MATERIAL_ELEMENTS[material]
+            for sym, z in syms_z:
+                element_z.setdefault(sym, z)
+            syms = [sym for sym, _ in syms_z]
+            nist_fallback_used.add(material)
+        else:
+            syms = []
+            if material not in material_to_elements:
+                unresolved_materials.add(material)
+
+        volume_to_elements[name] = {"material": material, "elements": syms}
+
+    if nist_fallback_used:
+        print(f"parse_gdml_volume_elements: {len(nist_fallback_used)} material(s) had "
+              f"no inline <material> definition in the GDML - resolved from the "
+              f"built-in NIST composition table instead: {sorted(nist_fallback_used)}")
+    if unresolved_materials:
+        print(f"parse_gdml_volume_elements: WARNING - {len(unresolved_materials)} "
+              f"material(s) could not be resolved (no inline <material> block, and "
+              f"not in the NIST fallback table) - their volumes contribute NO "
+              f"elements to the candidate-line table: {sorted(unresolved_materials)}. "
+              f"If any of these is a genuine Geant4 NIST material, add it to "
+              f"_NIST_MATERIAL_ELEMENTS in this file, sourced from "
+              f"G4NistMaterialBuilder.cc (see that table's docstring).")
 
     return volume_to_elements, element_z
+
+
+def parse_gdml_elements(gdml_path):
+    """Return sorted [(symbol, Z), ...] for every element used by any volume
+    in the GDML - whether declared inline as <element>/<material>, or (a
+    materialref with no inline definition) resolved via the
+    _NIST_MATERIAL_ELEMENTS fallback in parse_gdml_volume_elements.
+    """
+    volume_to_elements, element_z = parse_gdml_volume_elements(gdml_path)
+    symbols = {sym for info in volume_to_elements.values() for sym in info["elements"]}
+    return sorted(((sym, element_z[sym]) for sym in symbols if sym in element_z),
+                  key=lambda kv: kv[1])
 
 
 def build_escape_peak_lines(parent_lines, detector_elements, fluor_dir,
