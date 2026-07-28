@@ -61,6 +61,38 @@ CANDIDATE_LINES_FILE = ("/Volumes/X10Pro/MAGI/CandidateLines/"
     "CANDIDATE_ENERGY_LINES_SRON_CCNwithXFDM_NoShield_FlowerCryoAC_fixed_EADL.json")
 candidate_lines = magi.load_candidate_energy_lines(CANDIDATE_LINES_FILE)["lines"]
 
+# v0.8.1 remainder item 2: per-line gate_class_weights.
+# CALIBRATION ATTEMPTED AND REVERTED - deliberately empty, see section 10 of
+# docs/v0.8.1_line_truth.md for the full measurement. The weights below were
+# tried on both sources (trained_models/v0_8_1_gatew_{CR,Small}) and did not
+# work:
+#
+#   CR:    511  w=0.7631 -> routing 1.721 -> 1.424   (-17%)
+#          Al Ka1 w=1.7613 -> routing 0.319 -> 0.381 (+19%)
+#          Cu Kbeta w=1.0 (CONTROL, untouched) -> 0.893 -> 1.129 (+27%)
+#   Small: 511  w=1.3424 -> routing 0.557 -> 2.180   (+292%, overshot past 1.0)
+#
+# The CR control line - weight never changed - moved MORE (+27%) than either
+# deliberately-weighted line (-17%, +19%). So on CR the calibration's effect is
+# not distinguishable from run-to-run variance. And the implied response
+# exponent (routing ratio = w^beta) is 0.31, 0.50, 0.70, 0.90, 4.64 across the
+# five weighted lines - a 15x spread, so there is no stable gain to iterate on.
+# Coupling residuals also degraded on both sources (CR 0.042 -> 0.050, at the
+# threshold; Small 0.023 -> 0.043) and no acceptance verdict changed anywhere.
+#
+# Root cause: the calibration assumed routing is set by the gate CE alone. It
+# is not - the mixture NLL (the dominant reconstruction term), the gate CE
+# (w_gate_aux=2.0) and the continuum flow all compete for the same density, so
+# this knob is a soft nudge on one of several terms rather than a controller
+# with predictable gain.
+#
+# PREREQUISITE before retrying: multi-seed, to establish the actual run-to-run
+# noise floor per line (Phase 4 item 17, which this result promotes to a
+# blocker rather than a follow-up - a +-27% measurement cannot calibrate a
+# +-20% effect). The plumbing below is correct and tested; drop a calibrated
+# table back in once the noise floor is known.
+GATE_CLASS_WEIGHTS_BY_LABEL = {}
+
 T0 = time.time()
 def log(msg): print(f"[{time.time()-T0:6.0f}s] {msg}", flush=True)
 
@@ -122,6 +154,11 @@ for name in args.sources:
         random_state=42, energy_transform="log10")
 
     line_positions_y = np.log10([m["candidate_energy_mev"] for m in matched]).astype(np.float32)
+    # v0.8.1 remainder item 2: [continuum, line_1..line_L] in the same order as
+    # `matched` / line_positions_y; unlisted labels default to the neutral 1.0.
+    gcw_by_label = GATE_CLASS_WEIGHTS_BY_LABEL.get(name, {})
+    gate_class_weights = [1.0] + [gcw_by_label.get(m["label"], 1.0) for m in matched]
+    log(f"gate_class_weights: {dict(zip(['continuum'] + [m['label'] for m in matched], gate_class_weights))}")
     E_full = feature_pack["filtered_prep"]["features"]["Energy"].to_numpy()
     # v0.8.1 Phase 2: gate-target bandwidth from the pinned line width, not the
     # detection bin width. The bin-width bandwidth was +/-43 keV at 511 keV and
@@ -165,7 +202,7 @@ for name in args.sources:
         # lines. On the narrow-line synthetic, gamma=1 gave lines 1.05-1.57 (vs
         # 1.08-2.57), between-line continuum 0.97/0.81/0.59 (vs 0.43/0.16/0.30) and
         # continuum core 0.807 (vs 0.655).
-        gate_focal_gamma=1.0,
+        gate_focal_gamma=1.0, gate_class_weights=gate_class_weights,
         line_logsigma_init=lls, line_logsigma_trainable=False)
     magi.compile_model(model, learning_rate=2e-4)
     log(f"training {args.epochs} epochs (warp=cdf {warp_yk.size} knots [{warp_yk[0]:.2f},{warp_yk[-1]:.2f}]; "
@@ -205,7 +242,9 @@ for name in args.sources:
     recovery = magi.compute_line_integral_recovery(
         E_real, E_gen, matched, feature_pack["energy_bins"],
         energy_component_idx_gen=comp_idx,
-        resolution_ev=X_IFU_RESOLUTION_EV)
+        resolution_ev=X_IFU_RESOLUTION_EV,
+        # See acceptance_v0_8.py: check contamination against all real lines.
+        neighbour_lines=candidate_lines)
     log(f"{name} line-integral recovery (window +/-5sigma @ {X_IFU_RESOLUTION_EV} eV FWHM, "
         f"continuum-subtracted, N_real/N_gen={recovery[0]['gen_scale']:.3f}):")
     for r in recovery:

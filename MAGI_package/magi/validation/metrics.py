@@ -70,6 +70,7 @@ def compute_line_integral_recovery(
     continuum_subtract=True,
     sideband_scale=(2.0, 3.0),
     min_significance=3.0,
+    neighbour_lines=None,
 ):
     """
     Per-line real-vs-generated recovery check for the v0.8 mixture energy
@@ -151,6 +152,18 @@ def compute_line_integral_recovery(
         window dominated by continuum returns meaningless ratios (0.0, 6.7,
         ...) driven by side-band noise - which is what a too-wide window on a
         weak line produces.
+    neighbour_lines : list of dict or None
+        Every line known to be physically present in the real spectrum, as
+        dicts with "label" and "energy_mev" - normally the whole candidate
+        table. Used ONLY to detect side-band contamination (see
+        `sideband_contaminated` below). Defaults to `matched_lines` itself,
+        which is the wrong reference whenever a real line exists in the data
+        but is not modelled: on CryoSphere-Small, Cu Kalpha2 has 63 real
+        events (below the 100-event modelling floor, so it is absent from
+        matched_lines) yet still sits 21 eV from Cu Kalpha1 and still lands
+        in its side-bands, deflating Kalpha1's continuum-subtracted count by
+        ~2x. Passing the full candidate table catches that; passing only the
+        modelled lines does not.
 
     Returns
     -------
@@ -184,6 +197,15 @@ def compute_line_integral_recovery(
     # Window half-widths first, so overlaps between adjacent lines can be
     # flagged before any counting.
     centres = [float(line["candidate_energy_mev"]) for line in matched_lines]
+    # Contamination reference: every real line, not just the modelled ones.
+    if neighbour_lines is None:
+        neighbours = [(line["label"], float(line["candidate_energy_mev"]))
+                      for line in matched_lines]
+    else:
+        neighbours = [(n["label"],
+                       float(n["energy_mev"] if "energy_mev" in n
+                             else n["candidate_energy_mev"]))
+                      for n in neighbour_lines]
     res_ev = (None if resolution_ev is None else
               np.broadcast_to(np.asarray(resolution_ev, dtype=np.float64).reshape(-1),
                               (len(centres),)))
@@ -228,28 +250,42 @@ def compute_line_integral_recovery(
         n_real_line = max(n_real - n_real_cont, 0.0)
         n_gen_line = max(n_gen - n_gen_cont, 0.0)
 
-        # Any other matched line whose position falls inside this line's
-        # side-bands (not just its central window) contaminates the continuum
-        # ESTIMATE itself, not only the raw window count - the side-bands are
-        # what n_real_cont/n_gen_cont are measured from. Confirmed on
-        # CryoSphere-CR: Cu Kalpha1 and Kalpha2 are 21 eV apart, outside each
-        # other's +/-8.5 eV window (so the old window-only check missed it),
-        # but inside the default side-band span (2-3x the window, 17-25.5 eV)
-        # - Kalpha2's real events were being counted as Kalpha1's "local
-        # continuum", inflating the subtraction until n_gen_line clipped to 0
-        # and reported "recovery=0.000" for a line that, by component
-        # routing, was landing exactly on its pinned position (mean 8005.70
-        # eV vs pinned 8005.71 eV, std 1.64 eV - correct in every respect
-        # compute_line_integral_recovery cannot see from routing alone). The
-        # side-band radius is a superset of the window radius, so this
-        # subsumes the old overlap check when continuum_subtract is used.
-        overlap_radius = (sb_out * tol) if continuum_subtract else tol
-        overlaps = [
-            matched_lines[j]["label"]
-            for j in range(len(centres))
-            if j != i and abs(centres[j] - E_c) <= overlap_radius
-        ]
-        sideband_contaminated = bool(continuum_subtract and overlaps)
+        # Two distinct ways a neighbouring real line interferes, which need
+        # different verdicts - both measured against `neighbours` (every line
+        # real in the DATA, not only the modelled ones: a line below the
+        # modelling floor still sits in the spectrum. Small's Cu Kalpha2, 63
+        # events, deflates Cu Kalpha1's subtracted count ~2x exactly this way).
+        #
+        # 1. BLENDED - neighbour inside the window (|d| <= tol). It is not
+        #    resolvable from this line at this resolution, so both lines' events
+        #    are in n_real_line together and one model component is expected to
+        #    produce all of them. The continuum estimate is untouched, so the
+        #    ratio stays meaningful; it just describes the pair, not one line.
+        #    CryoSphere Al Kalpha1/Kalpha2 (0.5 eV apart, vs an 8.5 eV window).
+        # 2. SIDE-BAND CONTAMINATED - neighbour outside the window but within
+        #    the side-bands (tol < |d| <= sb_out*tol). Its real events are
+        #    counted as this line's "local continuum" and subtracted from the
+        #    line itself, which is fatal to the ratio. CryoSphere Cu
+        #    Kalpha1/Kalpha2 (21 eV apart, window 8.5 eV, side-bands
+        #    17-25.5 eV): this reported "recovery=0.000" for a line that, by
+        #    component routing, was landing exactly on its pinned position
+        #    (mean 8005.70 eV vs pinned 8005.71 eV, std 1.64 eV).
+        #
+        # Only (2) nulls the recovery. Conflating them would discard Al
+        # Kalpha1's perfectly usable measurement along with Cu Kalpha1's
+        # broken one.
+        blended = []
+        contaminants = []
+        for lbl, e_n in neighbours:
+            d = abs(e_n - E_c)
+            if d <= 1e-12:
+                continue
+            if d <= tol:
+                blended.append(lbl)
+            elif continuum_subtract and d <= sb_out * tol:
+                contaminants.append(lbl)
+        overlaps = blended + contaminants
+        sideband_contaminated = bool(contaminants)
 
         # Poisson significance of the subtracted real line count. A window
         # dominated by continuum gives a small difference of two large noisy
@@ -283,6 +319,8 @@ def compute_line_integral_recovery(
             "line_significance": float(significance),
             "low_significance": low_significance,
             "sideband_contaminated": sideband_contaminated,
+            "blended_lines": blended,
+            "sideband_contaminants": contaminants,
             "recovery_ratio": recovery,
             "recovery_ratio_window": (n_gen * gen_scale / n_real) if n_real else None,
             "recovery_ratio_raw": (n_gen / n_real if n_real else None),

@@ -281,7 +281,11 @@ for name in args.sources:
 
     recovery = magi.compute_line_integral_recovery(
         real["E"], gen["E"], matched, feature_pack["energy_bins"],
-        energy_component_idx_gen=gen["comp"], resolution_ev=args.resolution_ev)
+        energy_component_idx_gen=gen["comp"], resolution_ev=args.resolution_ev,
+        # Contamination is checked against every line real in the data, not
+        # just the modelled ones - Small's Cu Kalpha2 (63 events, below the
+        # modelling floor) still deflates Cu Kalpha1's subtracted count ~2x.
+        neighbour_lines=candidate_lines)
     continuum = near_line_continuum_ratios(real["E"], gen["E"], recovery, scale)
     wass = band_wasserstein(real["logE"], gen["logE"])
     coup = coupling_residuals(real, gen)
