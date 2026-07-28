@@ -19,15 +19,14 @@ class TaskAdaptiveLossScheduler(keras.callbacks.Callback):
     `monitor` (a key in the epoch logs) and optionally `threshold`, `patience`,
     `min_delta`, `decay_factor`, `min_weight` and `cooldown`.
 
-    KNOWN LIMITATION: the model's task weights are Python floats read inside
-    train_step, which Keras traces into a tf.function once per fit() call.
-    Reducing a weight from this callback therefore updates the attribute and
-    prints the change, but does NOT alter the compiled graph - the loss keeps
-    the weights it was traced with until the next fit(). Verified by zeroing a
-    weight mid-fit and observing no discontinuity in the loss. The fix (making
-    the weights tf.Variables) is v0.8.2 item 1a in docs/v0.8.2_plan.md; until
-    then, treat this callback as reporting-only and set the weights you want
-    before training starts.
+    The model's task weights are backed by tf.Variable (see
+    core.model._make_task_weights), so a reduction made here reaches the
+    already-compiled train_step graph immediately - no retrace needed. Earlier
+    versions stored plain Python floats, which train_step's traced tf.function
+    had already baked in as constants by the time this callback ran, so a
+    decay updated the attribute and printed the change but never touched the
+    loss (docs/v0.8.2_plan.md item 1a; confirmed by zeroing a weight mid-fit
+    and observing no discontinuity). That gap is closed as of v0.8.2.
     """
 
     def __init__(self, task_configs, verbose=1):

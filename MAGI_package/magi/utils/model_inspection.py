@@ -229,9 +229,9 @@ def _print_objective(model):
         for k, v in tw.items():
             print(f"      w_{k:<8s} = {float(v):.6f}")
         print(f"      w_gate_aux = {float(getattr(model, 'w_gate_aux', 0.0)):.6f}")
-        print("\n    NOTE: task weights are read inside a tf.function that is traced")
-        print("    once per fit() call, so changing them mid-fit (e.g. from")
-        print("    TaskAdaptiveLossScheduler) does not affect the compiled graph.")
+        print("\n    Task weights are tf.Variables, so a mid-fit change (e.g. from")
+        print("    TaskAdaptiveLossScheduler.decay_task_weight) reaches the already-")
+        print("    compiled train_step graph immediately - no retrace needed.")
     else:
         print("    rec = sum of the per-variable weighted losses listed below")
 
@@ -415,7 +415,7 @@ def print_model_structure(model, explain=True, summaries=True):
     print("\n--- Task / loss weights ---")
     if hasattr(model, "task_weights"):
         for k, v in model.task_weights.items():
-            print(f"{k:>8s} : {v}")
+            print(f"{k:>8s} : {float(v)}")
     else:
         for name in ["w_energy", "w_sr", "w_uv", "w_phi_r", "w_phi_v", "w_xy", "w_vxy", "w_ur"]:
             if hasattr(model, name):

@@ -799,7 +799,14 @@ def load_task_adaptive_model_for_generation(
             if k in model.task_weights:
                 model.set_task_weight(k, float(v))
             else:
-                model.task_weights[k] = float(v)
+                # A key the current class doesn't define (schema drift between
+                # the checkpoint's model version and this one). Keep the same
+                # tf.Variable-backed representation as the rest of
+                # task_weights for consistency, even though nothing reads it.
+                model.task_weights[k] = tf.Variable(
+                    float(v), trainable=False, dtype=tf.float32,
+                    name=f"task_weight_{k}",
+                )
 
     if compile_model_fn is not None:
         lr = 2e-4 if learning_rate is None else learning_rate
@@ -814,7 +821,8 @@ def load_task_adaptive_model_for_generation(
             print("Task weights:", task_weights_path)
 
         if hasattr(model, "task_weights"):
-            print("Current task weights:", model.task_weights)
+            print("Current task weights:",
+                  {k: float(v) for k, v in model.task_weights.items()})
 
     return model
 

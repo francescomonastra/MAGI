@@ -33,6 +33,32 @@ from .losses import (
     angular_loss_2d,
     smoothed_categorical_ce,
 )
+
+
+def _make_task_weights(**weights):
+    """Wrap named task loss weights as (untracked) tf.Variables.
+
+    Keras traces train_step/test_step into a tf.function, cached on the model
+    instance from the first fit() call. A plain Python float read in that
+    trace is baked into the graph as a constant, so mutating
+    self.task_weights[name] later (e.g. from TaskAdaptiveLossScheduler /
+    decay_task_weight) silently had no effect on the loss - confirmed
+    empirically: zeroing a weight mid-fit produced no discontinuity in the
+    loss (docs/v0.8.2_plan.md item 1a). A tf.Variable is exactly the
+    TensorFlow-native fix: the graph reads its current value on every call, no
+    retrace required. These variables are deliberately plain dict values, not
+    layer attributes, so they are not picked up by model.weights / save_weights
+    / load_weights and stay independent from the checkpoint format - task
+    weights are (and remain) persisted separately as JSON, see
+    training/checkpointing.py's _save_task_weights.
+    """
+    return {
+        name: tf.Variable(
+            float(value), trainable=False, dtype=tf.float32,
+            name=f"task_weight_{name}",
+        )
+        for name, value in weights.items()
+    }
 from .flows import ConditionalRQSFlow
 from .priors import ConditionalCouplingPrior
 from .geometry import (
@@ -738,16 +764,16 @@ class CVAE_CatEnergy_CatUV_TaskAdaptive(keras.Model):
         # ======================================================
         # Mutable task weights dictionary
         # ======================================================
-        self.task_weights = {
-            "energy": self.w_energy,
-            "sr": self.w_sr,
-            "uv": self.w_uv,
-            "phi_r": self.w_phi_r,
-            "phi_v": self.w_phi_v,
-            "xy": self.w_xy,
-            "vxy": self.w_vxy,
-            "ur": self.w_ur,
-        }
+        self.task_weights = _make_task_weights(
+            energy=self.w_energy,
+            sr=self.w_sr,
+            uv=self.w_uv,
+            phi_r=self.w_phi_r,
+            phi_v=self.w_phi_v,
+            xy=self.w_xy,
+            vxy=self.w_vxy,
+            ur=self.w_ur,
+        )
 
         # ======================================================
         # Encoder
@@ -910,7 +936,7 @@ class CVAE_CatEnergy_CatUV_TaskAdaptive(keras.Model):
     def set_task_weight(self, task_name, value):
         """Set one task weight (see decay_task_weight on mid-fit changes)."""
         value = float(value)
-        self.task_weights[task_name] = value
+        self.task_weights[task_name].assign(value)
 
         if task_name == "energy":
             self.w_energy = value
@@ -937,11 +963,8 @@ class CVAE_CatEnergy_CatUV_TaskAdaptive(keras.Model):
         Returns (old, new). Used by TaskAdaptiveLossScheduler to back off a task
         whose validation metric has plateaued below its target.
 
-        IMPORTANT: the task weights are plain Python floats read inside
-        train_step, which Keras traces into a tf.function once per fit() call.
-        Calling this mid-fit updates the attribute but NOT the compiled graph,
-        so the loss is unchanged until the next fit(). Set the weights before
-        training starts if you need them to take effect.
+        Backed by a tf.Variable (see _make_task_weights), so this takes effect
+        immediately in a running fit() - no retrace needed.
         """
         old = self.get_task_weight(task_name)
         new = max(min_value, old * float(factor))
@@ -1400,13 +1423,13 @@ class CVAE_CatEnergy_ContGeom_TaskAdaptive(keras.Model):
         self.phi_v_mse_weight = phi_v_mse_weight
         self.phi_v_ang_weight = phi_v_ang_weight
 
-        self.task_weights = {
-            "energy": float(w_energy),
-            "ur": float(w_ur),
-            "uv": float(w_uv),
-            "phi_r": float(w_phi_r),
-            "phi_v": float(w_phi_v),
-        }
+        self.task_weights = _make_task_weights(
+            energy=w_energy,
+            ur=w_ur,
+            uv=w_uv,
+            phi_r=w_phi_r,
+            phi_v=w_phi_v,
+        )
 
         # =====================================================
         # Encoder
@@ -1620,7 +1643,7 @@ class CVAE_CatEnergy_ContGeom_TaskAdaptive(keras.Model):
     def set_task_weight(self, task_name, value):
         """Set one task weight (see decay_task_weight on mid-fit changes)."""
         value = float(value)
-        self.task_weights[task_name] = value
+        self.task_weights[task_name].assign(value)
 
         if task_name == "energy":
             self.w_energy = value
@@ -1641,11 +1664,8 @@ class CVAE_CatEnergy_ContGeom_TaskAdaptive(keras.Model):
         Returns (old, new). Used by TaskAdaptiveLossScheduler to back off a task
         whose validation metric has plateaued below its target.
 
-        IMPORTANT: the task weights are plain Python floats read inside
-        train_step, which Keras traces into a tf.function once per fit() call.
-        Calling this mid-fit updates the attribute but NOT the compiled graph,
-        so the loss is unchanged until the next fit(). Set the weights before
-        training starts if you need them to take effect.
+        Backed by a tf.Variable (see _make_task_weights), so this takes effect
+        immediately in a running fit() - no retrace needed.
         """
         old = self.get_task_weight(task_name)
         new = max(min_value, old * float(factor))
@@ -2088,13 +2108,13 @@ class CVAE_CatEnergy_ContPhi_TaskAdaptive(keras.Model):
 
         self.energy_sampling_temperature = energy_sampling_temperature
 
-        self.task_weights = {
-            "energy": float(w_energy),
-            "ur": float(w_ur),
-            "uv": float(w_uv),
-            "phi_r": float(w_phi_r),
-            "phi_v": float(w_phi_v),
-        }
+        self.task_weights = _make_task_weights(
+            energy=w_energy,
+            ur=w_ur,
+            uv=w_uv,
+            phi_r=w_phi_r,
+            phi_v=w_phi_v,
+        )
 
         # =====================================================
         # Encoder
@@ -2307,7 +2327,7 @@ class CVAE_CatEnergy_ContPhi_TaskAdaptive(keras.Model):
     def set_task_weight(self, task_name, value):
         """Set one task weight (see decay_task_weight on mid-fit changes)."""
         value = float(value)
-        self.task_weights[task_name] = value
+        self.task_weights[task_name].assign(value)
 
         if task_name == "energy":
             self.w_energy = value
@@ -2328,11 +2348,8 @@ class CVAE_CatEnergy_ContPhi_TaskAdaptive(keras.Model):
         Returns (old, new). Used by TaskAdaptiveLossScheduler to back off a task
         whose validation metric has plateaued below its target.
 
-        IMPORTANT: the task weights are plain Python floats read inside
-        train_step, which Keras traces into a tf.function once per fit() call.
-        Calling this mid-fit updates the attribute but NOT the compiled graph,
-        so the loss is unchanged until the next fit(). Set the weights before
-        training starts if you need them to take effect.
+        Backed by a tf.Variable (see _make_task_weights), so this takes effect
+        immediately in a running fit() - no retrace needed.
         """
         old = self.get_task_weight(task_name)
         new = max(min_value, old * float(factor))
@@ -2999,13 +3016,13 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
 
         self.energy_sampling_temperature = energy_sampling_temperature
 
-        self.task_weights = {
-            "energy": float(w_energy),
-            "ur": float(w_ur),
-            "uv": float(w_uv),
-            "phi_r": float(w_phi_r),
-            "phi_v": float(w_phi_v),
-        }
+        self.task_weights = _make_task_weights(
+            energy=w_energy,
+            ur=w_ur,
+            uv=w_uv,
+            phi_r=w_phi_r,
+            phi_v=w_phi_v,
+        )
 
         # =====================================================
         # Encoder
@@ -3331,7 +3348,7 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
     def set_task_weight(self, task_name, value):
         """Set one task weight (see decay_task_weight on mid-fit changes)."""
         value = float(value)
-        self.task_weights[task_name] = value
+        self.task_weights[task_name].assign(value)
 
         if task_name == "energy":
             self.w_energy = value
@@ -3352,11 +3369,8 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
         Returns (old, new). Used by TaskAdaptiveLossScheduler to back off a task
         whose validation metric has plateaued below its target.
 
-        IMPORTANT: the task weights are plain Python floats read inside
-        train_step, which Keras traces into a tf.function once per fit() call.
-        Calling this mid-fit updates the attribute but NOT the compiled graph,
-        so the loss is unchanged until the next fit(). Set the weights before
-        training starts if you need them to take effect.
+        Backed by a tf.Variable (see _make_task_weights), so this takes effect
+        immediately in a running fit() - no retrace needed.
         """
         old = self.get_task_weight(task_name)
         new = max(min_value, old * float(factor))
