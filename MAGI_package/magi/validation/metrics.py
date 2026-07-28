@@ -228,11 +228,28 @@ def compute_line_integral_recovery(
         n_real_line = max(n_real - n_real_cont, 0.0)
         n_gen_line = max(n_gen - n_gen_cont, 0.0)
 
+        # Any other matched line whose position falls inside this line's
+        # side-bands (not just its central window) contaminates the continuum
+        # ESTIMATE itself, not only the raw window count - the side-bands are
+        # what n_real_cont/n_gen_cont are measured from. Confirmed on
+        # CryoSphere-CR: Cu Kalpha1 and Kalpha2 are 21 eV apart, outside each
+        # other's +/-8.5 eV window (so the old window-only check missed it),
+        # but inside the default side-band span (2-3x the window, 17-25.5 eV)
+        # - Kalpha2's real events were being counted as Kalpha1's "local
+        # continuum", inflating the subtraction until n_gen_line clipped to 0
+        # and reported "recovery=0.000" for a line that, by component
+        # routing, was landing exactly on its pinned position (mean 8005.70
+        # eV vs pinned 8005.71 eV, std 1.64 eV - correct in every respect
+        # compute_line_integral_recovery cannot see from routing alone). The
+        # side-band radius is a superset of the window radius, so this
+        # subsumes the old overlap check when continuum_subtract is used.
+        overlap_radius = (sb_out * tol) if continuum_subtract else tol
         overlaps = [
             matched_lines[j]["label"]
             for j in range(len(centres))
-            if j != i and abs(centres[j] - E_c) <= tol
+            if j != i and abs(centres[j] - E_c) <= overlap_radius
         ]
+        sideband_contaminated = bool(continuum_subtract and overlaps)
 
         # Poisson significance of the subtracted real line count. A window
         # dominated by continuum gives a small difference of two large noisy
@@ -242,7 +259,7 @@ def compute_line_integral_recovery(
         low_significance = bool(continuum_subtract and significance < min_significance)
 
         if continuum_subtract:
-            recovery = (None if (low_significance or n_real_line <= 0)
+            recovery = (None if (low_significance or sideband_contaminated or n_real_line <= 0)
                         else n_gen_line * gen_scale / n_real_line)
         else:
             recovery = (n_gen * gen_scale / n_real) if n_real else None
@@ -265,6 +282,7 @@ def compute_line_integral_recovery(
             "gen_scale": float(gen_scale),
             "line_significance": float(significance),
             "low_significance": low_significance,
+            "sideband_contaminated": sideband_contaminated,
             "recovery_ratio": recovery,
             "recovery_ratio_window": (n_gen * gen_scale / n_real) if n_real else None,
             "recovery_ratio_raw": (n_gen / n_real if n_real else None),

@@ -835,6 +835,220 @@ def print_detected_energy_lines(result):
         print(f"  bin={p['bin_index']:5d}  E={p['energy_mev']:.6f} MeV  count={p['count']:.0f}")
 
 
+FWHM_TO_SIGMA = 1.0 / 2.3548200450309493
+
+
+def measure_line_centroid(
+    E_sorted,
+    energy_mev,
+    candidate_energies,
+    resolution_ev,
+    search_fwhm=20.0,
+    min_count=100,
+    fail_fwhm=1.0,
+):
+    """Measure a candidate line's real position directly from eV-scale events,
+    independent of any coarse detection binning.
+
+    `detect_energy_lines` can only resolve peaks that land in different
+    detection bins - on CryoSphere-CR's 1024-bin log grid a bin is ~166 eV
+    wide at 8 keV, so a doublet 21 eV apart (Cu Kalpha1/Kalpha2) is always one
+    bin and only one member is ever reported as a detected peak. This function
+    is the fine, per-candidate alternative: histogram the raw energies in a
+    window around `energy_mev` at eV resolution and find the real peak there,
+    the same method tools/line_centroid_audit.py uses to confirm/reject a
+    catalogue position - promoted here so the training pipeline
+    (confirm_unresolved_candidate_lines below) and the audit tool share one
+    implementation instead of two that could drift apart.
+
+    The search window is clipped to half the distance to the nearest OTHER
+    resolvable candidate (further than one FWHM from `energy_mev` - a
+    within-FWHM entry is this same line's own unresolvable doublet partner,
+    e.g. Al Kalpha1/Kalpha2 0.47 eV apart, and must not exclude itself). Without
+    this clip a strong neighbouring line's own peak can fall inside the window
+    and be found by argmax instead - confirmed on Cu Kalpha2 (7.9847 keV, 21 eV
+    from Kalpha1): with an unclipped +/-80 eV window, Kalpha1's peak dominated
+    the histogram and Kalpha2 was reported "shadowed by Kalpha1" even though it
+    is a real, distinct, ~4000-event line in CryoSphere-CR.
+
+    Parameters
+    ----------
+    E_sorted : np.ndarray
+        Real energies (MeV), pre-sorted ascending (np.sort(E)).
+    energy_mev : float
+        The candidate energy to measure.
+    candidate_energies : list of (label, energy_mev)
+        Every other candidate line, used only to clip the search window and to
+        detect genuine shadowing by a *different* real peak.
+    resolution_ev : float
+        Detector FWHM (eV) the mixture head's line widths are pinned to.
+    search_fwhm : float
+        Half-width of the (pre-clip) search window, in units of the FWHM.
+    min_count : int
+        Line count below which the measurement is reported "weak" rather than
+        confirmed - matches the run scripts' count>=100 modelling threshold.
+    fail_fwhm : float
+        |catalogue - measured| above this many FWHM fails the position check.
+
+    Returns
+    -------
+    dict with at least "verdict" in {"absent", "shadowed", "ok"} and
+    "energy_mev" (== the input, for convenience). "ok" entries additionally
+    carry measured_centroid_mev, delta_ev, delta_fwhm, measured_fwhm_ev,
+    n_line, n_continuum, strong (n_line >= min_count and delta_fwhm <=
+    fail_fwhm).
+    """
+    fwhm_mev = float(resolution_ev) * 1.0e-6
+    E_c = float(energy_mev)
+
+    others = [abs(e - E_c) for _, e in candidate_energies if abs(e - E_c) > fwhm_mev]
+    nearest_other_dist = min(others) if others else float("inf")
+    half = min(search_fwhm * fwhm_mev, 0.5 * nearest_other_dist)
+
+    lo, hi = E_c - half, E_c + half
+    i0, i1 = np.searchsorted(E_sorted, [lo, hi])
+    sub = E_sorted[i0:i1]
+    out = {"energy_mev": E_c, "n_window": int(sub.size)}
+    if sub.size < 10:
+        out.update(verdict="absent", reason="fewer than 10 events in the search window")
+        return out
+
+    step = fwhm_mev / 2.0
+    nb = max(int(round((hi - lo) / step)), 8)
+    hist, edges = np.histogram(sub, bins=nb, range=(lo, hi))
+    med = float(np.median(hist))
+    k = int(np.argmax(hist))
+    peak_e = 0.5 * (edges[k] + edges[k + 1])
+
+    if hist[k] < max(10.0, 5.0 * max(med, 1.0)):
+        out.update(verdict="absent", peak_energy_mev=float(peak_e),
+                   continuum_per_bin=med, peak_bin_count=int(hist[k]),
+                   reason="no bin stands 5x above the local continuum")
+        return out
+
+    thr = max(med * 2.0, 1.0)
+    a = k
+    while a > 0 and hist[a - 1] > thr:
+        a -= 1
+    b = k
+    while b < nb - 1 and hist[b + 1] > thr:
+        b += 1
+    core = sub[(sub >= edges[a]) & (sub < edges[b + 1])]
+    n_core = core.size
+    n_cont = med * (b - a + 1)
+    n_line = max(n_core - n_cont, 0.0)
+
+    centroid = float(core.mean())
+    std = float(core.std(ddof=1)) if n_core > 1 else 0.0
+    delta = E_c - centroid
+
+    nearest = min((c for c in candidate_energies if abs(c[1] - E_c) > fwhm_mev),
+                  key=lambda c: abs(c[1] - centroid), default=None)
+    if nearest is not None and abs(nearest[1] - centroid) < abs(delta) - 1e-12:
+        out.update(verdict="shadowed", measured_centroid_mev=centroid,
+                   shadowed_by=nearest[0], shadow_delta_ev=float((nearest[1] - centroid) * 1e6),
+                   delta_ev=float(delta * 1e6), delta_fwhm=float(abs(delta) / fwhm_mev),
+                   n_core=int(n_core))
+        return out
+
+    delta_fwhm = float(abs(delta) / fwhm_mev)
+    n_line_int = float(n_line)
+    out.update(
+        verdict="ok",
+        measured_centroid_mev=centroid,
+        measured_fwhm_ev=float(std * (1.0 / FWHM_TO_SIGMA) * 1e6),
+        n_core=int(n_core), n_continuum=float(n_cont), n_line=n_line_int,
+        delta_ev=float(delta * 1e6),
+        delta_fwhm=delta_fwhm,
+        strong=bool(n_line_int >= min_count and delta_fwhm <= fail_fwhm),
+    )
+    return out
+
+
+def confirm_unresolved_candidate_lines(
+    E,
+    candidate_lines,
+    matched_lines,
+    resolution_ev,
+    min_count=100,
+    search_fwhm=20.0,
+    fail_fwhm=1.0,
+):
+    """Add candidate lines detect_energy_lines's coarse binning cannot resolve.
+
+    A doublet closer together than the detection bin width (Cu Kalpha1/Kalpha2,
+    21 eV apart on CryoSphere-CR's ~166 eV bins at 8 keV) is always one bin, so
+    only one member is ever a "detected peak" and the other never appears in
+    detect_energy_lines's matched_lines regardless of how good the matching
+    logic is - the gap is in peak detection, not matching. This runs the fine,
+    eV-resolution measurement in measure_line_centroid on every candidate NOT
+    already in `matched_lines`, and returns matched-line-shaped entries (same
+    keys as detect_energy_lines's matched_lines: label, origin,
+    candidate_energy_mev, count, delta_mev, ...) for the ones it confirms are
+    real and strong enough to model (measured within `fail_fwhm` of the
+    catalogue position, with at least `min_count` line events).
+
+    Call this right after building `matched` from detect_energy_lines, with
+    the same `min_count` filter already applied, and extend `matched` with the
+    result before it is used to build line_positions_y / gate targets:
+
+        matched = [m for m in res["matched_lines"] if m["count"] >= 100]
+        matched += magi.confirm_unresolved_candidate_lines(
+            E, candidate_lines, matched, resolution_ev=4.0)
+
+    Both tools/run_v0_8_real.py and tools/acceptance_v0_8.py must call this
+    identically - the acceptance script rebuilds `matched` independently
+    (rather than reading it from the checkpoint) to reconstruct gate targets
+    for scoring, so a mismatch here silently misaligns the checkpoint's
+    n_lines against the rebuilt pipeline's line count.
+
+    A candidate within one FWHM of an ALREADY-matched line's position is
+    skipped, not just one already matched under its own label: it is the same
+    unresolvable peak, not a second line. Confirmed empirically on
+    CryoSphere-CR - Al Kalpha1/Kalpha2 are 0.47 eV apart (far inside the 4 eV
+    FWHM) and detect_energy_lines's coarse matching keeps only Kalpha1, so
+    without this check Kalpha2 measures the *same* merged blob Kalpha1 already
+    represents and gets "confirmed" as a redundant, nearly-degenerate second
+    component pinned 0.5 eV away. Cu Kalpha1/Kalpha2 (21 eV apart, genuinely
+    two distinguishable peaks in the data) are far enough apart to both pass.
+    """
+    E = np.asarray(E, dtype=np.float64)
+    E_sorted = np.sort(E)
+    fwhm_mev = float(resolution_ev) * 1.0e-6
+    already = {m["label"] for m in matched_lines}
+    already_positions = [float(m["candidate_energy_mev"]) for m in matched_lines]
+    candidate_energies = [(c["label"], float(c["energy_mev"])) for c in candidate_lines]
+
+    confirmed = []
+    for cand in candidate_lines:
+        if cand["label"] in already:
+            continue
+        E_c = float(cand["energy_mev"])
+        if any(abs(E_c - p) <= fwhm_mev for p in already_positions):
+            continue
+        r = measure_line_centroid(
+            E_sorted, float(cand["energy_mev"]), candidate_energies,
+            resolution_ev, search_fwhm=search_fwhm, min_count=min_count,
+            fail_fwhm=fail_fwhm,
+        )
+        if r["verdict"] != "ok" or not r["strong"]:
+            continue
+        confirmed.append({
+            "label": cand["label"],
+            "origin": cand.get("origin", ""),
+            "candidate_energy_mev": float(cand["energy_mev"]),
+            "detected_energy_mev": r["measured_centroid_mev"],
+            "detected_bin_center_mev": r["measured_centroid_mev"],
+            "detected_energy_refined_mev": r["measured_centroid_mev"],
+            "bin_index": -1,
+            "count": r["n_line"],
+            "delta_mev": r["measured_centroid_mev"] - float(cand["energy_mev"]),
+            "match_tolerance_mev": None,
+            "fine_detected": True,
+        })
+    return confirmed
+
+
 def line_logsigma_from_resolution(line_energies_mev, resolution_ev, fwhm=True):
     """Per-line log-widths (in log10(E) space) for a fixed detector resolution.
 

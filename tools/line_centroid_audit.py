@@ -60,8 +60,6 @@ SOURCE_FILES = {
 }
 center = (0.0, 0.0, -507.66); R = 100.0
 
-FWHM_TO_SIGMA = 1.0 / 2.3548200450309493
-SIGMA_MEV = args.resolution_ev * 1e-6 * FWHM_TO_SIGMA
 FWHM_MEV = args.resolution_ev * 1e-6
 
 T0 = time.time()
@@ -71,79 +69,26 @@ def log(m): print(f"[{time.time()-T0:6.0f}s] {m}", flush=True)
 def audit_line(E_sorted, E_c, label):
     """Measure the real peak near E_c: centroid, width, line and continuum counts.
 
-    The search window is wide (default +/-60 FWHM) so a mis-pinned line is found
-    rather than silently reported as missing; the continuum level is taken as the
-    median density across the window, and the line region is the contiguous run of
-    eV-scale bins around the mode that stands above it.
+    Thin wrapper around magi.measure_line_centroid (promoted from this
+    function so the audit tool and the training pipeline's
+    confirm_unresolved_candidate_lines share one implementation, including
+    the search-window clip that stops a doublet member being reported
+    "shadowed" by its own stronger neighbour - see that function's docstring
+    for the Cu Kalpha2/Kalpha1 case that motivated it).
+
+    Renames "energy_mev" -> "candidate_mev" and re-derives "strong" as a
+    count-only threshold (independent of position accuracy) to keep this
+    script's PASS/FAIL logic - which checks position accuracy separately via
+    delta_fwhm - unchanged.
     """
-    half = args.search_fwhm * FWHM_MEV
-    lo, hi = E_c - half, E_c + half
-    i0, i1 = np.searchsorted(E_sorted, [lo, hi])
-    sub = E_sorted[i0:i1]
-    out = {"label": label, "candidate_mev": float(E_c), "n_window": int(sub.size)}
-    if sub.size < 10:
-        out.update(verdict="absent", reason="fewer than 10 events in the search window")
-        return out
-
-    # eV-scale histogram across the window
-    step = FWHM_MEV / 2.0
-    nb = max(int(round((hi - lo) / step)), 8)
-    hist, edges = np.histogram(sub, bins=nb, range=(lo, hi))
-    med = float(np.median(hist))
-    k = int(np.argmax(hist))
-    peak_e = 0.5 * (edges[k] + edges[k + 1])
-
-    # a line must stand clearly above the local continuum density
-    if hist[k] < max(10.0, 5.0 * max(med, 1.0)):
-        out.update(verdict="absent", peak_energy_mev=float(peak_e),
-                   continuum_per_bin=med, peak_bin_count=int(hist[k]),
-                   reason="no bin stands 5x above the local continuum")
-        return out
-
-    # contiguous run above the continuum, centred on the mode
-    thr = max(med * 2.0, 1.0)
-    a = k
-    while a > 0 and hist[a - 1] > thr:
-        a -= 1
-    b = k
-    while b < nb - 1 and hist[b + 1] > thr:
-        b += 1
-    core = sub[(sub >= edges[a]) & (sub < edges[b + 1])]
-    n_core = core.size
-    n_cont = med * (b - a + 1)
-    n_line = max(n_core - n_cont, 0.0)
-
-    centroid = float(core.mean())
-    std = float(core.std(ddof=1)) if n_core > 1 else 0.0
-    err = std / np.sqrt(n_core) if n_core > 1 else float("nan")
-    delta = E_c - centroid
-
-    # A weak line sitting near a much stronger one can have the strong line's
-    # peak fall inside its search window (CR: Al K-beta at 1.5450 keV "finding"
-    # Al K-alpha at 1.4690 keV). If some other catalogue entry is closer to the
-    # measured centroid than this one, this is not a measurement of this line.
-    # Only a *resolvable* neighbour can shadow this line: Al K-alpha1/K-alpha2 are
-    # 0.47 eV apart in EADL, far inside one 4 eV detector FWHM, so which of the
-    # two the centroid lands nearer to is meaningless.
-    nearest = min((c for c in candidate_energies if abs(c[1] - E_c) > FWHM_MEV),
-                  key=lambda c: abs(c[1] - centroid), default=None)
-    if nearest is not None and abs(nearest[1] - centroid) < abs(delta) - 1e-12:
-        out.update(verdict="shadowed", measured_centroid_mev=centroid,
-                   shadowed_by=nearest[0], shadow_delta_ev=float((nearest[1] - centroid) * 1e6),
-                   delta_ev=float(delta * 1e6), delta_fwhm=float(abs(delta) / FWHM_MEV),
-                   n_core=int(n_core))
-        return out
-
-    out.update(
-        verdict="ok",
-        measured_centroid_mev=centroid,
-        centroid_err_ev=float(err * 1e6),
-        measured_fwhm_ev=float(std * 2.3548200450309493 * 1e6),
-        n_core=int(n_core), n_continuum=float(n_cont), n_line=float(n_line),
-        delta_ev=float(delta * 1e6),
-        delta_fwhm=float(abs(delta) / FWHM_MEV),
-        strong=bool(n_line >= args.min_count),
+    r = magi.measure_line_centroid(
+        E_sorted, E_c, candidate_energies, args.resolution_ev,
+        search_fwhm=args.search_fwhm, min_count=args.min_count,
+        fail_fwhm=args.fail_fwhm,
     )
+    out = {"label": label, "candidate_mev": r.pop("energy_mev"), **r}
+    if out["verdict"] == "ok":
+        out["strong"] = bool(out["n_line"] >= args.min_count)
     return out
 
 

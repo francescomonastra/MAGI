@@ -103,6 +103,17 @@ for name in args.sources:
                                   # 21 keV wide at 511 keV on CR's log grid.
                                   refine_bin_width_mev=X_IFU_RESOLUTION_EV * 1e-6)
     matched = [m for m in res["matched_lines"] if m["count"] >= 100]
+    # v0.8.1 Cu Kalpha2: detect_energy_lines's coarse bins (166 eV at 8 keV)
+    # can never separate a 21 eV doublet, so Cu Kalpha2 never becomes a
+    # detected peak regardless of matching logic - confirmed real (3,940 CR
+    # events, 0.0 FWHM off) by the fine eV-resolution measurement instead.
+    # See docs/v0.8.1_line_truth.md section 6.2.
+    fine_matched = magi.confirm_unresolved_candidate_lines(
+        E, candidate_lines, matched, resolution_ev=X_IFU_RESOLUTION_EV)
+    if fine_matched:
+        log(f"fine-detected lines (unresolved by coarse binning): "
+            f"{[m['label'] for m in fine_matched]}")
+        matched += fine_matched
     log(f"matched lines: {[m['label'] for m in matched]}")
 
     feature_pack = magi.build_feature_dataframe(

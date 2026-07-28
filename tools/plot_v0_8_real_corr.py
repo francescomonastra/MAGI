@@ -71,9 +71,19 @@ T0 = time.time()
 def log(msg): print(f"[{time.time()-T0:6.0f}s] {msg}", flush=True)
 
 
-def rebuild_pipeline(name):
+def rebuild_pipeline(name, line_positions_y=None):
     """Deterministic rebuild of the driver's Phase-A/B pipeline for one source.
-    Returns everything needed to reload the model + real physical arrays."""
+    Returns everything needed to reload the model + real physical arrays.
+
+    line_positions_y : the checkpoint's own model_config["line_positions_y"],
+        or None. When given, `matched` is reconstructed to have exactly this
+        line set (matching each position back to its candidate_lines entry),
+        rather than re-derived from detect_energy_lines today - the two can
+        disagree (e.g. Cu Kalpha2 was added mid-project) and a length
+        mismatch against the checkpoint's actual n_lines would otherwise
+        silently misalign gate targets. See tools/acceptance_v0_8.py's
+        rebuild_pipeline, which has the same fix for the same reason.
+    """
     path = SOURCE_FILES[name]
     df = magi.load_detector_table(filepath=path, sep=r"\s+")
     prep = magi.build_physical_features(df, center=center, radius=R)
@@ -82,7 +92,30 @@ def rebuild_pipeline(name):
     res = magi.detect_energy_lines(E, binning_mode="log_fixed_count", n_bins=1024,
                                    prominence_factor=3.0, window=5, candidate_lines=candidate_lines,
                                    refine_bin_width_mev=4.0e-6)
-    matched = [m for m in res["matched_lines"] if m["count"] >= 100]
+
+    if line_positions_y is not None:
+        coarse_by_label = {m["label"]: m for m in res["matched_lines"]}
+        E_sorted = np.sort(E)
+        candidate_energies = [(c["label"], float(c["energy_mev"])) for c in candidate_lines]
+        matched = []
+        for y in np.asarray(line_positions_y, dtype=np.float64).reshape(-1):
+            E_c = float(10.0 ** y)
+            cand = min(candidate_lines, key=lambda c: abs(float(c["energy_mev"]) - E_c))
+            m = coarse_by_label.get(cand["label"])
+            if m is None:
+                r = magi.measure_line_centroid(E_sorted, float(cand["energy_mev"]),
+                                               candidate_energies, 4.0)
+                count = float(r["n_line"]) if r["verdict"] == "ok" else 0.0
+                m = {"label": cand["label"], "origin": cand.get("origin", ""),
+                     "candidate_energy_mev": float(cand["energy_mev"]), "count": count}
+            matched.append(m)
+        assert len(matched) == len(np.asarray(line_positions_y).reshape(-1)), (
+            "rebuilt line count doesn't match the checkpoint - two positions "
+            "likely matched the same candidate")
+    else:
+        matched = [m for m in res["matched_lines"] if m["count"] >= 100]
+        matched += magi.confirm_unresolved_candidate_lines(
+            E, candidate_lines, matched, resolution_ev=4.0)
 
     feature_pack = magi.build_feature_dataframe(
         prep, energy_binning_mode="log_fixed_count", n_bins=512,
@@ -214,9 +247,10 @@ for name in args.sources:
         log(f"  SKIP: no checkpoint at {cfg_path}")
         continue
 
-    feature_pack, dataset_pack, matched = rebuild_pipeline(name)
     with open(cfg_path) as f:
         model_config = json.load(f)
+    feature_pack, dataset_pack, matched = rebuild_pipeline(
+        name, line_positions_y=model_config.get("line_positions_y"))
     model = magi.load_task_adaptive_model_for_generation(
         save_dir=save_dir, model_name=model_name, model_config=model_config,
         energy_bins=feature_pack["energy_bins"], n_types=dataset_pack["n_types"],
