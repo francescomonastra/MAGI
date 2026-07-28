@@ -1,0 +1,188 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 1180 1300" xmlns="http://www.w3.org/2000/svg" role="img"
+     aria-label="MAGI v0.8.1 model architecture schematic">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#475569"/>
+    </marker>
+    <marker id="arrowT" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#0d9488"/>
+    </marker>
+    <style>
+      .box{fill:#eef2f7;stroke:#64748b;stroke-width:1.5;rx:9;}
+      .train{fill:#eef2f7;stroke:#94a3b8;stroke-width:1.5;stroke-dasharray:6 4;}
+      .nf{fill:#d1fae5;stroke:#0d9488;stroke-width:2;}
+      .out{fill:#e0e7ff;stroke:#4338ca;stroke-width:1.5;}
+      .loss{fill:#fef3c7;stroke:#b45309;stroke-width:1.5;}
+      .gate{fill:#fff7ed;stroke:#ea580c;stroke-width:2;}
+      .cont{fill:#eef2f7;stroke:#64748b;stroke-width:1.5;}
+      .hub{fill:#1e293b;stroke:#1e293b;}
+      .t{font-size:15px;fill:#0f172a;}
+      .tb{font-size:15px;font-weight:700;fill:#0f172a;}
+      .ts{font-size:12.5px;fill:#334155;}
+      .tw{font-size:15px;fill:#ffffff;font-weight:700;}
+      .tt{font-size:13px;fill:#0d9488;font-weight:700;}
+      .lab{font-size:11.5px;fill:#475569;}
+      .edge{stroke:#475569;stroke-width:1.6;fill:none;}
+      .edgeT{stroke:#0d9488;stroke-width:1.8;fill:none;}
+      .edgeC{stroke:#94a3b8;stroke-width:1.4;fill:none;stroke-dasharray:5 4;}
+      .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;}
+    </style>
+  </defs>
+
+  <!-- title -->
+  <text x="24" y="30" style="font-size:22px;font-weight:800;">MAGI v0.8.1 — <tspan class="mono" style="font-size:19px;">CVAE_MixEnergy_ContPhi_TaskAdaptive</tspan></text>
+  <text x="24" y="52" class="ts">Conditional VAE with two normalizing flows:
+    <tspan style="fill:#0d9488;font-weight:700;">①</tspan> coupling latent prior p(z|cond) &#160;·&#160;
+    <tspan style="fill:#0d9488;font-weight:700;">②</tspan> RQS energy-continuum flow. Dashed = training-only path;
+    <tspan style="fill:#ea580c;font-weight:700;">★</tspan> = new/changed in v0.8.1.</text>
+
+  <!-- ===================== INPUTS ===================== -->
+  <rect x="24" y="72" width="470" height="48" class="train" rx="9"/>
+  <text x="40" y="93" class="tb">Real event&#160; x</text>
+  <text x="40" y="111" class="ts mono">(logE, u_r, u_v, φ_r, φ_v)  — quantile-transformed  [training only]</text>
+
+  <rect x="770" y="72" width="386" height="48" class="box" rx="9"/>
+  <text x="786" y="93" class="tb">cond</text>
+  <text x="786" y="111" class="ts">particle type (one-hot) — supplied at train &amp; generation</text>
+
+  <!-- cond bus (vertical dashed on right) -->
+  <path class="edgeC" d="M963,120 L963,432" marker-end="url(#arrow)"/>
+  <text x="970" y="150" class="lab">cond bus</text>
+
+  <!-- ===================== ENCODER ===================== -->
+  <rect x="24" y="160" width="470" height="70" class="train" rx="9"/>
+  <text x="40" y="186" class="tb">Encoder&#160; q<tspan style="font-size:11px;" dy="3">φ</tspan><tspan dy="-3">(z | x, cond)</tspan></text>
+  <text x="40" y="208" class="ts">MLP (128·128·64) → z_mean, z_logvar</text>
+  <text x="40" y="223" class="ts">reparameterize:&#160; <tspan class="mono">z = z_mean + exp(½·z_logvar)·ε</tspan></text>
+  <path class="edgeC" d="M259,120 L259,158" marker-end="url(#arrow)"/>
+
+  <!-- z hub -->
+  <rect x="180" y="270" width="160" height="46" class="box" rx="9" style="fill:#1e293b;stroke:#1e293b;"/>
+  <text x="260" y="293" text-anchor="middle" class="tw">z  ∈  ℝ⁸</text>
+  <text x="260" y="308" text-anchor="middle" style="font-size:11px;fill:#cbd5e1;">latent code</text>
+  <path class="edge" d="M259,230 L259,268" marker-end="url(#arrow)"/>
+  <text x="266" y="252" class="lab">train</text>
+
+  <!-- ===================== PRIOR (NF 1) ===================== -->
+  <rect x="620" y="250" width="352" height="120" class="nf" rx="9"/>
+  <text x="636" y="276" class="tb"><tspan style="fill:#0d9488;">①</tspan>&#160; Learnable prior&#160; p<tspan style="font-size:11px;" dy="3">ψ</tspan><tspan dy="-3">(z | cond)</tspan></text>
+  <text x="636" y="298" class="ts">conditional <tspan style="font-weight:700;">coupling flow</tspan> (RealNVP / spline)</text>
+  <text x="636" y="315" class="ts">cheap to sample <tspan style="font-weight:700;">and</tspan> to score — both directions</text>
+  <text x="636" y="336" class="tt">train:&#160; provides&#160; log p<tspan style="font-size:10px;" dy="3">ψ</tspan><tspan dy="-3">(z|cond)&#160; for the KL</tspan></text>
+  <text x="636" y="353" class="tt">generate:&#160; z ~ p<tspan style="font-size:10px;" dy="3">ψ</tspan><tspan dy="-3">(z|cond)&#160; — replaces N(0, I)</tspan></text>
+  <!-- prior -> z (generation) -->
+  <path class="edgeT" d="M620,320 C470,330 420,310 342,300" marker-end="url(#arrowT)"/>
+  <text x="410" y="330" class="lab" style="fill:#0d9488;">generate: sample z</text>
+
+  <!-- KL pill -->
+  <rect x="372" y="272" width="228" height="42" class="box" rx="21" style="fill:#f1f5f9;"/>
+  <text x="486" y="290" text-anchor="middle" class="ts" style="font-weight:700;">KL (Monte-Carlo)</text>
+  <text x="486" y="306" text-anchor="middle" class="ts mono" style="font-size:11.5px;">log q(z|x) − log pψ(z|cond)</text>
+  <path class="edge" d="M340,293 L370,293"/>
+  <path class="edgeT" d="M620,300 L602,296"/>
+
+  <!-- ===================== DECODER TRUNK ===================== -->
+  <rect x="300" y="410" width="360" height="58" class="box" rx="9"/>
+  <text x="480" y="435" text-anchor="middle" class="tb">Decoder&#160; p<tspan style="font-size:11px;" dy="3">θ</tspan><tspan dy="-3">(x | z, cond)</tspan></text>
+  <text x="480" y="455" text-anchor="middle" class="ts">stem → deep trunk → task branches</text>
+  <path class="edge" d="M260,316 L260,390 C260,404 300,410 330,430" marker-end="url(#arrow)"/>
+  <text x="150" y="360" class="lab">z (train from encoder,</text>
+  <text x="150" y="374" class="lab">generate from prior ①)</text>
+
+  <!-- split arrows to heads -->
+  <path class="edge" d="M400,468 C360,486 320,494 300,506" marker-end="url(#arrow)"/>
+  <path class="edge" d="M560,468 C640,486 760,494 860,506" marker-end="url(#arrow)"/>
+
+  <!-- ===================== ENERGY HEAD (contains NF 2) ===================== -->
+  <rect x="24" y="500" width="600" height="372" rx="12" style="fill:#f8fafc;stroke:#475569;stroke-width:1.5;"/>
+  <text x="40" y="526" class="tb">Energy mixture head&#160; p(E | z, cond)</text>
+  <text x="40" y="544" class="ts">energy features from (z, cond)</text>
+
+  <!-- gate -->
+  <rect x="44" y="556" width="560" height="66" class="gate" rx="9"/>
+  <text x="58" y="580" class="tb" style="fill:#9a3412;">Gate&#160; g(z, cond)&#160; → softmax over { continuum, line₁ … line_L }</text>
+  <text x="58" y="602" class="ts" style="fill:#9a3412;"><tspan style="font-weight:700;">★ v0.8.1:</tspan> focal down-weight (1−p)<tspan dy="-6" style="font-size:10px;">γ</tspan><tspan dy="6">&#160; + per-line class weights (imbalance-aware routing)</tspan></text>
+  <path class="edge" d="M320,544 L320,554"/>
+
+  <!-- continuum NF2 -->
+  <rect x="44" y="642" width="270" height="104" class="nf" rx="9"/>
+  <text x="58" y="668" class="tb"><tspan style="fill:#0d9488;">②</tspan>&#160; Continuum flow</text>
+  <text x="58" y="689" class="ts">1-D conditional <tspan style="font-weight:700;">RQS</tspan> normalizing flow</text>
+  <text x="58" y="707" class="ts">over standardized energy y</text>
+  <text x="58" y="727" class="ts"><tspan style="font-weight:700;">+ CDF pre-warp</tspan> (density-proportional knots)</text>
+  <text x="58" y="742" class="lab">→ smooth continuum density p_cont(E)</text>
+
+  <!-- lines -->
+  <rect x="334" y="642" width="270" height="104" class="cont" rx="9"/>
+  <text x="348" y="668" class="tb">Fixed lines</text>
+  <text x="348" y="689" class="ts">μ_l&#160; fixed at physical line energies</text>
+  <text x="348" y="707" class="ts">σ_l&#160; pinned = detector resolution</text>
+  <text x="348" y="722" class="ts">(X-IFU 4 eV FWHM)</text>
+  <text x="348" y="742" class="lab">→ only the firing weight π_l is learned</text>
+
+  <path class="edge" d="M150,622 L150,640" marker-end="url(#arrow)"/>
+  <path class="edge" d="M470,622 L470,640" marker-end="url(#arrow)"/>
+
+  <!-- combine -->
+  <rect x="44" y="762" width="560" height="92" rx="9" style="fill:#ecfeff;stroke:#0e7490;stroke-width:1.5;"/>
+  <text x="324" y="788" text-anchor="middle" class="tb">Mixture density</text>
+  <text x="324" y="815" text-anchor="middle" class="mono" style="font-size:15px;fill:#0f172a;">p(E | z, cond) = π₀·p_cont(E) + Σₗ πₗ·𝒩(E ; μₗ, σₗ)</text>
+  <text x="324" y="840" text-anchor="middle" class="lab">mixing weights π from the gate · continuum from ② · sharp lines from the fixed Gaussians</text>
+  <path class="edge" d="M180,746 L200,760" marker-end="url(#arrow)"/>
+  <path class="edge" d="M470,746 L450,760" marker-end="url(#arrow)"/>
+
+  <!-- ===================== GEOMETRY HEADS ===================== -->
+  <rect x="648" y="500" width="508" height="372" rx="12" style="fill:#f8fafc;stroke:#475569;stroke-width:1.5;"/>
+  <text x="664" y="526" class="tb">Geometry heads&#160; (Gaussian, on z)</text>
+  <text x="664" y="544" class="ts">each continuous feature → (μ, log σ), sampled at generation</text>
+
+  <g>
+    <rect x="668" y="560" width="228" height="60" class="box" rx="9"/>
+    <text x="682" y="584" class="tb">u_r</text><text x="682" y="604" class="ts">radial position → (μ, logσ)</text>
+    <rect x="908" y="560" width="228" height="60" class="box" rx="9"/>
+    <text x="922" y="584" class="tb">u_v</text><text x="922" y="604" class="ts">radial direction → (μ, logσ)</text>
+    <rect x="668" y="632" width="228" height="60" class="box" rx="9"/>
+    <text x="682" y="656" class="tb">φ_r</text><text x="682" y="676" class="ts">azimuth position → (μ, logσ)</text>
+    <rect x="908" y="632" width="228" height="60" class="box" rx="9"/>
+    <text x="922" y="656" class="tb">φ_v</text><text x="922" y="676" class="ts">azimuth direction → (μ, logσ)</text>
+  </g>
+  <rect x="668" y="704" width="468" height="150" rx="9" style="fill:#eef2ff;stroke:#4338ca;stroke-width:1.3;"/>
+  <text x="684" y="728" class="tb" style="fill:#3730a3;">Why the coupling matters</text>
+  <text x="684" y="750" class="ts">Energy ↔ geometry correlation is carried by the shared z.</text>
+  <text x="684" y="768" class="ts">Because the energy head conditions on z (z_cond), keeping</text>
+  <text x="684" y="786" class="ts">that coupling once forced z ≁ N(0,I) → prior holes at</text>
+  <text x="684" y="804" class="ts">generation. The learnable prior ① makes z realistic, so the</text>
+  <text x="684" y="822" class="ts">coupling is preserved <tspan style="font-weight:700;">and</tspan> generation stays faithful.</text>
+  <text x="684" y="844" class="lab">validated on real data: all cross-correlations within ±0.04 (CR) / ±0.02 (Small)</text>
+
+  <!-- ===================== OUTPUTS ===================== -->
+  <rect x="24" y="892" width="1132" height="54" class="out" rx="9"/>
+  <text x="40" y="916" class="tb">Generated event</text>
+  <text x="40" y="936" class="ts mono">Ê,  û_r,  û_v,  φ̂_r,  φ̂_v &#160;&#160;→&#160; inverse-transform → physical event → Geant4 source file (text / GNTBIN1)</text>
+  <path class="edge" d="M324,854 L324,890" marker-end="url(#arrow)"/>
+  <path class="edge" d="M902,854 L902,890" marker-end="url(#arrow)"/>
+
+  <!-- ===================== LOSS ===================== -->
+  <rect x="24" y="964" width="1132" height="70" class="loss" rx="9"/>
+  <text x="40" y="989" class="tb" style="fill:#92400e;">Training objective</text>
+  <text x="40" y="1011" class="mono" style="font-size:14px;fill:#0f172a;">L = Σ_task w_task·NLL_task  (TaskAdaptive)  +  β·KL(MC, prior ①)  +  λ·gate_aux(★ focal + per-line)  +  σ-reg</text>
+  <text x="40" y="1028" class="lab">reconstruction NLL = energy-mixture NLL (gate CE + continuum-flow log-prob + line Gaussians) + geometry Gaussian NLL</text>
+
+  <!-- ===================== GENERATION STRIP ===================== -->
+  <rect x="24" y="1054" width="1132" height="46" rx="9" style="fill:#f0fdfa;stroke:#0d9488;stroke-width:1.5;"/>
+  <text x="40" y="1073" class="tb" style="fill:#0f766e;">Generation path (no encoder):</text>
+  <text x="40" y="1091" class="ts mono" style="font-size:12.5px;">cond → ① prior flow → z ~ pψ(z|cond) → decoder → { ② continuum flow ⊕ fixed lines ⊕ geometry Gaussians } → event</text>
+
+  <!-- ===================== LEGEND ===================== -->
+  <g transform="translate(24,1120)">
+    <rect x="0" y="0" width="22" height="14" class="nf" rx="3"/>
+    <text x="30" y="12" class="ts">① ② normalizing flows</text>
+    <rect x="230" y="0" width="22" height="14" class="train" rx="3"/>
+    <text x="260" y="12" class="ts">training-only path</text>
+    <rect x="430" y="0" width="22" height="14" class="gate" rx="3"/>
+    <text x="460" y="12" class="ts"><tspan style="fill:#ea580c;font-weight:700;">★</tspan> new/changed in v0.8.1</text>
+    <text x="690" y="12" class="lab">latent dim = 8 · L = number of physical lines per source · quantile geometry features</text>
+  </g>
+  <text x="24" y="1168" class="lab">Two flows, two jobs: ① fixes faithful generation (aggregated-posterior/prior match); ② + fixed lines give the sharp continuum &amp; detector-resolution lines. v0.8.1 tunes gate routing so rare CR fluorescence lines are recovered.</text>
+</svg>
