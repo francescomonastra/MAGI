@@ -471,6 +471,19 @@ def load_task_adaptive_model_for_generation(
         - CVAE_CatEnergy_ContPhi_TaskAdaptive    v0.7.2
         - CVAE_MixEnergy_ContPhi_TaskAdaptive    v0.8 (flow continuum +
           fixed-line mixture; reconstructed from model.to_generation_config()).
+
+    `model_config` must be the dict saved next to the weights - pass the one
+    from the checkpoint, not a hand-written one.
+
+    CAVEAT: the architecture is rebuilt entirely from `model_config.get(key,
+    <default>)`, with no check that the keys are present. A missing or renamed
+    key therefore yields a *different* architecture rather than an error: for a
+    v0.8 run the fallbacks are continuum_mode="gaussian", prior="gaussian" and
+    continuum_flow_warp="affine", so a config that lost those keys loads a model
+    whose weights no longer mean what they did at training time, and generation
+    is quietly wrong. Adding the config-match guard is v0.8.2/Phase 4 work; for
+    now, keep each checkpoint's JSON files together with its weights and treat
+    the directory as one unit.
     """
     import os
     import json

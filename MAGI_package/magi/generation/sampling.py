@@ -4,6 +4,9 @@ Supports:
   - v0.6 legacy models with categorical u_v
   - v0.7 continuous-geometry models with u_r_q/u_v_q and cos/sin phi
   - v0.7.2 continuous-phi models with u_r_q/u_v_q/phi_r_q/phi_v_q
+  - v0.8 mixture-energy models, which additionally return the raw energy_y
+    sample and the index of the mixture component each event was routed to
+    (continuum or a specific line)
 """
 
 import numpy as np
@@ -11,12 +14,18 @@ import tensorflow as tf
 
 
 def sample_types(n_samples, type_probs, rng=None):
+    """Draw `n_samples` particle-type indices from the categorical `type_probs`.
+
+    Pass the training-set type fractions to reproduce the natural mix, or a
+    different vector to deliberately re-weight the generated source.
+    """
     rng = np.random.default_rng() if rng is None else rng
     idx = rng.choice(len(type_probs), size=n_samples, p=type_probs)
     return idx.astype(np.int32)
 
 
 def one_hot_from_idx(idx, n_types):
+    """One-hot the type indices into the `cond` tensor the models expect."""
     return tf.one_hot(idx, depth=n_types, dtype=tf.float32)
 
 

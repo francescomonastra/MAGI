@@ -1,12 +1,22 @@
 """
 Core model definitions for MAGI.
 
-This module contains the main CVAE architecture used to model:
-- energy (categorical)
-- radial position
-- angular position
-- directional variable u_v
-- angular direction phi_v
+This module holds the CVAE architectures, one class per version in the
+lineage; they all model the same physical variables, and differ in how the
+energy and the geometry are parametrized:
+
+- energy       - categorical over log-E bins (v0.6 - v0.7.2), or a continuous
+                 gated mixture of a continuum density and fixed-position
+                 detector lines (v0.8, CVAE_MixEnergy_ContPhi_TaskAdaptive)
+- radial position     u_r  (discretized, then quantile-transformed)
+- angular position    phi_r
+- directional variable u_v (discretized in v0.6, continuous from v0.7)
+- angular direction   phi_v (cos/sin pair in v0.7, continuous from v0.7.2)
+
+Older classes are kept working rather than migrated: a trained run records
+its class in model_config["model_class"], and the loader in
+training/checkpointing.py rebuilds whichever one it was. See docs/USAGE.md
+for the lineage and magi.print_model_structure() for a built model.
 """
 
 import numpy as np
@@ -268,6 +278,7 @@ class CVAE_CatEnergy_CatUV(keras.Model):
     # Utilities
     # ==========================================================
     def sample_z(self, z_mean, z_logvar):
+        """Reparametrization trick: z = mu + sigma * eps, eps ~ N(0, I)."""
         eps = tf.random.normal(shape=tf.shape(z_mean))
         return z_mean + tf.exp(0.5 * z_logvar) * eps
 
@@ -542,6 +553,7 @@ class CVAE_CatEnergy_CatUV(keras.Model):
     # ==========================================================
     @tf.function(reduce_retracing=True)
     def decode(self, z, cond):
+        """Inference-mode decode: latent + conditioning -> per-head parameters."""
         return self._decode_params(z, cond, training=False)
 
     def _sample_energy_from_logits(self, logits):
@@ -569,6 +581,11 @@ class CVAE_CatEnergy_CatUV(keras.Model):
         return tf.expand_dims(uv_value, axis=1)
 
     def generate(self, cond, n_samples):
+        """Sample `n_samples` events from the prior, conditioned on `cond`.
+
+        Returns the decoded per-variable outputs as tensors; converting them
+        back to physical quantities is generation/reconstruction.py's job.
+        """
         z = tf.random.normal((n_samples, self.latent_dim))
         params = self.decode(z, cond)
 
@@ -887,9 +904,11 @@ class CVAE_CatEnergy_CatUV_TaskAdaptive(keras.Model):
     # Task-weight API
     # ==========================================================
     def get_task_weight(self, task_name):
+        """Current weight of one task in the reconstruction loss."""
         return float(self.task_weights[task_name])
 
     def set_task_weight(self, task_name, value):
+        """Set one task weight (see decay_task_weight on mid-fit changes)."""
         value = float(value)
         self.task_weights[task_name] = value
 
@@ -913,6 +932,17 @@ class CVAE_CatEnergy_CatUV_TaskAdaptive(keras.Model):
             raise ValueError(f"Unknown task name: {task_name}")
 
     def decay_task_weight(self, task_name, factor=0.5, min_value=0.0):
+        """Multiply one task weight by `factor`, floored at `min_value`.
+
+        Returns (old, new). Used by TaskAdaptiveLossScheduler to back off a task
+        whose validation metric has plateaued below its target.
+
+        IMPORTANT: the task weights are plain Python floats read inside
+        train_step, which Keras traces into a tf.function once per fit() call.
+        Calling this mid-fit updates the attribute but NOT the compiled graph,
+        so the loss is unchanged until the next fit(). Set the weights before
+        training starts if you need them to take effect.
+        """
         old = self.get_task_weight(task_name)
         new = max(min_value, old * float(factor))
         self.set_task_weight(task_name, new)
@@ -922,6 +952,7 @@ class CVAE_CatEnergy_CatUV_TaskAdaptive(keras.Model):
     # Utilities
     # ==========================================================
     def sample_z(self, z_mean, z_logvar):
+        """Reparametrization trick: z = mu + sigma * eps, eps ~ N(0, I)."""
         eps = tf.random.normal(shape=tf.shape(z_mean))
         return z_mean + tf.exp(0.5 * z_logvar) * eps
 
@@ -1213,6 +1244,7 @@ class CVAE_CatEnergy_CatUV_TaskAdaptive(keras.Model):
     # ==========================================================
     @tf.function(reduce_retracing=True)
     def decode(self, z, cond):
+        """Inference-mode decode: latent + conditioning -> per-head parameters."""
         return self._decode_params(z, cond, training=False)
 
     def _sample_energy_from_logits(self, logits):
@@ -1240,6 +1272,11 @@ class CVAE_CatEnergy_CatUV_TaskAdaptive(keras.Model):
         return tf.expand_dims(uv_value, axis=1)
 
     def generate(self, cond, n_samples):
+        """Sample `n_samples` events from the prior, conditioned on `cond`.
+
+        Returns the decoded per-variable outputs as tensors; converting them
+        back to physical quantities is generation/reconstruction.py's job.
+        """
         z = tf.random.normal((n_samples, self.latent_dim))
         params = self.decode(z, cond)
 
@@ -1577,9 +1614,11 @@ class CVAE_CatEnergy_ContGeom_TaskAdaptive(keras.Model):
     # Task-weight API
     # ==========================================================
     def get_task_weight(self, task_name):
+        """Current weight of one task in the reconstruction loss."""
         return float(self.task_weights[task_name])
 
     def set_task_weight(self, task_name, value):
+        """Set one task weight (see decay_task_weight on mid-fit changes)."""
         value = float(value)
         self.task_weights[task_name] = value
 
@@ -1597,6 +1636,17 @@ class CVAE_CatEnergy_ContGeom_TaskAdaptive(keras.Model):
             raise ValueError(f"Unknown task name: {task_name}")
 
     def decay_task_weight(self, task_name, factor=0.5, min_value=0.0):
+        """Multiply one task weight by `factor`, floored at `min_value`.
+
+        Returns (old, new). Used by TaskAdaptiveLossScheduler to back off a task
+        whose validation metric has plateaued below its target.
+
+        IMPORTANT: the task weights are plain Python floats read inside
+        train_step, which Keras traces into a tf.function once per fit() call.
+        Calling this mid-fit updates the attribute but NOT the compiled graph,
+        so the loss is unchanged until the next fit(). Set the weights before
+        training starts if you need them to take effect.
+        """
         old = self.get_task_weight(task_name)
         new = max(min_value, old * float(factor))
         self.set_task_weight(task_name, new)
@@ -1606,6 +1656,7 @@ class CVAE_CatEnergy_ContGeom_TaskAdaptive(keras.Model):
     # Utilities
     # ==========================================================
     def sample_z(self, z_mean, z_logvar):
+        """Reparametrization trick: z = mu + sigma * eps, eps ~ N(0, I)."""
         eps = tf.random.normal(shape=tf.shape(z_mean))
         return z_mean + tf.exp(0.5 * z_logvar) * eps
 
@@ -1922,6 +1973,7 @@ class CVAE_CatEnergy_ContGeom_TaskAdaptive(keras.Model):
     # ==========================================================
     @tf.function(reduce_retracing=True)
     def decode(self, z, cond):
+        """Inference-mode decode: latent + conditioning -> per-head parameters."""
         return self._decode_params(z, cond, training=False)
 
     def _sample_energy_from_logits(self, logits):
@@ -1931,6 +1983,11 @@ class CVAE_CatEnergy_ContGeom_TaskAdaptive(keras.Model):
         return idx
 
     def generate(self, cond, n_samples):
+        """Sample `n_samples` events from the prior, conditioned on `cond`.
+
+        Returns the decoded per-variable outputs as tensors; converting them
+        back to physical quantities is generation/reconstruction.py's job.
+        """
         z = tf.random.normal((n_samples, self.latent_dim))
         params = self.decode(z, cond)
 
@@ -2244,9 +2301,11 @@ class CVAE_CatEnergy_ContPhi_TaskAdaptive(keras.Model):
     # Task-weight API
     # ==========================================================
     def get_task_weight(self, task_name):
+        """Current weight of one task in the reconstruction loss."""
         return float(self.task_weights[task_name])
 
     def set_task_weight(self, task_name, value):
+        """Set one task weight (see decay_task_weight on mid-fit changes)."""
         value = float(value)
         self.task_weights[task_name] = value
 
@@ -2264,6 +2323,17 @@ class CVAE_CatEnergy_ContPhi_TaskAdaptive(keras.Model):
             raise ValueError(f"Unknown task name: {task_name}")
 
     def decay_task_weight(self, task_name, factor=0.5, min_value=0.0):
+        """Multiply one task weight by `factor`, floored at `min_value`.
+
+        Returns (old, new). Used by TaskAdaptiveLossScheduler to back off a task
+        whose validation metric has plateaued below its target.
+
+        IMPORTANT: the task weights are plain Python floats read inside
+        train_step, which Keras traces into a tf.function once per fit() call.
+        Calling this mid-fit updates the attribute but NOT the compiled graph,
+        so the loss is unchanged until the next fit(). Set the weights before
+        training starts if you need them to take effect.
+        """
         old = self.get_task_weight(task_name)
         new = max(min_value, old * float(factor))
         self.set_task_weight(task_name, new)
@@ -2273,6 +2343,7 @@ class CVAE_CatEnergy_ContPhi_TaskAdaptive(keras.Model):
     # Utilities
     # ==========================================================
     def sample_z(self, z_mean, z_logvar):
+        """Reparametrization trick: z = mu + sigma * eps, eps ~ N(0, I)."""
         eps = tf.random.normal(shape=tf.shape(z_mean))
         return z_mean + tf.exp(0.5 * z_logvar) * eps
 
@@ -2587,6 +2658,7 @@ class CVAE_CatEnergy_ContPhi_TaskAdaptive(keras.Model):
     # ==========================================================
     @tf.function(reduce_retracing=True)
     def decode(self, z, cond):
+        """Inference-mode decode: latent + conditioning -> per-head parameters."""
         return self._decode_params(z, cond, training=False)
 
     def _sample_energy_from_logits(self, logits):
@@ -2596,6 +2668,11 @@ class CVAE_CatEnergy_ContPhi_TaskAdaptive(keras.Model):
         return idx
 
     def generate(self, cond, n_samples):
+        """Sample `n_samples` events from the prior, conditioned on `cond`.
+
+        Returns the decoded per-variable outputs as tensors; converting them
+        back to physical quantities is generation/reconstruction.py's job.
+        """
         z = tf.random.normal((n_samples, self.latent_dim))
         params = self.decode(z, cond)
 
@@ -2646,17 +2723,28 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
             gate_target_0, ..., gate_target_n_lines,   # see below
         ]
 
-    Energy model, in a transformed energy space y = T(E):
+    Energy model, in a transformed energy space y = T(E) (in practice
+    y = log10(E / MeV)):
 
-        p(y | z, cond) = sum_{k=1}^{K} pi_k * N(y; mu_k(h), sigma_k(h))
-                       + sum_l pi_l * N(y; line_positions_y[l], line_sigma)
+        p(y | z, cond) = sum_{k=1}^{K} pi_k * p_cont,k(y)
+                       + sum_l pi_l * N(y; line_positions_y[l], sigma_l)
 
-    The K continuum sub-components (mu_k, sigma_k) and the gate (pi, over
-    K+n_lines slots) are learned per-sample; the L line positions are fixed
-    physics inputs (already mapped into y-space outside the model); the
-    line width is a single learned scalar shared across all lines (no
-    detector-resolution constant is available to fix it instead - see
-    docs/v0.8_beta_plan.md). K = n_continuum_components, default 1 (a
+    The gate (pi, over K+n_lines slots) is learned per-sample. The continuum
+    p_cont depends on continuum_mode: "gaussian" gives K learned per-sample
+    components N(y; mu_k(h), sigma_k(h)); "flow" replaces them with a single
+    conditional rational-quadratic-spline normalizing flow (K is forced to 1;
+    see core/flows.py). The L line positions are fixed physics inputs (already
+    mapped into y-space outside the model).
+
+    Line widths sigma_l are per-line, shape (n_lines,), set by
+    line_logsigma_init and learned or frozen via line_logsigma_trainable. The
+    intended v0.8.1 configuration pins them to the detector resolution -
+    line_logsigma_init=magi.line_logsigma_from_resolution(E_lines, fwhm_ev)
+    with line_logsigma_trainable=False - so every line has exactly the
+    instrument's width (4 eV FWHM for X-IFU) rather than a width the fit is
+    free to inflate. A single scalar line_logsigma_init is broadcast to all
+    lines, which is the earlier behavior and still the default.
+    K = n_continuum_components, default 1 (a
     single Gaussian continuum, the original v0.8 Part 2/3 design). K>1
     (docs/v0.8_fixing_plan.md Task #25) lets the continuum itself represent
     multi-modal or sharply-peaked real shapes that a single Gaussian can't
@@ -3237,9 +3325,11 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
     # Task-weight API
     # ==========================================================
     def get_task_weight(self, task_name):
+        """Current weight of one task in the reconstruction loss."""
         return float(self.task_weights[task_name])
 
     def set_task_weight(self, task_name, value):
+        """Set one task weight (see decay_task_weight on mid-fit changes)."""
         value = float(value)
         self.task_weights[task_name] = value
 
@@ -3257,6 +3347,17 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
             raise ValueError(f"Unknown task name: {task_name}")
 
     def decay_task_weight(self, task_name, factor=0.5, min_value=0.0):
+        """Multiply one task weight by `factor`, floored at `min_value`.
+
+        Returns (old, new). Used by TaskAdaptiveLossScheduler to back off a task
+        whose validation metric has plateaued below its target.
+
+        IMPORTANT: the task weights are plain Python floats read inside
+        train_step, which Keras traces into a tf.function once per fit() call.
+        Calling this mid-fit updates the attribute but NOT the compiled graph,
+        so the loss is unchanged until the next fit(). Set the weights before
+        training starts if you need them to take effect.
+        """
         old = self.get_task_weight(task_name)
         new = max(min_value, old * float(factor))
         self.set_task_weight(task_name, new)
@@ -3266,6 +3367,7 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
     # Utilities
     # ==========================================================
     def sample_z(self, z_mean, z_logvar):
+        """Reparametrization trick: z = mu + sigma * eps, eps ~ N(0, I)."""
         eps = tf.random.normal(shape=tf.shape(z_mean))
         return z_mean + tf.exp(0.5 * z_logvar) * eps
 
@@ -3715,6 +3817,13 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
     # Keras train/test
     # ==========================================================
     def train_step(self, data):
+        """One optimization step for the mixture-energy head.
+
+        `y_cont` carries the four geometry targets, energy_y, and the
+        n_lines+1 gate-target columns appended by build_gate_targets; E_idx_true
+        is unused here (it exists for the categorical heads) and the Keras
+        target is a dummy, since the loss is assembled from the inputs.
+        """
         (y_cont, E_idx_true, cond), _ = data
 
         x_in = tf.concat([y_cont, cond], axis=1)
@@ -3793,6 +3902,7 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
         return {m.name: m.result() for m in self.metrics}
 
     def test_step(self, data):
+        """Validation counterpart of train_step: same loss, no gradient step."""
         (y_cont, E_idx_true, cond), _ = data
 
         x_in = tf.concat([y_cont, cond], axis=1)
@@ -3856,9 +3966,20 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
     # ==========================================================
     @tf.function(reduce_retracing=True)
     def decode(self, z, cond):
+        """Inference-mode decode: latent + conditioning -> per-head parameters."""
         return self._decode_params(z, cond, training=False)
 
     def generate(self, cond, n_samples):
+        """Sample `n_samples` events from the prior, conditioned on `cond`.
+
+        Draws z from the learned p(z|cond) when prior="coupling", otherwise from
+        N(0, I), then decodes and samples each head. Alongside the geometry
+        outputs this returns the raw `energy_y` sample and
+        `energy_component_idx` - which mixture slot each event was routed to,
+        0..K-1 for the continuum and K+l for line l - which is what lets
+        validation cross-check the windowed line counts against the model's own
+        routing.
+        """
         if self.prior_mode == "coupling":
             # Sample the learned prior p(z|cond) instead of N(0,I). This is the
             # line that makes z-conditioned generation faithful: the decoded z

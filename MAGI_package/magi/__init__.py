@@ -1,9 +1,14 @@
 """
 MAGI
 A CVAE-based generative toolkit for Geant4 particle-source modeling.
+
+See docs/USAGE.md for the workflow and the model lineage. The version below
+tracks the newest model head in magi.core, not the pipeline as a whole: older
+heads stay supported, and a trained run records which one it is in
+model_config["model_class"].
 """
 
-__version__ = "0.7.2"
+__version__ = "0.8.1"
 
 # ==========================================================
 # Environment / configuration helpers

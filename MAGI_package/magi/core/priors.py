@@ -173,6 +173,12 @@ class ConditionalCouplingPrior(keras.layers.Layer):
         return self._forward(u, cond)
 
     def get_config(self):
+        """Serialize the prior's construction arguments for save/load.
+
+        Keeping this complete matters: the prior is rebuilt from this dict at
+        generation time, and a missing key silently yields a different
+        architecture from the one that was trained.
+        """
         config = super().get_config()
         config.update(
             {

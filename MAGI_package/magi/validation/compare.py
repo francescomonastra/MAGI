@@ -18,6 +18,13 @@ def compare_hist_with_residuals(
     dpi=300,
     show=True
 ):
+    """Overlay real vs generated histograms with a residual panel underneath.
+
+    Residual = gen_density / real_density - 1, so 0 means a perfect match. Bins
+    where the real density is ~0 are floored by `eps_res` and will show large
+    residuals; `ratio_clip` bounds the residual axis so a handful of empty-bin
+    spikes do not flatten the rest of the panel.
+    """
     real = np.asarray(real)
     gen = np.asarray(gen)
 
@@ -56,6 +63,12 @@ def compare_hist_with_residuals(
 
 
 def report_final_ranges(real_pack, gen_pack):
+    """Print min/max of every reconstructed quantity, real vs generated.
+
+    A coarse but effective check: a generated range that overshoots the real one
+    usually means a Gaussian head extrapolating past the support of its quantile
+    transform.
+    """
     print("\n--- RANGE CHECK ---")
     print("logE real/gen:",
           real_pack["logE_real"].min(), real_pack["logE_real"].max(), "|",
@@ -86,6 +99,12 @@ def report_final_ranges(real_pack, gen_pack):
 
 
 def report_norm_checks(real_pack, gen_pack):
+    """Print the mean |(cos, sin)| for phi_r and phi_v, real vs generated.
+
+    These should sit at 1: the angle heads predict a 2-D vector that is only
+    softly regularized onto the unit circle, so a mean below 1 means the
+    regularizer is losing and the reconstructed angles are less reliable.
+    """
     norm_phi_r_real = np.sqrt(real_pack["cphi_r_real"]**2 + real_pack["sphi_r_real"]**2)
     norm_phi_r_gen = np.sqrt(gen_pack["cphi_r_gen"]**2 + gen_pack["sphi_r_gen"]**2)
 
@@ -98,7 +117,12 @@ def report_norm_checks(real_pack, gen_pack):
 
 
 def build_real_generated_featureframes(real_pack, gen_pack):
+    """Pack the real and generated arrays into DataFrames for the plot helpers.
 
+    Returns (df_real, df_gen, df_both), where df_both is the concatenation with
+    a "sample" column of "real"/"generated" - the form plot_pairwise_sample and
+    the correlation/covariance plots expect.
+    """
     real_dict = {
         "sample": "real",
 

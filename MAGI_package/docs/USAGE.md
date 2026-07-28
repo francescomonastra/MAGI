@@ -70,12 +70,24 @@ The models form a version lineage — check which one a given trained run actual
 - `CVAE_CatEnergy_ContGeom_TaskAdaptive` — continuous geometry targets
   `[u_r, u_v, cphi_r, sphi_r, cphi_v, sphi_v]` (v0.7).
 - `CVAE_CatEnergy_ContPhi_TaskAdaptive` — continuous geometry including continuous
-  `phi_r`/`phi_v` targets `[u_r, u_v, phi_r, phi_v]` (v0.7.2, current default).
+  `phi_r`/`phi_v` targets `[u_r, u_v, phi_r, phi_v]` (v0.7.2; the stable default, and
+  the fallback if a v0.8 run does not meet its acceptance thresholds).
+- `CVAE_MixEnergy_ContPhi_TaskAdaptive` — same geometry as v0.7.2, but the categorical
+  energy head is replaced by a **continuous mixture** (v0.8): a gate routes each event
+  between a continuum density and `n_lines` fixed-position Gaussian line components
+  pinned at measured line energies. The continuum is either a single Gaussian or a
+  conditional rational-quadratic-spline normalizing flow (`continuum_mode="flow"`), and
+  the latent prior is either `N(0, I)` or a learned conditional coupling flow
+  (`prior="coupling"`). See `magi.print_model_structure(model)` for a printed
+  description of a built model, including the formulas and the configured line table.
 
-Each uses per-variable heads (categorical for logE, Gaussian for radial/angular
+The first four use per-variable heads (categorical for logE, Gaussian for radial/angular
 variables, unit-circle-regularized 2D heads for angles) rather than one flat output,
 because narrow spectral energy lines and boundary-heavy angular variables (`u_v`
-concentrates near ±1) don't fit a naive Gaussian/flat output well.
+concentrates near ±1) don't fit a naive Gaussian/flat output well. v0.8 keeps that
+principle for geometry and takes the energy head further: a categorical head can never
+place a line more precisely than one bin, so the line positions become fixed physical
+inputs instead of something the model has to learn.
 
 ## Limitations & things to watch during training and adaptation
 
@@ -104,6 +116,12 @@ output, check this first.
 `"fixed_width"`, `"min_counts"`, and `"log_fixed_count"` modes — the choice trades off
 against the categorical energy head's ability to resolve narrow spectral lines (e.g.
 characteristic decay-line gammas) versus giving every bin enough statistics to train on.
+With the v0.8 mixture head the binning no longer limits where a line can be *placed*
+(positions are pinned physical inputs), but it still limits which lines
+`detect_energy_lines` can *find*: on a log grid spanning many decades a bin can be
+hundreds of eV wide, so close doublets fall in one bin and only one member is matched.
+Pass `refine_bin_width_mev` to refine each detected peak to sub-bin precision, and check
+the result with `tools/line_centroid_audit.py`.
 
 **Quantile transforms need enough samples.** The `QuantileTransformer`-based geometry
 modes (`u_r_q`, `u_v_q`, `phi_r_q`, `phi_v_q`) are fit per-feature on your training data;

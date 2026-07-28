@@ -125,6 +125,11 @@ def plot_history(history, keys=None, show_available=True):
 
 
 def plot_dist(data, name, bins=200, range_=None, density=True, figsize=(7, 4), xscale="linear", yscale="linear", savepath=None, dpi=300, show=True):
+    """Step histogram of one 1-D quantity.
+
+    Returns whatever _save_and_show returns (the figure, unless show closes it).
+    Use xscale/yscale="log" for energy spectra, which span many decades.
+    """
     fig = plt.figure(figsize=figsize)
     plt.hist(
         data,
@@ -154,6 +159,10 @@ def plot_dist_by_class(
     density=True,
     figsize=(7, 4),
 ):
+    """Step histogram of `value_col`, optionally restricted to one particle type.
+
+    With selected_class=None the whole column is plotted.
+    """
     if selected_class is None:
         data = df[value_col].to_numpy()
         title = value_col
@@ -179,6 +188,12 @@ def plot_dist_by_class(
 
 
 def plot_correlation_matrix(df, cols, method="pearson", figsize=(8, 6), cmap="coolwarm", savepath=None, dpi=300, show=True):
+    """Plot the correlation matrix of `cols`, fixed to the [-1, 1] color scale.
+
+    Returns (figure_result, corr_dataframe). Comparing the real and generated
+    matrices is the main check that the model reproduced the *joint*
+    distribution and not just the marginals.
+    """
     corr = df[cols].corr(method=method)
 
     fig = plt.figure(figsize=figsize)
@@ -192,6 +207,12 @@ def plot_correlation_matrix(df, cols, method="pearson", figsize=(8, 6), cmap="co
 
 
 def plot_covariance_matrix(df, cols, figsize=(8, 6), cmap="viridis", savepath=None, dpi=300, show=True):
+    """Plot the covariance matrix of `cols`. Returns (figure_result, cov_dataframe).
+
+    Unlike the correlation matrix this keeps the variable scales, so it is the
+    one to read when a generated variable has the right shape but the wrong
+    spread.
+    """
     cov = df[cols].cov()
 
     fig = plt.figure(figsize=figsize)
@@ -213,6 +234,12 @@ def plot_pairwise_sample(
     theme=None,
     palette="deep",
 ):
+    """Seaborn pairplot over `cols`, on a random subsample of `sample_size` rows.
+
+    Subsampled because these datasets run to millions of events and a full
+    pairplot is neither fast nor readable. Pass class_col to color by particle
+    type.
+    """
     import seaborn as sns
 
     if theme is not None:

@@ -271,6 +271,12 @@ class ConditionalRQSFlow(keras.layers.Layer):
         return self._warp_inverse(w)
 
     def get_config(self):
+        """Serialize the flow's construction arguments for save/load.
+
+        Keeping this complete matters: the flow is rebuilt from this dict at
+        generation time, and a missing key silently yields a different
+        architecture from the one that was trained.
+        """
         config = super().get_config()
         config.update(
             {

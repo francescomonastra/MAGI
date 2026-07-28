@@ -4,6 +4,10 @@ Compatible with:
   - v0.6 discrete-u_v models
   - v0.7 continuous-geometry cos/sin phi models
   - v0.7.2 continuous-geometry quantile-phi models
+  - v0.8 mixture-energy models
+
+The helpers here are head-agnostic: each model computes its own loss inside
+train_step, so compiling and fitting looks the same for every version.
 """
 
 from tensorflow import keras

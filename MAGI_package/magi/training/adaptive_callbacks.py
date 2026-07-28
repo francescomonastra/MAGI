@@ -14,6 +14,20 @@ class TaskAdaptiveLossScheduler(keras.callbacks.Callback):
     Reduce selected task weights when their monitored validation metric:
     1) is below a target threshold
     2) has reached a plateau for a given patience
+
+    `task_configs` maps a task name in `model.task_weights` to a dict with
+    `monitor` (a key in the epoch logs) and optionally `threshold`, `patience`,
+    `min_delta`, `decay_factor`, `min_weight` and `cooldown`.
+
+    KNOWN LIMITATION: the model's task weights are Python floats read inside
+    train_step, which Keras traces into a tf.function once per fit() call.
+    Reducing a weight from this callback therefore updates the attribute and
+    prints the change, but does NOT alter the compiled graph - the loss keeps
+    the weights it was traced with until the next fit(). Verified by zeroing a
+    weight mid-fit and observing no discontinuity in the loss. The fix (making
+    the weights tf.Variables) is v0.8.2 item 1a in docs/v0.8.2_plan.md; until
+    then, treat this callback as reporting-only and set the weights you want
+    before training starts.
     """
 
     def __init__(self, task_configs, verbose=1):
@@ -23,6 +37,7 @@ class TaskAdaptiveLossScheduler(keras.callbacks.Callback):
         self.state = {}
 
     def on_train_begin(self, logs=None):
+        """Reset the per-task plateau/cooldown bookkeeping."""
         self.state = {}
         for task_name, cfg in self.task_configs.items():
             self.state[task_name] = {
@@ -34,6 +49,7 @@ class TaskAdaptiveLossScheduler(keras.callbacks.Callback):
             }
 
     def on_epoch_end(self, epoch, logs=None):
+        """Check each task's monitor and decay its weight if it has plateaued."""
         logs = logs or {}
 
         for task_name, cfg in self.task_configs.items():
@@ -180,6 +196,7 @@ class TaskAdaptiveTrainingMonitor(keras.callbacks.Callback):
             return None
 
     def on_epoch_end(self, epoch, logs=None):
+        """Print the selected metrics, the learning rate and the task weights."""
         logs = logs or {}
 
         if ((epoch + 1) % self.every_n_epochs) != 0:
@@ -324,6 +341,11 @@ class ValidationEnergyDistributionMonitor(keras.callbacks.Callback):
         }
 
     def on_epoch_end(self, epoch, logs=None):
+        """Generate a validation-sized sample and score its energy spectrum.
+
+        Adds the val_energy_* keys to `logs`, so they can be monitored by
+        EarlyStopping/ReduceLROnPlateau like any other metric.
+        """
         logs = logs or {}
 
         if ((epoch + 1) % self.every_n_epochs) != 0:

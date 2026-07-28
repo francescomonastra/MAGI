@@ -387,11 +387,17 @@ def split_feature_data(
 
 
 def frac_per_type(y_idx, n_types):
+    """Population fraction of each particle-type index (sums to 1)."""
     c = np.bincount(y_idx, minlength=n_types).astype(np.float64)
     return c / c.sum()
 
 
 def report_split_summary(split_pack, n_types):
+    """Print train/val/test shapes and the per-type fractions in each split.
+
+    Printed sanity check only - confirms the split did not skew the particle-type
+    mix, which matters because the conditioning is a type one-hot.
+    """
     print(
         "Train:", split_pack["X_cont_train"].shape,
         "Val:", split_pack["X_cont_val"].shape,
@@ -459,6 +465,12 @@ def scale_continuous_features(split_pack, scale_cols=(0,)):
 
 
 def report_scaled_features(scaled_pack):
+    """Print the per-column mean/std of the scaled training features.
+
+    Printed sanity check only. Columns left out of `scale_cols` are reported
+    unscaled, which is expected for the quantile-transformed geometry columns -
+    they are already standardized by their own transform.
+    """
     cont_cols = scaled_pack.get("cont_cols", None)
 
     if scaled_pack.get("scaler", None) is None:
@@ -498,6 +510,7 @@ def report_scaled_features(scaled_pack):
 
 
 def to_one_hot(y_idx, n_types):
+    """One-hot encode integer particle-type indices as a float32 tensor."""
     y_idx = np.asarray(y_idx, dtype=np.int32)
     return tf.one_hot(y_idx, depth=n_types, dtype=tf.float32)
 
@@ -508,6 +521,24 @@ def build_conditioning_and_weights(
     idx_to_type=None,
     alpha=0.5,
 ):
+    """Build the particle-type conditioning one-hots and per-type loss weights.
+
+    The conditioning vector `cond` is the type one-hot; the model is conditioned
+    on it at both encode and decode time, so generation can be steered to a
+    chosen type mix.
+
+    Type weights counteract the strongly uneven particle-type populations:
+
+        w_t = (1 / freq_t) ** alpha,  renormalized to mean 1
+
+    alpha = 0 leaves the natural proportions untouched, alpha = 1 fully balances
+    the types, and the default 0.5 is the compromise the notebooks use - enough
+    to keep rare species from being ignored, not so much that the common ones
+    are under-fit.
+
+    Returns `scaled_pack` extended with cond_train/val/test, type_weights,
+    counts_train and freq_train.
+    """
     cond_train = to_one_hot(scaled_pack["y_train"], n_types)
     cond_val = to_one_hot(scaled_pack["y_val"], n_types)
     cond_test = to_one_hot(scaled_pack["y_test"], n_types)
@@ -539,6 +570,7 @@ def build_conditioning_and_weights(
 
 
 def report_conditioning(condition_pack, n_types):
+    """Print the conditioning shapes, class fractions, counts and type weights."""
     print("\ncond_train shape:", condition_pack["cond_train"].shape)
     print("cond_val shape  :", condition_pack["cond_val"].shape)
     print("cond_test shape :", condition_pack["cond_test"].shape)
@@ -560,6 +592,12 @@ def report_conditioning(condition_pack, n_types):
 
 
 def make_dummy_targets(n):
+    """Placeholder y for tf.data.
+
+    The models compute their own losses inside train_step from the inputs, so
+    Keras never uses the target tensor - but the dataset element must still be
+    an (inputs, targets) pair.
+    """
     return tf.zeros((n, 1), dtype=tf.float32)
 
 
@@ -644,6 +682,12 @@ def build_tf_datasets(
 
 
 def report_tf_datasets(dataset_tf_pack):
+    """Print batch counts and the shapes of one batch, per dataset mode.
+
+    Worth running once after build_tf_datasets: the element layout differs
+    between the legacy discrete-u_v models and the continuous-geometry ones, and
+    a mismatch surfaces here rather than as an unpacking error inside train_step.
+    """
     dataset_mode = dataset_tf_pack.get("dataset_mode", "discrete_uv")
 
     print("\nDatasets ready.")
@@ -678,6 +722,12 @@ def report_energy_binning_diagnostics(
     n_bins=None,
     min_counts=None,
 ):
+    """Print diagnostics for the chosen energy binning.
+
+    Covers bin count and widths, how the training events distribute across bins,
+    and empty/underpopulated bins. Use it to check that the binning resolves the
+    spectral features you care about before committing to a long run.
+    """
     E_train_values = E_values[idx_train].astype(np.float64)
     E_train_idx = E_idx[idx_train].astype(np.int32)
 

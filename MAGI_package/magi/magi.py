@@ -1,7 +1,15 @@
 """
 High-level user-facing API for MAGI.
 
-This module provides a simpler interface for notebook users.
+A thin convenience layer over the modules below it, for quick notebook use.
+Note the scope: `build_model` / `build_task_adaptive_model` construct the
+*original* v0.6 heads only. The v0.7.2 and v0.8 heads take enough
+version-specific configuration (geometry transform, line positions, continuum
+mode, prior) that wrapping them here would hide the arguments that matter -
+instantiate `magi.CVAE_CatEnergy_ContPhi_TaskAdaptive` or
+`magi.CVAE_MixEnergy_ContPhi_TaskAdaptive` directly instead, as the versioned
+notebooks do. Everything else here (setup, train_model, plot_training) is
+head-agnostic and works with any of them.
 """
 
 from .config import initialize_environment, print_tf_info
@@ -70,14 +78,16 @@ def setup(seed=42, cpu_only=True, quiet=True, show_info=False):
 
 def build_model(**kwargs):
     """
-    Convenience wrapper around the main CVAE model constructor.
+    Convenience wrapper around the v0.6 CVAE constructor
+    (CVAE_CatEnergy_CatUV: categorical energy head, discretized u_v).
     """
     return CVAE_CatEnergy_CatUV(**kwargs)
 
 
 def build_task_adaptive_model(**kwargs):
     """
-    Convenience wrapper around the task-adaptive CVAE model constructor.
+    Convenience wrapper around the v0.6 task-adaptive CVAE constructor
+    (CVAE_CatEnergy_CatUV_TaskAdaptive).
     """
     return CVAE_CatEnergy_CatUV_TaskAdaptive(**kwargs)
 

@@ -6,11 +6,21 @@ import numpy as np
 
 
 def renorm_cos_sin(c, s, eps=1e-12):
+    """Project a predicted (cos, sin) pair back onto the unit circle.
+
+    The angle heads are only softly regularized towards norm 1, so the raw
+    output has to be renormalized before an angle can be read off it.
+    """
     r = np.sqrt(c * c + s * s) + eps
     return c / r, s / r
 
 
 def u_from_s(s):
+    """Inverse of the s = atanh(u) reparametrization: maps R back to (-1, 1).
+
+    u_v is bounded and piles up at the edges, which a Gaussian head fits badly;
+    the model works in s-space and this brings the sample back.
+    """
     return np.tanh(s)
 
 
