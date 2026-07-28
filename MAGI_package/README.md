@@ -32,32 +32,38 @@ MAGI_package/
 ├── docs/
 │   └── USAGE.md
 └── magi/
-    ├── __init__.py       # public API surface
-    ├── magi.py            # simplified high-level API (setup, build_model, train_model)
+    ├── __init__.py        # public API surface
+    ├── magi.py            # high-level convenience API (setup, train_model, plot_training)
     ├── config.py          # environment/seed initialization
-    ├── core/               # CVAE model classes, losses, geometry transforms
-    │   ├── model.py
+    ├── core/              # CVAE model classes, losses, geometry transforms
+    │   ├── model.py       #   one class per version in the lineage
     │   ├── losses.py
-    │   └── geometry.py
-    ├── data/                # load/preprocess/dataset-build raw detector tables
+    │   ├── geometry.py
+    │   ├── flows.py       #   conditional spline flow (v0.8 continuum)
+    │   └── priors.py      #   conditional coupling prior p(z|cond) (v0.8)
+    ├── data/              # load/preprocess/dataset-build raw detector tables
     │   ├── io.py
     │   ├── preprocessing.py
     │   └── dataset.py
-    ├── training/            # compile/fit wrappers, adaptive loss scheduling, checkpointing
+    ├── training/          # compile/fit wrappers, adaptive loss scheduling, checkpointing
     │   ├── train.py
     │   ├── adaptive_callbacks.py
     │   └── checkpointing.py
-    ├── generation/          # sample from a trained model, reconstruct physics, export files
+    ├── generation/        # sample from a trained model, reconstruct physics, export files
     │   ├── sampling.py
     │   ├── reconstruction.py
     │   └── export.py
-    ├── validation/          # Wasserstein / histogram-residual comparisons
+    ├── validation/        # Wasserstein / histogram-residual / line-recovery metrics
     │   ├── metrics.py
     │   └── compare.py
-    └── utils/                # plotting, model introspection
+    └── utils/             # plotting, model introspection
         ├── plotting.py
         └── model_inspection.py
 ```
+
+`magi.print_model_structure(model)` and `magi.print_model_tree_with_params(model)` print
+a description of a built model — its generative structure and the formulas behind it, the
+configured mixture/prior/flow settings, and the parameter counts per block.
 
 ## Author
 

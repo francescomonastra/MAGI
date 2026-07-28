@@ -76,11 +76,17 @@ See also `MAGI_package/docs/USAGE.md` for the user-facing version of this workfl
   - `CVAE_CatEnergy_ContGeom_TaskAdaptive` — continuous geometry targets
     `[u_r, u_v, cphi_r, sphi_r, cphi_v, sphi_v]` (v0.7 quantile-transform line).
   - `CVAE_CatEnergy_ContPhi_TaskAdaptive` — continuous geometry incl. continuous
-    `phi_r`/`phi_v` targets `[u_r, u_v, phi_r, phi_v]` (v0.7.2, current head).
-  Each model uses per-variable heads (categorical for logE, Gaussian for radial/angular
-  variables, unit-circle-regularized 2D heads for angles) rather than one flat output —
-  see the physics rationale block in `README.md` (transform `s_v = atanh(u_v)`, why
-  direct Gaussians/Betas on bounded variables fail, quantile transforms for `u_r`/`u_v`).
+    `phi_r`/`phi_v` targets `[u_r, u_v, phi_r, phi_v]` (v0.7.2, the stable head).
+  - `CVAE_MixEnergy_ContPhi_TaskAdaptive` — v0.7.2 geometry, but the categorical energy
+    head becomes a gated mixture of a continuum density (a single Gaussian, or the
+    conditional spline flow in `core/flows.py`) and fixed-position line components
+    pinned at measured line energies; optionally with the learned conditional prior in
+    `core/priors.py` (v0.8, newest head).
+  Each model uses per-variable heads (categorical or mixture for logE, Gaussian for
+  radial/angular variables, unit-circle-regularized 2D heads for angles) rather than one
+  flat output — see `MAGI_package/docs/USAGE.md` for why, and
+  `magi.print_model_structure(model)` for a printed description of a built model
+  (generative structure, formulas, configured line table, parameter counts).
   `core/losses.py` and `core/geometry.py` hold the shared NLL/angular losses and the
   physical coordinate transforms (`xy_from_ur_phi`, `vxyz_from_uv_phi`, etc.) used both
   inside the model and during generation/reconstruction — keep these two in sync if you
