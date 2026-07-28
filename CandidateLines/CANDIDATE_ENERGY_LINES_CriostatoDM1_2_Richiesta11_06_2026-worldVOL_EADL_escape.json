@@ -12,7 +12,7 @@
   "fluor_energy_dataset_path": "/Volumes/X10Pro/Geant4-system/geant4-v10.4.3-build/data/G4EMLOW7.3/fluor",
   "photoevap_dataset_path": "/Volumes/X10Pro/Geant4-system/geant4-v10.4.3-build/data/PhotonEvaporation5.2",
   "generated_by": "tools/build_candidate_lines_from_geant4.py",
-  "generated_at": "2026-07-28T09:00:29.321760+00:00",
+  "generated_at": "2026-07-28T09:24:06.424893+00:00",
   "n_lines": 132,
   "lines": [
     {
