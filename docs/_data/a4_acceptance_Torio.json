@@ -1,0 +1,266 @@
+{
+  "resolution_ev": 4.0,
+  "thresholds": {
+    "line": [
+      0.8,
+      1.2
+    ],
+    "continuum": [
+      0.85,
+      1.15
+    ],
+    "wasserstein_max": 0.05,
+    "coupling_max": 0.05
+  },
+  "sources": {
+    "Torio": {
+      "n_real": 8847918,
+      "n_gen": 8847918,
+      "recovery": [
+        {
+          "label": "e+e- annihilation",
+          "origin": "instrumental",
+          "candidate_energy_mev": 0.510999,
+          "window_half_width_mev": 8.49321800288019e-06,
+          "window_mode": "5sigma@4eV",
+          "overlaps_lines": [],
+          "n_real": 133564,
+          "n_gen": 85345,
+          "n_real_continuum": 26.0,
+          "n_gen_continuum": 175.0,
+          "n_real_line": 133538.0,
+          "n_gen_line": 85170.0,
+          "gen_scale": 1.0,
+          "line_significance": 365.3573870076203,
+          "low_significance": false,
+          "sideband_contaminated": false,
+          "blended_lines": [],
+          "sideband_contaminants": [],
+          "recovery_ratio": 0.6377959831658404,
+          "recovery_ratio_window": 0.6389820610344105,
+          "recovery_ratio_raw": 0.6389820610344105,
+          "real_fraction": 0.015095528688217952,
+          "real_fraction_line": 0.015092590143805582,
+          "component_fraction": 0.008372252093656383,
+          "component_recovery": 0.554725995596759
+        },
+        {
+          "label": "Al K-alpha1",
+          "origin": "instrumental",
+          "candidate_energy_mev": 0.00146917,
+          "window_half_width_mev": 8.49321800288019e-06,
+          "window_mode": "5sigma@4eV",
+          "overlaps_lines": [
+            "Al K-alpha2"
+          ],
+          "n_real": 646,
+          "n_gen": 2121,
+          "n_real_continuum": 0.0,
+          "n_gen_continuum": 1.0,
+          "n_real_line": 646.0,
+          "n_gen_line": 2120.0,
+          "gen_scale": 1.0,
+          "line_significance": 25.41653005427767,
+          "low_significance": false,
+          "sideband_contaminated": false,
+          "blended_lines": [
+            "Al K-alpha2"
+          ],
+          "sideband_contaminants": [],
+          "recovery_ratio": 3.281733746130031,
+          "recovery_ratio_window": 3.28328173374613,
+          "recovery_ratio_raw": 3.28328173374613,
+          "real_fraction": 7.301152655347845e-05,
+          "real_fraction_line": 7.301152655347845e-05,
+          "component_fraction": 0.00023960439054701907,
+          "component_recovery": 3.281733746130031
+        },
+        {
+          "label": "Cu K-alpha1",
+          "origin": "instrumental",
+          "candidate_energy_mev": 0.00800571,
+          "window_half_width_mev": 8.49321800288019e-06,
+          "window_mode": "5sigma@4eV",
+          "overlaps_lines": [
+            "Cu K-alpha2"
+          ],
+          "n_real": 790,
+          "n_gen": 1494,
+          "n_real_continuum": 351.0,
+          "n_gen_continuum": 0.0,
+          "n_real_line": 439.0,
+          "n_gen_line": 1494.0,
+          "gen_scale": 1.0,
+          "line_significance": 12.996358958860547,
+          "low_significance": false,
+          "sideband_contaminated": true,
+          "blended_lines": [],
+          "sideband_contaminants": [
+            "Cu K-alpha2"
+          ],
+          "recovery_ratio": null,
+          "recovery_ratio_window": 1.8911392405063292,
+          "recovery_ratio_raw": 1.8911392405063292,
+          "real_fraction": 8.928654176044579e-05,
+          "real_fraction_line": 4.9616192193462914e-05,
+          "component_fraction": 0.00016874026183334883,
+          "component_recovery": 3.4009111617312073
+        },
+        {
+          "label": "Cu K-beta",
+          "origin": "instrumental",
+          "candidate_energy_mev": 0.00886534,
+          "window_half_width_mev": 8.49321800288019e-06,
+          "window_mode": "5sigma@4eV",
+          "overlaps_lines": [],
+          "n_real": 166,
+          "n_gen": 528,
+          "n_real_continuum": 0.0,
+          "n_gen_continuum": 1.0,
+          "n_real_line": 166.0,
+          "n_gen_line": 527.0,
+          "gen_scale": 1.0,
+          "line_significance": 12.884098726725124,
+          "low_significance": false,
+          "sideband_contaminated": false,
+          "blended_lines": [],
+          "sideband_contaminants": [],
+          "recovery_ratio": 3.174698795180723,
+          "recovery_ratio_window": 3.180722891566265,
+          "recovery_ratio_raw": 3.180722891566265,
+          "real_fraction": 1.8761475863587344e-05,
+          "real_fraction_line": 1.8761475863587344e-05,
+          "component_fraction": 5.967505575888023e-05,
+          "component_recovery": 3.180722891566265
+        }
+      ],
+      "near_line_continuum": [
+        {
+          "label": "e+e- annihilation",
+          "n_real": 26.0,
+          "n_gen": 175.0,
+          "ratio": 6.730769230769231,
+          "sideband_contaminated": false,
+          "sideband_contaminants": []
+        },
+        {
+          "label": "Al K-alpha1",
+          "n_real": 0.0,
+          "n_gen": 1.0,
+          "ratio": null,
+          "sideband_contaminated": false,
+          "sideband_contaminants": []
+        },
+        {
+          "label": "Cu K-alpha1",
+          "n_real": 351.0,
+          "n_gen": 0.0,
+          "ratio": null,
+          "sideband_contaminated": true,
+          "sideband_contaminants": [
+            "Cu K-alpha2"
+          ]
+        },
+        {
+          "label": "Cu K-beta",
+          "n_real": 0.0,
+          "n_gen": 1.0,
+          "ratio": null,
+          "sideband_contaminated": false,
+          "sideband_contaminants": []
+        }
+      ],
+      "wasserstein_logE": {
+        "global": 0.008573898708698416,
+        "[-3.00,-2.43)": 0.04720282342838435,
+        "[-2.43,-1.86)": 0.034589431017712835,
+        "[-1.86,-1.30)": 0.07820002954074547,
+        "[-1.30,-0.73)": 0.002575729932861744,
+        "[-0.73,-0.17)": 0.0044531444360046794,
+        "[-0.17,0.40)": 0.020858756808715292
+      },
+      "coupling": {
+        "max_abs": 0.02194014298204386,
+        "worst_pair": "phi_r<->phi_v",
+        "real": -0.11646970428286005,
+        "gen": -0.09452956130081619,
+        "matrix_real": [
+          [
+            1.0,
+            -0.02505777100613922,
+            0.1645548832930329,
+            0.0014878054908459156,
+            -0.0008932383486442112
+          ],
+          [
+            -0.02505777100613922,
+            1.0,
+            -0.1610677362464991,
+            -0.0010480534325736136,
+            0.0024201368332104622
+          ],
+          [
+            0.1645548832930329,
+            -0.16106773624649912,
+            1.0,
+            0.004174451851590349,
+            -0.005366019901202856
+          ],
+          [
+            0.0014878054908459158,
+            -0.0010480534325736138,
+            0.004174451851590349,
+            1.0,
+            -0.11646970428286005
+          ],
+          [
+            -0.0008932383486442111,
+            0.0024201368332104622,
+            -0.005366019901202856,
+            -0.11646970428286005,
+            1.0
+          ]
+        ],
+        "matrix_gen": [
+          [
+            1.0,
+            -0.02266886561360328,
+            0.16508856072767233,
+            -0.004800301888208435,
+            0.0010022160487137767
+          ],
+          [
+            -0.02266886561360328,
+            1.0,
+            -0.17127906065673879,
+            0.002547597281090404,
+            0.014864288907487306
+          ],
+          [
+            0.16508856072767236,
+            -0.17127906065673879,
+            1.0,
+            -0.004743345993092178,
+            -0.002247409017795003
+          ],
+          [
+            -0.004800301888208435,
+            0.0025475972810904044,
+            -0.004743345993092179,
+            1.0,
+            -0.09452956130081619
+          ],
+          [
+            0.0010022160487137767,
+            0.014864288907487306,
+            -0.0022474090177950034,
+            -0.09452956130081619,
+            1.0
+          ]
+        ]
+      },
+      "pass": false
+    }
+  },
+  "pass": false
+}

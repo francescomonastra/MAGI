@@ -74,6 +74,7 @@ TRAINING_DATA_DIR = "/Volumes/X10Pro/MAGI/TrainingData"
 SOURCE_FILES = {
     "CR": f"{TRAINING_DATA_DIR}/alloutputDSCryoSphereCR.dat",
     "Small": f"{TRAINING_DATA_DIR}/alloutputDSCryoSphereSmall.dat",
+    "Torio": f"{TRAINING_DATA_DIR}/alloutputDSCryoSphereTorio.dat",
 }
 CANDIDATE_LINES_FILE = ("/Volumes/X10Pro/MAGI/CandidateLines/"
     # v0.8.1: EADL energies (what Geant4 actually emitted). The Bearden table

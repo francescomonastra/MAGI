@@ -57,6 +57,7 @@ TRAINING_DATA_DIR = "/Volumes/X10Pro/MAGI/TrainingData"
 SOURCE_FILES = {
     "CR": f"{TRAINING_DATA_DIR}/alloutputDSCryoSphereCR.dat",
     "Small": f"{TRAINING_DATA_DIR}/alloutputDSCryoSphereSmall.dat",
+    "Torio": f"{TRAINING_DATA_DIR}/alloutputDSCryoSphereTorio.dat",
 }
 center = (0.0, 0.0, -507.66); R = 100.0
 
