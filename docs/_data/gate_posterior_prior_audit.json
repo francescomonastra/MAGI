@@ -1,0 +1,318 @@
+{
+  "sources": {
+    "CR": {
+      "n_events_scored": 673734,
+      "slot_labels": [
+        "continuum_0",
+        "e+e- annihilation",
+        "Al K-alpha1",
+        "Cu K-alpha1",
+        "Cu K-beta",
+        "Cu K-alpha2"
+      ],
+      "per_type": {
+        "gamma": {
+          "continuum_0": {
+            "posterior": 0.93753125,
+            "prior": 0.944895625,
+            "ratio_prior_over_post": 1.0078550714976167
+          },
+          "e+e- annihilation": {
+            "posterior": 0.049015703125,
+            "prior": 0.04977357421875,
+            "ratio_prior_over_post": 1.015461801941661
+          },
+          "Al K-alpha1": {
+            "posterior": 0.005788260498046875,
+            "prior": 0.0017573136901855469,
+            "ratio_prior_over_post": 0.3035996204349329
+          },
+          "Cu K-alpha1": {
+            "posterior": 0.004393865051269531,
+            "prior": 0.00139890380859375,
+            "ratio_prior_over_post": 0.3183765983412624
+          },
+          "Cu K-beta": {
+            "posterior": 0.000948795166015625,
+            "prior": 0.0006282145690917969,
+            "ratio_prior_over_post": 0.6621182227665896
+          },
+          "Cu K-alpha2": {
+            "posterior": 0.00239365234375,
+            "prior": 0.0016233012390136719,
+            "ratio_prior_over_post": 0.6781691765941823
+          }
+        },
+        "mu-": {
+          "continuum_0": {
+            "posterior": 0.999970625,
+            "prior": 0.9999734375,
+            "ratio_prior_over_post": 1.0000028125826197
+          },
+          "e+e- annihilation": {
+            "posterior": 7.029963970184327e-05,
+            "prior": 6.962460994720458e-05,
+            "ratio_prior_over_post": 0.9903978205649184
+          },
+          "Al K-alpha1": {
+            "posterior": 5.995738320052624e-09,
+            "prior": 1.1348298750817775e-07,
+            "ratio_prior_over_post": 18.92727491602431
+          },
+          "Cu K-alpha1": {
+            "posterior": 1.5494699709961424e-11,
+            "prior": 1.1888633016496897e-08,
+            "ratio_prior_over_post": 767.2709532314321
+          },
+          "Cu K-beta": {
+            "posterior": 3.0474321101792155e-09,
+            "prior": 3.774898499250412e-07,
+            "ratio_prior_over_post": 123.87145513894369
+          },
+          "Cu K-alpha2": {
+            "posterior": 4.1741409222595396e-09,
+            "prior": 5.944880843162537e-07,
+            "ratio_prior_over_post": 142.42166122039941
+          }
+        },
+        "e-": {
+          "continuum_0": {
+            "posterior": 0.9740786502504476,
+            "prior": 0.9590703745185439,
+            "ratio_prior_over_post": 0.9845923368425693
+          },
+          "e+e- annihilation": {
+            "posterior": 0.02307910318713156,
+            "prior": 0.032632329684222486,
+            "ratio_prior_over_post": 1.4139340432611616
+          },
+          "Al K-alpha1": {
+            "posterior": 0.0007724759548568926,
+            "prior": 0.0018522001447105246,
+            "ratio_prior_over_post": 2.3977447233987492
+          },
+          "Cu K-alpha1": {
+            "posterior": 5.1718581979765075e-05,
+            "prior": 0.0012277924012767908,
+            "ratio_prior_over_post": 23.739869777504055
+          },
+          "Cu K-beta": {
+            "posterior": 0.0006618122776771173,
+            "prior": 0.0015000136570590666,
+            "ratio_prior_over_post": 2.2665243720227384
+          },
+          "Cu K-alpha2": {
+            "posterior": 0.0014519834170942745,
+            "prior": 0.0037884603488536036,
+            "ratio_prior_over_post": 2.609162270210436
+          }
+        },
+        "anti_nu_e": {
+          "continuum_0": {
+            "posterior": 0.9994932640062025,
+            "prior": 0.9994599740614205,
+            "ratio_prior_over_post": 0.9999666931774521
+          },
+          "e+e- annihilation": {
+            "posterior": 0.0009235581081834071,
+            "prior": 0.00094763106878525,
+            "ratio_prior_over_post": 1.0260654531518252
+          },
+          "Al K-alpha1": {
+            "posterior": 4.307056503918335e-10,
+            "prior": 3.615682531062697e-10,
+            "ratio_prior_over_post": 0.839478778087387
+          },
+          "Cu K-alpha1": {
+            "posterior": 2.7320543760909777e-13,
+            "prior": 1.48368535519436e-13,
+            "ratio_prior_over_post": NaN
+          },
+          "Cu K-beta": {
+            "posterior": 4.480804595913117e-10,
+            "prior": 4.5893353524411136e-10,
+            "ratio_prior_over_post": 1.024221265222542
+          },
+          "Cu K-alpha2": {
+            "posterior": 8.556328758087155e-10,
+            "prior": 8.644481935081367e-10,
+            "ratio_prior_over_post": 1.010302686991882
+          }
+        },
+        "nu_mu": {
+          "continuum_0": {
+            "posterior": 0.9995972616603653,
+            "prior": 0.9995676378509392,
+            "ratio_prior_over_post": 0.9999703642551231
+          },
+          "e+e- annihilation": {
+            "posterior": 0.0007075928866417811,
+            "prior": 0.000739439415994304,
+            "ratio_prior_over_post": 1.045006853451659
+          },
+          "Al K-alpha1": {
+            "posterior": 5.200726809865288e-10,
+            "prior": 3.751052835788547e-10,
+            "ratio_prior_over_post": 0.7212555038794104
+          },
+          "Cu K-alpha1": {
+            "posterior": 3.152578752934134e-13,
+            "prior": 2.0968067045667732e-13,
+            "ratio_prior_over_post": NaN
+          },
+          "Cu K-beta": {
+            "posterior": 7.221988915466319e-10,
+            "prior": 5.228466162904772e-10,
+            "ratio_prior_over_post": 0.7239648556795345
+          },
+          "Cu K-alpha2": {
+            "posterior": 1.274417562077205e-09,
+            "prior": 9.90783408457376e-10,
+            "ratio_prior_over_post": 0.7774401718401256
+          }
+        },
+        "e+": {
+          "continuum_0": {
+            "posterior": 0.9829538400971376,
+            "prior": 0.9839879037195255,
+            "ratio_prior_over_post": 1.0010519961164053
+          },
+          "e+e- annihilation": {
+            "posterior": 0.016977096776833574,
+            "prior": 0.015784719066096742,
+            "ratio_prior_over_post": 0.9297655113585784
+          },
+          "Al K-alpha1": {
+            "posterior": 5.110408048501054e-05,
+            "prior": 3.095266348806007e-05,
+            "ratio_prior_over_post": 0.6056789045864718
+          },
+          "Cu K-alpha1": {
+            "posterior": 3.938596541792621e-08,
+            "prior": 0.0001147383054443479,
+            "ratio_prior_over_post": 2913.1774282248684
+          },
+          "Cu K-beta": {
+            "posterior": 6.577329248721879e-06,
+            "prior": 2.4163877387953986e-05,
+            "ratio_prior_over_post": 3.673812952673696
+          },
+          "Cu K-alpha2": {
+            "posterior": 1.2153297383784209e-05,
+            "prior": 5.906931877551413e-05,
+            "ratio_prior_over_post": 4.860353277813197
+          }
+        }
+      },
+      "population": {
+        "continuum_0": {
+          "posterior": 0.9769686748532712,
+          "prior": 0.9766914962799673,
+          "ratio_prior_over_post": 0.9997162871436532
+        },
+        "e+e- annihilation": {
+          "posterior": 0.01866775234825882,
+          "prior": 0.020459260060022282,
+          "ratio_prior_over_post": 1.095968045769075
+        },
+        "Al K-alpha1": {
+          "posterior": 0.0018454249478642615,
+          "prior": 0.0008259709766326261,
+          "ratio_prior_over_post": 0.4475776582453461
+        },
+        "Cu K-alpha1": {
+          "posterior": 0.0013128228246499986,
+          "prior": 0.0006176125034731203,
+          "ratio_prior_over_post": 0.4704461956911643
+        },
+        "Cu K-beta": {
+          "posterior": 0.0003903435379958645,
+          "prior": 0.0004330106673560411,
+          "ratio_prior_over_post": 1.1093066112461905
+        },
+        "Cu K-alpha2": {
+          "posterior": 0.00094900891828021,
+          "prior": 0.001104385333721642,
+          "ratio_prior_over_post": 1.1637249265507477
+        }
+      }
+    },
+    "Small": {
+      "n_events_scored": 213703,
+      "slot_labels": [
+        "continuum_0",
+        "e+e- annihilation",
+        "Al K-alpha2",
+        "Cu K-alpha1"
+      ],
+      "per_type": {
+        "gamma": {
+          "continuum_0": {
+            "posterior": 0.9960815625,
+            "prior": 0.99809890625,
+            "ratio_prior_over_post": 1.0020252796818534
+          },
+          "e+e- annihilation": {
+            "posterior": 0.004171336364746094,
+            "prior": 0.002132857971191406,
+            "ratio_prior_over_post": 0.5113128706706996
+          },
+          "Al K-alpha2": {
+            "posterior": 0.00020527267456054687,
+            "prior": 0.00020971080780029296,
+            "ratio_prior_over_post": 1.0216206723532364
+          },
+          "Cu K-alpha1": {
+            "posterior": 0.00017408246994018555,
+            "prior": 0.0001749907112121582,
+            "ratio_prior_over_post": 1.0052173046044484
+          }
+        },
+        "e-": {
+          "continuum_0": {
+            "posterior": 0.9913025147321755,
+            "prior": 0.9861121167581917,
+            "ratio_prior_over_post": 0.9947640625370691
+          },
+          "e+e- annihilation": {
+            "posterior": 0.006796927536646571,
+            "prior": 0.011917128733785485,
+            "ratio_prior_over_post": 1.753311134999254
+          },
+          "Al K-alpha2": {
+            "posterior": 0.0010602478910378102,
+            "prior": 0.001068801590363353,
+            "ratio_prior_over_post": 1.0080676409713676
+          },
+          "Cu K-alpha1": {
+            "posterior": 0.0008581302500567993,
+            "prior": 0.0009171774654782341,
+            "ratio_prior_over_post": 1.0688091527102401
+          }
+        }
+      },
+      "population": {
+        "continuum_0": {
+          "posterior": 0.9957751218250328,
+          "prior": 0.9973302929108974,
+          "ratio_prior_over_post": 1.0015617693711953
+        },
+        "e+e- annihilation": {
+          "posterior": 0.004339693738430845,
+          "prior": 0.002760242061540286,
+          "ratio_prior_over_post": 0.6360453589377807
+        },
+        "Al K-alpha2": {
+          "posterior": 0.0002600951402788004,
+          "prior": 0.00026479717061907236,
+          "ratio_prior_over_post": 1.0180781168584379
+        },
+        "Cu K-alpha1": {
+          "posterior": 0.00021794477758648885,
+          "prior": 0.00022258098881101283,
+          "ratio_prior_over_post": 1.0212724125618664
+        }
+      }
+    }
+  }
+}

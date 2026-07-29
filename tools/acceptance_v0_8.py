@@ -190,26 +190,33 @@ def generate(model, n_gen, dataset_pack, feature_pack, chunk):
     return {k: np.concatenate([p[k] for p in parts]) for k in parts[0]}
 
 
-def near_line_continuum_ratios(E_real, E_gen, recovery, scale):
+def near_line_continuum_ratios(recovery):
     """Ratio of generated to real continuum in the side-bands beside each line.
 
     This is the 'did the gate dig a hole next to the line' check: the line
     integral can look right while the continuum around it has been evacuated
     to feed it (seen in the gamma sweeps at gate_focal_gamma >= 2).
+
+    Phase A6 fix (docs/v0.8.2_RoadmapForAdoption.md S2.3, S6): this used to
+    recompute the side-bands from E_real/E_gen directly, with no notion of a
+    neighbouring real line sitting in those side-bands - exactly the blind
+    spot magi.compute_line_integral_recovery's neighbour_lines/
+    sideband_contaminated logic was built to fix for the line integral itself
+    (docs/v0.8.1_line_truth.md S9). Reusing recovery[i]["n_real_continuum"] /
+    ["n_gen_continuum"] (the side-band counts compute_line_integral_recovery
+    already computed, scaled the same way, with contamination flagged) makes
+    this row share that fix instead of re-introducing the bug next to it.
     """
     out = []
     for r in recovery:
-        c, w = r["candidate_energy_mev"], r["window_half_width_mev"]
-        lo_in, lo_out = c - 3.0 * w, c - 2.0 * w
-        hi_in, hi_out = c + 2.0 * w, c + 3.0 * w
-        nr = (np.sum((E_real >= lo_in) & (E_real <= lo_out))
-              + np.sum((E_real >= hi_in) & (E_real <= hi_out)))
-        ng = (np.sum((E_gen >= lo_in) & (E_gen <= lo_out))
-              + np.sum((E_gen >= hi_in) & (E_gen <= hi_out)))
+        nr, ng = r["n_real_continuum"], r["n_gen_continuum"]
+        usable = nr > 0 and not r["sideband_contaminated"]
         out.append({
             "label": r["label"],
-            "n_real": int(nr), "n_gen": int(ng),
-            "ratio": (float(ng * scale / nr) if nr else None),
+            "n_real": nr, "n_gen": ng,
+            "ratio": (float(ng * r["gen_scale"] / nr) if usable else None),
+            "sideband_contaminated": r["sideband_contaminated"],
+            "sideband_contaminants": r["sideband_contaminants"],
         })
     return out
 
@@ -345,7 +352,6 @@ def score_checkpoint(name, save_dir, model_name):
     log(f"  model reloaded; n_types={dataset_pack['n_types']} n_real={n_real:,} n_gen={n_gen:,}")
 
     gen = generate(model, n_gen, dataset_pack, feature_pack, args.gen_chunk)
-    scale = n_real / gen["E"].size
 
     recovery = magi.compute_line_integral_recovery(
         real["E"], gen["E"], matched, feature_pack["energy_bins"],
@@ -354,7 +360,7 @@ def score_checkpoint(name, save_dir, model_name):
         # just the modelled ones - Small's Cu Kalpha2 (63 events, below the
         # modelling floor) still deflates Cu Kalpha1's subtracted count ~2x.
         neighbour_lines=candidate_lines)
-    continuum = near_line_continuum_ratios(real["E"], gen["E"], recovery, scale)
+    continuum = near_line_continuum_ratios(recovery)
     wass = band_wasserstein(real["logE"], gen["logE"])
     coup = coupling_residuals(real, gen)
 
@@ -364,24 +370,34 @@ def score_checkpoint(name, save_dir, model_name):
           f"(+/-{recovery[0]['window_half_width_mev']*1e6:.1f} eV window, "
           f"continuum-subtracted, N_real/N_gen={recovery[0]['gen_scale']:.3f})")
     print(f"    {'line':22s} {'E [keV]':>9s} {'real_line':>10s} {'gen_line':>10s} "
-          f"{'recovery':>9s} {'routing':>8s}  verdict")
+          f"{'recovery':>9s} {'+/-stat':>8s} {'sig':>6s} {'routing':>8s}  verdict")
     for r in recovery:
         v = verdict(r["recovery_ratio"], args.line_lo, args.line_hi)
         src_pass &= (v != "FAIL")
         rec = "n/a" if r["recovery_ratio"] is None else f"{r['recovery_ratio']:9.3f}"
+        # Phase A5 (docs/v0.8.2_RoadmapForAdoption.md S6): the 1/sqrt(N)
+        # Poisson floor on this ratio, from the two counts it divides - a
+        # "failure" narrower than this is not distinguishable from noise.
+        if r["n_real_line"] > 0 and r["n_gen_line"] > 0:
+            stat = np.sqrt(1.0 / r["n_real_line"] + 1.0 / r["n_gen_line"])
+            stat_s = f"{stat*100:7.1f}%"
+        else:
+            stat_s = "n/a"
         cr = r.get("component_recovery")
         crs = "n/a" if cr is None else f"{cr:8.3f}"
         note = f"  OVERLAPS {r['overlaps_lines']}" if r["overlaps_lines"] else ""
         print(f"    {r['label']:22s} {r['candidate_energy_mev']*1e3:9.4f} "
-              f"{r['n_real_line']:10.1f} {r['n_gen_line']:10.1f} {rec} {crs}  {v}{note}")
+              f"{r['n_real_line']:10.1f} {r['n_gen_line']:10.1f} {rec} {stat_s} "
+              f"{r['line_significance']:5.1f}s {crs}  {v}{note}")
 
     print(f"\n  {name}: NEAR-LINE CONTINUUM (gate must not dig holes beside the lines)")
     for c in continuum:
         v = verdict(c["ratio"], args.continuum_lo, args.continuum_hi)
         src_pass &= (v != "FAIL")
         rs = "n/a" if c["ratio"] is None else f"{c['ratio']:.3f}"
-        print(f"    {c['label']:22s} real={c['n_real']:8d} gen={c['n_gen']:8d} "
-              f"ratio={rs}  {v}")
+        note = f"  SIDEBAND CONTAMINATED by {c['sideband_contaminants']}" if c["sideband_contaminated"] else ""
+        print(f"    {c['label']:22s} real={c['n_real']:8.1f} gen={c['n_gen']:8.1f} "
+              f"ratio={rs}  {v}{note}")
 
     print(f"\n  {name}: ENERGY MARGINAL - Wasserstein on log10(E)")
     for k, v_ in wass.items():
