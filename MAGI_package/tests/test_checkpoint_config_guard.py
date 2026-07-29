@@ -42,7 +42,7 @@ def _build_tiny_model():
 def test_to_generation_config_has_every_required_key_and_a_version_stamp():
     model = _build_tiny_model()
     config = model.to_generation_config()
-    assert config.get("config_version") == 1
+    assert config.get("config_version") == 2
     missing = [k for k in _V08_MIXTURE_REQUIRED_KEYS if k not in config]
     assert not missing
 

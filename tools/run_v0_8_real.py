@@ -51,6 +51,13 @@ parser.add_argument("--warp-boost-cr", action="store_true",
                     help="Add extra CDF-warp knots across CR's 0.39-13.2 keV line "
                          "band (log10 MeV in [-3.41,-1.88], +64 knots). No-op for "
                          "other sources. See docs/v0.8.1_line_truth.md section 11.")
+parser.add_argument("--prior-zone-conditioning", action="store_true",
+                    help="v0.8.2 Phase C candidate 1: widen the coupling prior's "
+                         "conditioning with the per-event [continuum, line_1..line_L] "
+                         "zone (real at train time, sampled from each type's "
+                         "empirical zone frequency at generation) instead of "
+                         "particle type alone. See docs/v0.8.2_RoadmapForAdoption.md "
+                         "section 6 and docs/v0.8.1_line_truth.md section 13.2.")
 args = parser.parse_args()
 
 magi.initialize_environment(seed=args.seed, cpu_only=True)
@@ -201,6 +208,25 @@ for name in args.sources:
         feat[f"gate_target_{j}"] = gate_targets[:, j]
     cont_cols = ("u_r_q","u_v_q","phi_r_q","phi_v_q","energy_y") + tuple(f"gate_target_{j}" for j in range(gate_targets.shape[1]))
     dataset_pack = magi.filter_particle_types_continuous_geometry(feat=feat, prob_threshold=1e-5, cont_cols=cont_cols)
+
+    # v0.8.2 Phase C candidate 1: each type's empirical [continuum, line_1..
+    # line_L] zone frequency, from the same real gate_target columns just
+    # appended - used only if --prior-zone-conditioning is set, to sample the
+    # prior's zone at generation time (there is no real event to read it from
+    # then). Computed unconditionally (cheap) so it's available either way.
+    n_zones = gate_targets.shape[1]
+    zone_cols = dataset_pack["X_cont_raw"][:, -n_zones:]
+    y_type_for_zones = dataset_pack["y_type"]
+    zone_probs = np.zeros((dataset_pack["n_types"], n_zones), dtype=np.float64)
+    for t in range(dataset_pack["n_types"]):
+        mask = (y_type_for_zones == t)
+        row = zone_cols[mask].mean(axis=0) if mask.any() else np.zeros(n_zones)
+        row_sum = row.sum()
+        zone_probs[t] = (row / row_sum) if row_sum > 0 else np.eye(n_zones)[0]
+    if args.prior_zone_conditioning:
+        log("zone_probs (per type, [continuum," + ",".join(m["label"] for m in matched) + "]):")
+        for t, tname in dataset_pack["idx_to_type"].items():
+            log(f"    {tname:12s} {np.round(zone_probs[t], 4)}")
     split_pack = magi.split_feature_data(dataset_pack, test_size_total=0.30, val_size_from_temp=0.50, random_state=42)
     scaled_pack = magi.scale_continuous_features(split_pack, scale_cols=())
     condition_pack = magi.build_conditioning_and_weights(scaled_pack, n_types=dataset_pack["n_types"], idx_to_type=dataset_pack["idx_to_type"], alpha=0.5)
@@ -232,7 +258,9 @@ for name in args.sources:
         # 1.08-2.57), between-line continuum 0.97/0.81/0.59 (vs 0.43/0.16/0.30) and
         # continuum core 0.807 (vs 0.655).
         gate_focal_gamma=1.0, gate_class_weights=gate_class_weights,
-        line_logsigma_init=lls, line_logsigma_trainable=False)
+        line_logsigma_init=lls, line_logsigma_trainable=False,
+        prior_zone_conditioning=args.prior_zone_conditioning,
+        zone_probs=zone_probs if args.prior_zone_conditioning else None)
     magi.compile_model(model, learning_rate=2e-4)
     log(f"training {args.epochs} epochs (warp=cdf {warp_yk.size} knots [{warp_yk[0]:.2f},{warp_yk[-1]:.2f}]; "
         f"pinned logsigma {np.round(model._line_logsigma_clipped().numpy(),2)})")

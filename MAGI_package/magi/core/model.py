@@ -2811,6 +2811,29 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
     at 0, so they start in different parts of y-space rather than
     competing from an identical starting point. Both are no-ops when
     n_continuum_components == 1.
+
+    Prior zone-conditioning (v0.8.2 Phase C candidate 1,
+    docs/v0.8.2_RoadmapForAdoption.md S6, motivated by the posterior/prior
+    gate audit in docs/v0.8.1_line_truth.md S13.2): the coupling prior
+    p(z|cond) (see core/priors.py) is conditioned on particle type alone by
+    default, but the encoder's posterior q(z|x) also sees the real event's
+    gate_target columns - i.e. which line (or continuum) it actually is.
+    That's strictly more information than type alone carries (a given type
+    crosses both continuum and several lines), which is exactly the gap the
+    S13.2 audit measured: CR's non-511 lines had a posterior/prior gate-
+    fraction mismatch that tracked their measured recovery error. When
+    prior_zone_conditioning=True, the prior's conditioning vector is
+    widened to [cond, zone] where zone is the same (n_lines+1)-wide
+    [continuum, line_1..line_L] vector already carried by y_cont's
+    gate_target columns - at training time the *real* per-event value
+    (`_prior_cond`), at generation time a *sampled* one-hot drawn from
+    `zone_probs[type]` (an (n_types, n_lines+1) empirical table - the
+    per-type real zone frequencies - passed in at construction and required
+    when this flag is set). This only changes what the prior is asked to
+    track; the decoder/gate themselves still condition on `cond` alone, so
+    their signatures and behavior are unchanged - only the *distribution of
+    z fed into them at generation* changes, hopefully to better match what
+    they were trained on near each line.
     """
 
     def __init__(
@@ -2861,6 +2884,8 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
         prior_n_layers=6,
         prior_hidden=(64, 64),
         prior_log_scale_clamp=3.0,
+        prior_zone_conditioning=False,
+        zone_probs=None,
 
         energy_sampling_temperature=1.0,
         line_logsigma_init=-2.0,
@@ -2981,6 +3006,32 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
         self.prior_hidden = tuple(prior_hidden)
         self.prior_log_scale_clamp = float(prior_log_scale_clamp)
 
+        # Phase C candidate 1 (see class docstring): widen the prior's own
+        # conditioning with the per-event zone (real at train time, sampled
+        # at generation) without touching what the encoder/decoder/gate see.
+        self.prior_zone_conditioning = bool(prior_zone_conditioning)
+        if self.prior_zone_conditioning:
+            if zone_probs is None:
+                raise ValueError(
+                    "zone_probs is required when prior_zone_conditioning=True "
+                    "- an (n_types, n_lines+1) table of each type's empirical "
+                    "[continuum, line_1..line_L] frequency, used to sample the "
+                    "zone at generation time (there is no real event to read "
+                    "it from then)."
+                )
+            zp = np.asarray(zone_probs, dtype=np.float32)
+            expected_shape = (self.n_types, self.n_lines + 1)
+            if zp.shape != expected_shape:
+                raise ValueError(
+                    f"zone_probs must have shape {expected_shape} "
+                    f"(n_types, n_lines+1), got {zp.shape}."
+                )
+            row_sums = zp.sum(axis=1, keepdims=True)
+            zp = zp / np.where(row_sums > 0, row_sums, 1.0)
+            self.zone_probs = tf.constant(zp, dtype=tf.float32)
+        else:
+            self.zone_probs = None
+
         # Architecture kwargs retained so the model is self-describing for
         # checkpoint reload (see to_generation_config / the generation loader).
         self.hidden = tuple(hidden)
@@ -2994,9 +3045,12 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
         self.beta = beta
 
         if self.prior_mode == "coupling":
+            prior_cond_dim = self.n_types + (
+                (self.n_lines + 1) if self.prior_zone_conditioning else 0
+            )
             self.prior = ConditionalCouplingPrior(
                 latent_dim=self.latent_dim,
-                cond_dim=self.n_types,
+                cond_dim=prior_cond_dim,
                 n_layers=self.prior_n_layers,
                 hidden=self.prior_hidden,
                 log_scale_clamp=self.prior_log_scale_clamp,
@@ -3639,8 +3693,9 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
             # a loader written against a newer schema can tell an old checkpoint
             # apart from a corrupt one. See
             # training.checkpointing.load_task_adaptive_model_for_generation's
-            # required-key check (v0.8.1 Phase 4).
-            "config_version": 1,
+            # required-key check (v0.8.1 Phase 4; bumped to 2 for
+            # prior_zone_conditioning/zone_probs, v0.8.2 Phase C).
+            "config_version": 2,
             "n_types": int(self.n_types),
             "line_positions_y": [float(v) for v in self.line_positions_y.numpy()],
             "latent_dim": int(self.latent_dim),
@@ -3677,6 +3732,10 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
             "prior_n_layers": int(self.prior_n_layers),
             "prior_hidden": list(self.prior_hidden),
             "prior_log_scale_clamp": float(self.prior_log_scale_clamp),
+            "prior_zone_conditioning": bool(self.prior_zone_conditioning),
+            "zone_probs": (
+                None if self.zone_probs is None else self.zone_probs.numpy().tolist()
+            ),
             "line_logsigma_trainable": bool(self.line_logsigma_trainable),
             "energy_sampling_temperature": float(self.energy_sampling_temperature),
             "stem_width": int(self.stem_width),
@@ -3704,19 +3763,36 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
         uniform = 1.0 / float(self.n_continuum_components)
         return tf.reduce_sum(tf.square(mean_usage - uniform))
 
-    def _kl_per(self, z, z_mean, z_logvar, cond):
+    def _prior_cond_from_real(self, cond, y_cont_true):
+        """Training-time conditioning vector for the prior (see class
+        docstring, "Prior zone-conditioning"): [cond, real zone] when enabled,
+        else just cond. The real zone is the same gate_target columns
+        _reconstruction_terms reads - the event's actual [continuum,
+        line_1..line_L] membership, unavailable at generation time (that's
+        what makes this a Monte-Carlo KL rather than a free lunch: the prior
+        is trained to track a signal it must instead sample at generation)."""
+        if not self.prior_zone_conditioning:
+            return cond
+        zone_true = y_cont_true[:, 5:5 + self.n_lines + 1]
+        return tf.concat([cond, zone_true], axis=1)
+
+    def _kl_per(self, z, z_mean, z_logvar, cond, prior_cond=None):
         """Per-event KL(q(z|x) || p(z)).
 
         Closed form for the fixed N(0, I) prior (prior="gaussian"); a
         single-sample Monte-Carlo estimate log q(z|x) - log p(z|cond) for the
         learned coupling prior (prior="coupling"), reusing the z already
-        sampled in the step.
+        sampled in the step. `prior_cond` (defaults to `cond`) lets the prior
+        see a wider conditioning vector than the rest of the model - see
+        _prior_cond_from_real / prior_zone_conditioning.
         """
+        if prior_cond is None:
+            prior_cond = cond
         if self.prior_mode == "coupling":
             log_qz = tf.reduce_sum(
                 gaussian_logpdf(z, z_mean, 0.5 * z_logvar), axis=1
             )
-            log_pz = self.prior.log_prob(z, cond)
+            log_pz = self.prior.log_prob(z, prior_cond)
             return log_qz - log_pz
         return -0.5 * tf.reduce_sum(
             1.0 + z_logvar - tf.square(z_mean) - tf.exp(z_logvar),
@@ -3869,7 +3945,8 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
             rec = tf.reduce_mean(rec_per_weighted)
             nll = tf.reduce_mean(rec_per)
 
-            kl_per = self._kl_per(z, z_mean, z_logvar, cond)
+            prior_cond = self._prior_cond_from_real(cond, y_cont)
+            kl_per = self._kl_per(z, z_mean, z_logvar, cond, prior_cond=prior_cond)
             kl = tf.reduce_mean(kl_per)
 
             sigma_reg = self._sigma_regularizer(params)
@@ -3947,7 +4024,8 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
         rec = tf.reduce_mean(rec_per_weighted)
         nll = tf.reduce_mean(rec_per)
 
-        kl_per = self._kl_per(z, z_mean, z_logvar, cond)
+        prior_cond = self._prior_cond_from_real(cond, y_cont)
+        kl_per = self._kl_per(z, z_mean, z_logvar, cond, prior_cond=prior_cond)
         kl = tf.reduce_mean(kl_per)
 
         sigma_reg = self._sigma_regularizer(params)
@@ -4006,7 +4084,21 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
             # now matches the aggregated posterior the decoder trained on, while
             # the energy flow/gate keep reading z (energy<->geometry coupling
             # preserved). cond already has n_samples rows.
-            z = self.prior.sample(cond)
+            if self.prior_zone_conditioning:
+                # No real event to read the zone from here - sample one from
+                # this event's type-conditional empirical zone frequency
+                # instead (see class docstring). decode() below still only
+                # sees `cond`, so this only changes which region of z-space
+                # gets sampled, not the decoder's own inputs.
+                type_idx = tf.argmax(cond, axis=1, output_type=tf.int32)
+                zone_p = tf.gather(self.zone_probs, type_idx)
+                zone_idx = tf.random.categorical(tf.math.log(zone_p + 1e-12), num_samples=1)
+                zone_idx = tf.cast(tf.squeeze(zone_idx, axis=1), tf.int32)
+                zone_onehot = tf.one_hot(zone_idx, depth=self.n_lines + 1, dtype=tf.float32)
+                prior_cond = tf.concat([cond, zone_onehot], axis=1)
+            else:
+                prior_cond = cond
+            z = self.prior.sample(prior_cond)
         else:
             z = tf.random.normal((n_samples, self.latent_dim))
         params = self.decode(z, cond)

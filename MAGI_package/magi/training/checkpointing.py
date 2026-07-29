@@ -452,6 +452,19 @@ def load_json(path):
 # (v0.8.1 Phase 4 config-match guard). Keep this in sync with that method -
 # it is the checked contract between "what training saved" and "what loading
 # assumes". "model_class" and "config_version" are handled separately.
+#
+# Deliberate exception: "prior_zone_conditioning"/"zone_probs" (v0.8.2 Phase C,
+# config_version 2) are emitted by to_generation_config() but NOT required
+# here. Every checkpoint saved before this feature existed (config_version 1)
+# lacks them, and unlike the rest of this list, a missing value here has an
+# unambiguous, SAFE default: prior_zone_conditioning=False reconstructs the
+# exact pre-existing architecture (prior cond_dim = n_types, nothing else
+# changes) rather than a silently-different one. That is exactly the failure
+# mode the rest of this guard exists to prevent for the OTHER keys, where a
+# default like continuum_mode="gaussian" is a real, different, wrong
+# architecture - so making these two required would just break every existing
+# v0.8/v0.8.1 checkpoint for no safety benefit. See the .get() calls for these
+# two keys below.
 _V08_MIXTURE_REQUIRED_KEYS = (
     "n_types", "line_positions_y", "latent_dim", "hidden", "beta",
     "n_continuum_components", "min_log_sigma", "max_log_sigma", "sigma_target",
@@ -796,6 +809,11 @@ def load_task_adaptive_model_for_generation(
             prior_n_layers=model_config.get("prior_n_layers", 6),
             prior_hidden=tuple(model_config.get("prior_hidden", (64, 64))),
             prior_log_scale_clamp=model_config.get("prior_log_scale_clamp", 3.0),
+            # v0.8.2 Phase C, config_version 2 - absent (False/None) on every
+            # pre-existing checkpoint, which is the correct backward-compatible
+            # default; see the comment on _V08_MIXTURE_REQUIRED_KEYS above.
+            prior_zone_conditioning=model_config.get("prior_zone_conditioning", False),
+            zone_probs=model_config.get("zone_probs"),
 
             line_logsigma_trainable=model_config.get("line_logsigma_trainable", True),
             energy_sampling_temperature=model_config.get(
