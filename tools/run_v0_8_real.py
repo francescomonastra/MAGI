@@ -40,6 +40,17 @@ parser.add_argument("--n-gen", type=int, default=0,
                          "line-recovery ratio; compute_line_integral_recovery now "
                          "normalizes for it, but matching the real count keeps the "
                          "spectra and the sparse-tail Poisson noise honest.")
+parser.add_argument("--continuum-flow-bins", type=int, default=24,
+                    help="RQS spline bins per transform for the continuum flow. "
+                         "v0.8.1 Phase 3 attempt #1 found 32 degraded every CR "
+                         "Wasserstein band incl. the untouched high-E/muon one when "
+                         "combined with --warp-boost-cr in the same run; this flag "
+                         "lets the two levers be tested independently. See "
+                         "docs/v0.8.1_line_truth.md section 11.")
+parser.add_argument("--warp-boost-cr", action="store_true",
+                    help="Add extra CDF-warp knots across CR's 0.39-13.2 keV line "
+                         "band (log10 MeV in [-3.41,-1.88], +64 knots). No-op for "
+                         "other sources. See docs/v0.8.1_line_truth.md section 11.")
 args = parser.parse_args()
 
 magi.initialize_environment(seed=args.seed, cpu_only=True)
@@ -92,6 +103,22 @@ candidate_lines = magi.load_candidate_energy_lines(CANDIDATE_LINES_FILE)["lines"
 # +-20% effect). The plumbing below is correct and tested; drop a calibrated
 # table back in once the noise floor is known.
 GATE_CLASS_WEIGHTS_BY_LABEL = {}
+
+# v0.8.1 Phase 3 (continuum polish) attempt #1: CR's worst per-band Wasserstein
+# score is [-3.41,-1.88) in log10(E/MeV) = 0.39-13.2 keV, ~5x the global score,
+# and every modelled CR fluorescence line lives inside it. Tried a CR-only CDF-warp
+# knot boost there (--run-tag v0_8_1_phase3) together with continuum_flow_bins
+# 24->32 on both sources. NEGATIVE RESULT: every CR band got worse (target band
+# +14%, global +23%, the high-E/muon guard band +45%, coupling 0.041->0.048), and
+# the two levers were confounded in one run so neither can be attributed. Small
+# (bins bump only) was mixed to mildly positive. See docs/v0.8.1_line_truth.md
+# section 11 for the full table. Reverted to empty here; the plumbing in
+# magi.fit_cdf_warp_knots(boost_ranges=...) is correct and tested - only the
+# calibration is withdrawn. trained_models/v0_8_1_cuka2_CR and v0_8_1_Small
+# remain the reference checkpoints, NOT the v0_8_1_phase3_* ones. Now
+# controllable via --continuum-flow-bins / --warp-boost-cr to split the two
+# confounded levers apart.
+WARP_BOOST_RANGES_BY_SOURCE = {"CR": [(-3.41, -1.88, 64)]} if args.warp_boost_cr else {}
 
 T0 = time.time()
 def log(msg): print(f"[{time.time()-T0:6.0f}s] {msg}", flush=True)
@@ -188,11 +215,13 @@ for name in args.sources:
     # low-E tail both land inside [-B,B] with resolution where the events are.
     # Validated on the --sparse-tail synthetic (deep-tail window 0.00 affine ->
     # 0.96 cdf). See docs/v0.8_v072_comparison.md sec 6(b).
-    warp_yk, warp_zk = magi.fit_cdf_warp_knots(ey, n_knots=256, eps=1e-4)
+    warp_yk, warp_zk = magi.fit_cdf_warp_knots(
+        ey, n_knots=256, eps=1e-4,
+        boost_ranges=WARP_BOOST_RANGES_BY_SOURCE.get(name))
     model = magi.CVAE_MixEnergy_ContPhi_TaskAdaptive(
         n_types=dataset_pack["n_types"], line_positions_y=line_positions_y, latent_dim=8,
         hidden=(128,128,64), beta=0.2, continuum_mode="flow",
-        continuum_flow_bins=24, continuum_flow_transforms=3,
+        continuum_flow_bins=args.continuum_flow_bins, continuum_flow_transforms=3,
         continuum_flow_warp="cdf",
         continuum_flow_warp_y_knots=warp_yk, continuum_flow_warp_z_knots=warp_zk,
         energy_flow_condition="z_cond", prior="coupling", w_gate_aux=2.0,

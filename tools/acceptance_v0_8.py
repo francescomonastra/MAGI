@@ -36,7 +36,20 @@ parser.add_argument("--run-tag", default="v0_8_1",
                          "must match the --run-tag the checkpoint was saved with "
                          "(run_v0_8_real.py's default is v0_8).")
 parser.add_argument("--save-dir-suffix", default="",
-                    help="e.g. _seed7, to score a multi-seed checkpoint")
+                    help="e.g. _seed7, to score a multi-seed checkpoint. Ignored "
+                         "when --seeds is given (the suffix is then derived per "
+                         "seed, matching run_v0_8_real.py's own convention).")
+parser.add_argument("--seeds", type=int, nargs="+", default=None,
+                    help="Score a checkpoint already trained for each of these "
+                         "seeds (e.g. --seeds 42 7 13) and report mean+/-std per "
+                         "metric across seeds, in addition to each seed's own "
+                         "table. Checkpoint dirs are derived the same way "
+                         "run_v0_8_real.py names them: trained_models/<run-tag>_"
+                         "<source> for seed 42, trained_models/<run-tag>_<source>"
+                         "_seed<N> otherwise. A single per-band Wasserstein score "
+                         "swings by tens of percent between seeds of the "
+                         "identical config (docs/v0.8.1_line_truth.md section "
+                         "11.2) - do not draw conclusions from a single seed.")
 parser.add_argument("--n-gen", type=int, default=0,
                     help="events to generate; 0 (default) = the real event count")
 parser.add_argument("--gen-chunk", type=int, default=1_000_000)
@@ -239,24 +252,79 @@ def verdict(value, lo, hi):
     return "PASS" if lo <= value <= hi else "FAIL"
 
 
-candidate_lines = magi.load_candidate_energy_lines(CANDIDATE_LINES_FILE)["lines"]
-report = {"seed": args.seed, "resolution_ev": args.resolution_ev,
-          "thresholds": {"line": [args.line_lo, args.line_hi],
-                         "continuum": [args.continuum_lo, args.continuum_hi],
-                         "wasserstein_max": args.wasserstein_max,
-                         "coupling_max": args.coupling_max},
-          "sources": {}}
-all_pass = True
+def aggregate_over_seeds(seed_reports):
+    """Mean+/-std per metric across a list of per-seed report dicts (as stored
+    in report["sources"][name]["seeds"][seed]). Skips None values (e.g. a line
+    with no valid recovery_ratio in some seed) rather than propagating NaN, and
+    reports how many seeds actually contributed to each number."""
+    def mean_std(vals):
+        vals = [v for v in vals if v is not None]
+        if not vals:
+            return None
+        arr = np.asarray(vals, dtype=np.float64)
+        return {"mean": float(arr.mean()),
+                "std": float(arr.std()) if arr.size > 1 else 0.0,
+                "n": int(arr.size)}
 
-for name in args.sources:
-    log("=" * 62)
-    log(f"SOURCE: {name}")
-    save_dir = f"trained_models/{args.run_tag}_{name}{args.save_dir_suffix}"
-    model_name = f"mix_{name}"
+    agg = {"n_seeds": len(seed_reports)}
+
+    labels = [r["label"] for r in seed_reports[0]["recovery"]]
+    agg["recovery"] = {}
+    for lbl in labels:
+        rows = [next((r for r in sr["recovery"] if r["label"] == lbl), None)
+                for sr in seed_reports]
+        agg["recovery"][lbl] = {
+            "recovery_ratio": mean_std([r["recovery_ratio"] for r in rows if r]),
+            "component_recovery": mean_std([r["component_recovery"] for r in rows if r]),
+        }
+
+    cont_labels = [c["label"] for c in seed_reports[0]["near_line_continuum"]]
+    agg["near_line_continuum"] = {
+        lbl: mean_std([
+            next((c["ratio"] for c in sr["near_line_continuum"] if c["label"] == lbl), None)
+            for sr in seed_reports])
+        for lbl in cont_labels
+    }
+
+    wass_keys = list(seed_reports[0]["wasserstein_logE"].keys())
+    agg["wasserstein_logE"] = {
+        k: mean_std([sr["wasserstein_logE"].get(k) for sr in seed_reports])
+        for k in wass_keys
+    }
+
+    agg["coupling_max_abs"] = mean_std([sr["coupling"]["max_abs"] for sr in seed_reports])
+    agg["pass_fraction"] = sum(1 for sr in seed_reports if sr["pass"]) / len(seed_reports)
+    return agg
+
+
+def print_aggregate(name, agg):
+    print(f"\n  {name}: MEAN +/- STD OVER {agg['n_seeds']} SEEDS")
+    print(f"  {name}: line recovery")
+    for lbl, d in agg["recovery"].items():
+        rr, cr = d["recovery_ratio"], d["component_recovery"]
+        rr_s = "n/a" if rr is None else f"{rr['mean']:.3f} +/- {rr['std']:.3f} (n={rr['n']})"
+        cr_s = "n/a" if cr is None else f"{cr['mean']:.3f} +/- {cr['std']:.3f} (n={cr['n']})"
+        print(f"    {lbl:22s} recovery={rr_s:28s} comp_rec={cr_s}")
+    print(f"  {name}: near-line continuum")
+    for lbl, d in agg["near_line_continuum"].items():
+        s = "n/a" if d is None else f"{d['mean']:.3f} +/- {d['std']:.3f} (n={d['n']})"
+        print(f"    {lbl:22s} ratio={s}")
+    print(f"  {name}: Wasserstein on log10(E)")
+    for k, d in agg["wasserstein_logE"].items():
+        if d is None:
+            continue
+        print(f"    {k:22s} {d['mean']:.5f} +/- {d['std']:.5f} (n={d['n']})")
+    d = agg["coupling_max_abs"]
+    print(f"  {name}: coupling max|corr_gen-corr_real| = {d['mean']:.3f} +/- {d['std']:.3f} (n={d['n']})")
+    print(f"  {name}: {agg['pass_fraction']*100:.0f}% of seeds PASS overall")
+
+
+def score_checkpoint(name, save_dir, model_name):
+    """Score one trained checkpoint; returns a report dict or None if missing."""
     cfg_path = os.path.join(save_dir, f"{model_name}_config.json")
     if not os.path.exists(cfg_path):
         log(f"  SKIP: no checkpoint at {cfg_path}")
-        continue
+        return None
 
     with open(cfg_path) as f:
         model_config = json.load(f)
@@ -330,12 +398,56 @@ for name in args.sources:
           f"({coup['worst_pair']}: real {coup['real']:+.3f} -> gen {coup['gen']:+.3f})  {vc}")
 
     print(f"\n  ==> {name}: {'PASS' if src_pass else 'FAIL'}\n")
-    all_pass &= src_pass
-    report["sources"][name] = {
+    return {
         "n_real": int(n_real), "n_gen": int(gen["E"].size),
         "recovery": recovery, "near_line_continuum": continuum,
         "wasserstein_logE": wass, "coupling": coup, "pass": bool(src_pass),
     }
+
+
+candidate_lines = magi.load_candidate_energy_lines(CANDIDATE_LINES_FILE)["lines"]
+report = {"resolution_ev": args.resolution_ev,
+          "thresholds": {"line": [args.line_lo, args.line_hi],
+                         "continuum": [args.continuum_lo, args.continuum_hi],
+                         "wasserstein_max": args.wasserstein_max,
+                         "coupling_max": args.coupling_max},
+          "sources": {}}
+all_pass = True
+
+for name in args.sources:
+    log("=" * 62)
+    log(f"SOURCE: {name}")
+    model_name = f"mix_{name}"
+
+    if args.seeds:
+        seed_reports = {}
+        for seed in args.seeds:
+            suffix = "" if seed == 42 else f"_seed{seed}"
+            save_dir = f"trained_models/{args.run_tag}_{name}{suffix}"
+            log(f"  -- seed {seed} ({save_dir}) --")
+            magi.initialize_environment(seed=seed, cpu_only=True)
+            r = score_checkpoint(name, save_dir, model_name)
+            if r is not None:
+                seed_reports[seed] = r
+        if not seed_reports:
+            continue
+        reports_list = list(seed_reports.values())
+        agg = aggregate_over_seeds(reports_list) if len(reports_list) > 1 else None
+        if agg is not None:
+            print_aggregate(name, agg)
+            src_pass = agg["pass_fraction"] == 1.0
+        else:
+            log(f"  only 1/{ len(args.seeds) } seeds had a checkpoint - no aggregate")
+            src_pass = reports_list[0]["pass"]
+        all_pass &= src_pass
+        report["sources"][name] = {"seeds": seed_reports, "aggregate": agg, "pass": bool(src_pass)}
+    else:
+        save_dir = f"trained_models/{args.run_tag}_{name}{args.save_dir_suffix}"
+        r = score_checkpoint(name, save_dir, model_name)
+        if r is None:
+            continue
+        all_pass &= r["pass"]
+        report["sources"][name] = r
 
 report["pass"] = bool(all_pass)
 print(f"OVERALL: {'PASS' if all_pass else 'FAIL'}")

@@ -1090,7 +1090,7 @@ def line_logsigma_from_resolution(line_energies_mev, resolution_ev, fwhm=True):
     return np.log(sigma_y).astype(np.float32)
 
 
-def fit_cdf_warp_knots(y, n_knots=256, eps=1.0e-4, min_gap=1.0e-6):
+def fit_cdf_warp_knots(y, n_knots=256, eps=1.0e-4, min_gap=1.0e-6, boost_ranges=None):
     """Fit a monotone empirical-CDF -> standard-normal warp for the continuum
     flow's standardization (ConditionalRQSFlow warp_mode='cdf').
 
@@ -1116,6 +1116,19 @@ def fit_cdf_warp_knots(y, n_knots=256, eps=1.0e-4, min_gap=1.0e-6):
     min_gap : float
         Minimum spacing enforced between successive y_knots so the map stays
         strictly increasing (flat/degenerate quantiles are nudged apart).
+    boost_ranges : list of (y_lo, y_hi, n_extra) or None
+        Extra quantile anchors to add inside specific y-ranges, on top of the
+        base uniform-in-probability grid. The base grid is already
+        density-proportional (equal probability mass per knot), but a region
+        with sharp local structure -- multiple narrow fluorescence lines packed
+        into one probability-mass interval -- can still be under-resolved by
+        the piecewise-linear warp even when its density is unremarkable. Each
+        (y_lo, y_hi, n_extra) adds n_extra knots spaced uniformly in
+        probability between the empirical-CDF levels of y_lo and y_hi. Used
+        for v0.8.1 Phase 3 to concentrate resolution across CR's
+        0.39-13.2 keV band, where every modelled fluorescence line lives and
+        which has the worst per-band Wasserstein score (see
+        docs/v0.8.1_line_truth.md section 10.5 / Phase 3).
 
     Returns
     -------
@@ -1130,6 +1143,20 @@ def fit_cdf_warp_knots(y, n_knots=256, eps=1.0e-4, min_gap=1.0e-6):
         raise ValueError("y must have >= 2 finite values to fit a warp.")
 
     p = np.linspace(float(eps), 1.0 - float(eps), int(n_knots))
+    if boost_ranges:
+        y_sorted = np.sort(y)
+        extra = [p]
+        for y_lo, y_hi, n_extra in boost_ranges:
+            if int(n_extra) <= 0:
+                continue
+            p_lo = np.searchsorted(y_sorted, float(y_lo)) / y_sorted.size
+            p_hi = np.searchsorted(y_sorted, float(y_hi)) / y_sorted.size
+            p_lo = max(p_lo, float(eps))
+            p_hi = min(p_hi, 1.0 - float(eps))
+            if p_hi > p_lo:
+                extra.append(np.linspace(p_lo, p_hi, int(n_extra)))
+        p = np.unique(np.concatenate(extra))
+
     z = ndtri(p)                       # standard-normal quantiles (strictly incr.)
     yk = np.quantile(y, p)             # data quantiles
 
