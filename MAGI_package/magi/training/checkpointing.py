@@ -448,6 +448,25 @@ def load_json(path):
         return json.load(f)
     
 
+# Every key CVAE_MixEnergy_ContPhi_TaskAdaptive.to_generation_config() emits
+# (v0.8.1 Phase 4 config-match guard). Keep this in sync with that method -
+# it is the checked contract between "what training saved" and "what loading
+# assumes". "model_class" and "config_version" are handled separately.
+_V08_MIXTURE_REQUIRED_KEYS = (
+    "n_types", "line_positions_y", "latent_dim", "hidden", "beta",
+    "n_continuum_components", "min_log_sigma", "max_log_sigma", "sigma_target",
+    "lambda_sigma", "continuum_mode", "energy_flow_condition",
+    "gate_focal_gamma", "gate_class_weights", "continuum_flow_bins",
+    "continuum_flow_transforms", "continuum_flow_interval",
+    "continuum_flow_conditioner_hidden", "continuum_flow_y_mean",
+    "continuum_flow_y_scale", "continuum_flow_warp",
+    "continuum_flow_warp_y_knots", "continuum_flow_warp_z_knots", "prior",
+    "prior_n_layers", "prior_hidden", "prior_log_scale_clamp",
+    "line_logsigma_trainable", "energy_sampling_temperature", "stem_width",
+    "deep_decoder_hidden", "energy_branch_hidden", "energy_cont_head_hidden",
+)
+
+
 def load_task_adaptive_model_for_generation(
     *,
     save_dir,
@@ -475,15 +494,19 @@ def load_task_adaptive_model_for_generation(
     `model_config` must be the dict saved next to the weights - pass the one
     from the checkpoint, not a hand-written one.
 
-    CAVEAT: the architecture is rebuilt entirely from `model_config.get(key,
-    <default>)`, with no check that the keys are present. A missing or renamed
-    key therefore yields a *different* architecture rather than an error: for a
-    v0.8 run the fallbacks are continuum_mode="gaussian", prior="gaussian" and
-    continuum_flow_warp="affine", so a config that lost those keys loads a model
-    whose weights no longer mean what they did at training time, and generation
-    is quietly wrong. Adding the config-match guard is v0.8.2/Phase 4 work; for
-    now, keep each checkpoint's JSON files together with its weights and treat
-    the directory as one unit.
+    For `CVAE_MixEnergy_ContPhi_TaskAdaptive` (v0.8), every key
+    `model.to_generation_config()` is documented to emit is required to be
+    present in `model_config` - see `_V08_MIXTURE_REQUIRED_KEYS` below. This
+    used to be `model_config.get(key, <default>)` everywhere, so a missing or
+    renamed key (e.g. from schema drift between a checkpoint's config_version
+    and this loader) silently yielded a *different* architecture rather than
+    an error: the fallbacks were continuum_mode="gaussian", prior="gaussian"
+    and continuum_flow_warp="affine", none of which raise on weight-shape
+    mismatch on their own (they select a code path, not just a layer shape),
+    so generation would be quietly wrong instead of failing loudly. Still keep
+    each checkpoint's JSON files together with its weights - the guard catches
+    a missing/renamed *key*, not a value that was saved wrong in the first
+    place.
     """
     import os
     import json
@@ -718,6 +741,21 @@ def load_task_adaptive_model_for_generation(
         # input is [y_cont, cond] (no one-hot energy) and y_cont carries the
         # gate-target columns: y_cont_dim = 4 geometry + 1 energy_y +
         # (n_lines + 1) gate targets.
+        missing = [k for k in _V08_MIXTURE_REQUIRED_KEYS if k not in model_config]
+        if missing:
+            raise ValueError(
+                f"model_config for {model_class} is missing required key(s) "
+                f"{missing}. This checkpoint's config_version is "
+                f"{model_config.get('config_version', '<none, pre-v0.8.1 Phase 4>')} "
+                "- either it predates a key this loader now requires, or the "
+                "config was hand-edited/truncated. Rebuilding the architecture "
+                "with a silent default for these keys (the old behavior) can "
+                "load weights into the wrong sub-architecture without any "
+                "error, so this raises instead. Restore the key(s) from "
+                "model.to_generation_config() at the time this checkpoint was "
+                "saved, or regenerate the config."
+            )
+
         line_positions_y = np.asarray(
             model_config["line_positions_y"], dtype=np.float32
         )

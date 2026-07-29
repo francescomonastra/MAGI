@@ -3635,6 +3635,12 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
         """
         return {
             "model_class": "CVAE_MixEnergy_ContPhi_TaskAdaptive",
+            # Bump when a key this config relies on is added/renamed/removed, so
+            # a loader written against a newer schema can tell an old checkpoint
+            # apart from a corrupt one. See
+            # training.checkpointing.load_task_adaptive_model_for_generation's
+            # required-key check (v0.8.1 Phase 4).
+            "config_version": 1,
             "n_types": int(self.n_types),
             "line_positions_y": [float(v) for v in self.line_positions_y.numpy()],
             "latent_dim": int(self.latent_dim),
