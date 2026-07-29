@@ -23,12 +23,26 @@ import magi
 magi.initialize_environment(seed=42)
 ```
 
+## Tests
+
+A minimal regression suite (v0.8.1 Phase 4) covers the pieces that fail silently
+rather than loudly: flow/prior round-trip identity, line-integral recovery on
+synthetic spectra, the coupling prior actually fitting an injected coupling, the
+checkpoint config-match guard, and the Geant4 export script end-to-end. Runs in
+under 30s, CPU only.
+
+```bash
+pip install pytest
+pytest MAGI_package/tests/
+```
+
 ## Package structure
 
 ```
 MAGI_package/
 ├── setup.py
 ├── README.md
+├── tests/              # minimal regression suite, see above
 ├── docs/
 │   └── USAGE.md
 └── magi/
