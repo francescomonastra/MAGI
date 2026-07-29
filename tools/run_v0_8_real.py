@@ -11,7 +11,7 @@ import os
 # tensorflow_probability and would otherwise initialize the Metal device, after
 # which set_visible_devices no longer takes effect.
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
-import argparse, time, numpy as np
+import argparse, time, numpy as np, joblib
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -255,8 +255,30 @@ for name in args.sources:
     # runs never clobber the reference checkpoint)
     suffix = "" if args.seed == 42 else f"_seed{args.seed}"
     save_dir = f"trained_models/{args.run_tag}_{name}{suffix}"
+    # scripts/generate_geant_source.py (what a Geant4 macro's /generator/mlScript
+    # invokes) reads n_types/type_probs/idx_to_type/geometry_transform/
+    # energy_transform from metadata["preprocessing_metadata"] and the fitted
+    # quantile transformers from a sibling .joblib file - both omitted here
+    # before v0.8.1 Phase 4, which left every checkpoint from this script
+    # unusable for Geant4 export (KeyError on preprocessing_metadata["idx_to_type"]
+    # against the empty dict save_final_trained_model defaults to). Mirrors what
+    # MAGI_v0_8_1.ipynb's save cell has always done.
+    preprocessing_metadata = {
+        "source": name,
+        "geometry_transform": "quantile_u_r_u_v_phi_r_phi_v",
+        "energy_transform": "log10",
+        "energy_bins": np.asarray(feature_pack["energy_bins"]).tolist(),
+        "type_probs": np.asarray(dataset_pack["type_probs"]).tolist(),
+        "idx_to_type": dataset_pack["idx_to_type"],
+        "n_types": int(dataset_pack["n_types"]),
+        "radius": R,
+        "center": list(center),
+    }
     magi.save_final_trained_model(model=model, save_dir=save_dir, model_name=f"mix_{name}",
-                                  model_config=model.to_generation_config())
+                                  model_config=model.to_generation_config(),
+                                  preprocessing_metadata=preprocessing_metadata)
+    joblib.dump(feature_pack["quantile_transformers"],
+                f"{save_dir}/mix_{name}_quantile_transformers.joblib")
     log(f"checkpoint saved -> {save_dir}/")
 
     # Generate + validate (chunked). Default n_gen = the real event count.
