@@ -1180,6 +1180,7 @@ def build_gate_targets(
     bandwidth_mode="bins",
     bandwidth_fwhm_mev=None,
     bandwidth_sigma=3.0,
+    exact_tol_mev=1e-8,
 ):
     """
     Soft per-event target distribution over {continuum, line_1..line_L},
@@ -1213,7 +1214,7 @@ def build_gate_targets(
     resolution_mev : float or None
         If given, widens the bandwidth to at least this value
         (bandwidth_mode="bins" only).
-    bandwidth_mode : {"bins", "resolution"}
+    bandwidth_mode : {"bins", "resolution", "exact"}
         How the per-line Gaussian bandwidth is set.
 
         "bins" (legacy) scales it with the local *detection bin* width, which
@@ -1230,16 +1231,49 @@ def build_gate_targets(
 
         "resolution" sets the bandwidth from the physical line width instead:
         `bandwidth_sigma * bandwidth_fwhm_mev / 2.3548`, independent of the
-        binning. This is the mode to use whenever the line widths are pinned to
-        a detector resolution.
+        binning. Sounds right, but conflates two different things: the
+        *detector's* resolution (how wide a line would look after being
+        measured) is not the same as the *identification* bandwidth (which
+        real training-data events actually came from a line-emission process).
+        The raw simulation output has no detector response applied - a
+        fluorescence photon's energy is the exact catalogued transition
+        energy, with zero physical spread (confirmed on real data: CR's Cu
+        Kalpha1 has exactly 7,542 events at the identical float64 value
+        0.00800571 MeV, Cu Kalpha2 exactly 3,939 at 0.00798467, and every
+        other nearby event is a singleton - genuine, sparse continuum). A
+        Gaussian kernel of detector-resolution width therefore hands
+        significant weight (e.g. exp(-0.5) at one bandwidth away) to nearby
+        continuum events that are NOT physically line photons, and - worse
+        for two close lines like Cu Kalpha1/Kalpha2 (21 eV apart) - broadens
+        the identification enough to blur what should be a clean separation.
+        See "exact" below for the fix; "resolution" is kept for
+        reproducibility of pre-v0.8.2 runs.
+        "exact" identifies line membership the way the simulation actually
+        works: an event counts as line `l` only if it matches `line_positions
+        [l]` to within `exact_tol_mev` (a numerical-precision tolerance, not a
+        physical width - default 1e-8 MeV = 0.01 eV, far tighter than any
+        line spacing in the candidate tables but loose enough for float
+        round-trip noise). This is a hard 0/1 assignment, not a kernel - there
+        is no "bandwidth" to speak of, because the true underlying line has no
+        width to approximate. `bandwidth_fwhm_mev`/`bandwidth_sigma` are
+        unused in this mode; the detector's actual 4 eV FWHM still applies
+        exactly where it always did - as the model's own pinned generative
+        width (`line_logsigma_init`) - only the *training label* changes.
     bandwidth_fwhm_mev : float, sequence of float, or None
         Line FWHM in MeV, required by bandwidth_mode="resolution" (e.g. 4e-6
         for X-IFU's 4 eV). A sequence of length n_lines gives a per-line width,
-        for cases where the physical widths differ between lines.
+        for cases where the physical widths differ between lines. Unused for
+        "exact".
     bandwidth_sigma : float
         Bandwidth in units of the line sigma, for bandwidth_mode="resolution".
         3 sigma keeps essentially all true line events while limiting the
         mislabelled continuum to the few events within a few eV of the line.
+        Unused for "exact".
+    exact_tol_mev : float
+        Match tolerance for bandwidth_mode="exact", in MeV. Default 1e-8 MeV
+        (0.01 eV) - comfortably tighter than the closest candidate-table
+        spacing (Al Kalpha1/Kalpha2 at 0.5 eV) while tolerant of any float32/
+        float64 round-trip noise upstream. Unused for other modes.
     continuum_floor : float or None
         Minimum unnormalized weight given to the continuum slot for every
         event, so events far from every line get a target close to
@@ -1252,11 +1286,12 @@ def build_gate_targets(
             dataset with known mixture weights (paired with
             CVAE_MixEnergy_ContPhi_TaskAdaptive's default w_gate_aux=0.3);
             with a wide bandwidth a smaller floor over-weights the lines.
-          - "resolution": 0.02. With a bandwidth of a few eV, events far from
-            every line already normalize to an all-continuum target whatever
-            the floor, so its only remaining effect is to dilute genuine line
-            events by 1/(1 + floor) - 0.15 would label every true line event
-            as 13% continuum and systematically under-route the lines.
+          - "resolution", "exact": 0.02. With a bandwidth of a few eV (or a
+            hard 0/1 match), events far from every line already normalize to
+            an all-continuum target whatever the floor, so its only remaining
+            effect is to dilute genuine line events by 1/(1 + floor) - 0.15
+            would label every true line event as 13% continuum and
+            systematically under-route the lines.
     max_bandwidth_frac_of_spacing : float or None
         Caps each line's bandwidth at this fraction of the distance to its
         nearest OTHER matched line, so two close lines can't bleed gate
@@ -1287,8 +1322,8 @@ def build_gate_targets(
         [float(m["candidate_energy_mev"]) for m in matched_lines], dtype=np.float64
     )
 
-    if bandwidth_mode not in ("bins", "resolution"):
-        raise ValueError("bandwidth_mode must be 'bins' or 'resolution'")
+    if bandwidth_mode not in ("bins", "resolution", "exact"):
+        raise ValueError("bandwidth_mode must be 'bins', 'resolution', or 'exact'")
     fwhm_per_line = None
     if bandwidth_mode == "resolution":
         if bandwidth_fwhm_mev is None:
@@ -1302,11 +1337,18 @@ def build_gate_targets(
         if not np.all(fwhm_per_line > 0):
             raise ValueError("bandwidth_fwhm_mev values must be > 0")
     if continuum_floor is None:
-        continuum_floor = 0.02 if bandwidth_mode == "resolution" else 0.15
+        continuum_floor = 0.15 if bandwidth_mode == "bins" else 0.02
 
     weights = np.zeros((n, n_lines), dtype=np.float64)
     for l, line in enumerate(matched_lines):
         E_c = line_positions[l]
+        if bandwidth_mode == "exact":
+            # No kernel: the true line has no width to approximate (see
+            # docstring). A hard match is both simpler and more correct than
+            # a very narrow Gaussian, and sidesteps ever having to compare a
+            # bandwidth against max_bandwidth_frac_of_spacing below.
+            weights[:, l] = (np.abs(E - E_c) <= float(exact_tol_mev)).astype(np.float64)
+            continue
         if bandwidth_mode == "resolution":
             bandwidth = (float(bandwidth_sigma) * float(fwhm_per_line[l])
                          / 2.3548200450309493)

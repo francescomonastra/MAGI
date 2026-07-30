@@ -51,6 +51,15 @@ parser.add_argument("--warp-boost-cr", action="store_true",
                     help="Add extra CDF-warp knots across CR's 0.39-13.2 keV line "
                          "band (log10 MeV in [-3.41,-1.88], +64 knots). No-op for "
                          "other sources. See docs/v0.8.1_line_truth.md section 11.")
+parser.add_argument("--gate-target-bandwidth-mode", default="exact",
+                    choices=["bins", "resolution", "exact"],
+                    help="How magi.build_gate_targets decides which real events "
+                         "are 'line' events. 'exact' (new default) matches the "
+                         "simulation's own ground truth: fluorescence lines are "
+                         "exactly monoenergetic in the raw data, so membership is "
+                         "a tight numerical match, not a detector-resolution "
+                         "kernel. Pass 'resolution' to reproduce pre-v0.8.2 runs. "
+                         "See docs/v0.8.1_line_truth.md section 14.2.")
 parser.add_argument("--prior-zone-conditioning", action="store_true",
                     help="v0.8.2 Phase C candidate 1: widen the coupling prior's "
                          "conditioning with the per-event [continuum, line_1..line_L] "
@@ -199,9 +208,27 @@ for name in args.sources:
     # +/-320 eV at 8.9 keV (31-10000 detector FWHM), labelling 3.5-4.6x too many
     # events as line events and training the gate to over-route by that factor.
     # Resolution mode labels 0.98x the true line fraction on both sources.
+    #
+    # v0.8.2 Phase C follow-up (docs/v0.8.1_line_truth.md section 14.2): even
+    # "resolution" mode is wrong in a subtler way - it uses the DETECTOR's
+    # resolution as a Gaussian kernel to decide which real events are line
+    # events, but the raw simulation has no detector response applied. A
+    # fluorescence line's real events are exactly monoenergetic (confirmed:
+    # CR's Cu Kalpha1 has 7,542 events at the identical float64 energy,
+    # Kalpha2 3,939 at another, everything else nearby a singleton), so any
+    # event not at that exact value is genuine continuum, not a broadened
+    # line photon. "exact" mode assigns membership by a tight numerical
+    # match instead of a physical-width kernel - the 4 eV detector FWHM still
+    # applies exactly where it always did (line_logsigma_init below), only
+    # the training LABEL changes. This matters most for adjacent lines: Cu
+    # Kalpha1/Kalpha2 are 21 eV apart, well inside "resolution" mode's ~5 eV
+    # kernel width, which was blurring their identification into each other
+    # and is the suspected cause of Cu Kalpha1's routing overshoot after the
+    # zone-conditioning fix (section 14.1) - 0.688->2.052, correct direction,
+    # wrong magnitude.
     gate_targets = magi.build_gate_targets(
         E_full, feature_pack["energy_bins"], matched,
-        bandwidth_mode="resolution",
+        bandwidth_mode=args.gate_target_bandwidth_mode,
         bandwidth_fwhm_mev=X_IFU_RESOLUTION_EV * 1e-6)
     feat = feature_pack["feat"].copy()
     for j in range(gate_targets.shape[1]):
