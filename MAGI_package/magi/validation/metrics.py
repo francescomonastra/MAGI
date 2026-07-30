@@ -24,19 +24,33 @@ def compute_wasserstein_scores(real_pack, gen_pack):
     Parameters
     ----------
     real_pack : dict
-        Real physical arrays, from reconstruct_real_test_physics.
+        Real physical arrays, from reconstruct_real_test_physics. Must use
+        that function's "<name>_real" key convention.
 
     gen_pack : dict
-        Generated physical arrays, from reconstruct_generated_physics. Only
-        variables present in both packs are scored; anything missing from
-        either is skipped silently rather than raising.
+        Generated physical arrays, from reconstruct_generated_physics, using
+        its "<name>_gen" key convention.
 
     Returns
     -------
     dict[str, float]
         Wasserstein distance per variable name, in that variable's own units.
-        The acceptance harness reads "logE" from here as the global
-        energy-marginal score.
+
+    Raises
+    ------
+    KeyError
+        If either pack is missing one of the twelve core variables (logE,
+        u_r, u_v, x, y, z, cphi_r, sphi_r, cphi_v, sphi_v, vx, vy, vz). Only
+        the six optional ones - phi_r, phi_v and the four quantile-space
+        columns - are skipped when absent.
+
+    Notes
+    -----
+    This helper is tied to the "<name>_real"/"<name>_gen" convention of the
+    two reconstruct_*_physics functions. Code that carries plain physical
+    arrays instead (as tools/acceptance_v0_8.py does, keying them "E",
+    "logE", "u_r", ...) should call scipy.stats.wasserstein_distance
+    directly rather than repacking to satisfy this signature.
     """
     scores = {
         "logE": wasserstein_distance(real_pack["logE_real"], gen_pack["logE_gen"]),

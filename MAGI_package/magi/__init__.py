@@ -8,7 +8,7 @@ heads stay supported, and a trained run records which one it is in
 model_config["model_class"].
 """
 
-__version__ = "0.8.1"
+__version__ = "0.8.2"
 
 # ==========================================================
 # Environment / configuration helpers

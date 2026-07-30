@@ -28,6 +28,11 @@ command -v pdflatex >/dev/null 2>&1 || {
 
 cd "$(dirname "$0")"
 
+# Drop any stale .bbl first. It is a build product, and pass 1 below reads
+# it before bibtex gets a chance to regenerate it - so a .bbl left over from
+# a broken .bib fails the build even after the .bib is fixed.
+rm -f magi_manual.bbl
+
 # Two pdflatex passes around bibtex: the first writes the .aux the
 # bibliography is built from, the last resolves the citation numbers and
 # the table of contents.

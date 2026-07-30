@@ -35,7 +35,10 @@ Built on `keras`/`tensorflow`. Author: Francesco Monastra (INAF).
   JSON form `magi.load_candidate_energy_lines` reads. Used to pin the v0.8 mixture head's
   line components at measured energies.
 - **[`docs/`](docs/)** — development notes and plans for the v0.8 line: what was tried,
-  what the measurements showed, and what is still open.
+  what the measurements showed, and what is still open. **[`docs/manual/`](docs/manual/)**
+  holds the LaTeX user manual (`magi_manual.pdf`, built with `./build.sh`) — the
+  long-form reference for structure, API, tools, a worked run, a worked validation,
+  the theoretical foundation, and the accuracy envelope.
 
 ## Quick start
 
@@ -49,6 +52,23 @@ pip install -e MAGI_package/
 import magi
 magi.initialize_environment(seed=42)
 ```
+
+## Status: v0.8.2 beta
+
+Measured over three seeds (42/7/13) on two reference sources with
+`tools/acceptance_v0_8.py`:
+
+| Quantity | CryoSphere-CR | CryoSphere-Small | Bar |
+|---|---|---|---|
+| Coupling, max\|Δcorr\| | 0.0285 ± 0.0101 | 0.0357 ± 0.0102 | ≤0.05 ✅ |
+| Wasserstein, log₁₀E | 0.0241 ± 0.0046 | 0.0065 ± 0.0006 | ≤0.05 ✅ |
+| Per-line intensity | 0.7×–4.9×, unstable | 0.7×–4.9×, unstable | ❌ |
+
+The joint distribution and the energy continuum are validated with error bars.
+Spectral-line **intensities** are not — do not use generated output to estimate a
+fluorescence or annihilation line flux. Line **positions** are reliable (≤0.5 eV,
+audited). Details and the full per-line table:
+[`MAGI_package/docs/USAGE.md`](MAGI_package/docs/USAGE.md#accuracy-you-can-rely-on).
 
 Then see [`Example_Usage.ipynb`](Example_Usage.ipynb) or
 [`MAGI_package/docs/USAGE.md`](MAGI_package/docs/USAGE.md) for the full workflow.

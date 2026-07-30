@@ -508,11 +508,10 @@ magi.print_physical_summary(prep)
 feature_pack = magi.build_feature_dataframe(
     prep,
     energy_binning_mode="log_fixed_count",
-    n_bins=1024,
+    n_bins=512,
     min_counts=20,
     geometry_transform="quantile_u_r_u_v_phi_r_phi_v",
-    candidate_energy_lines=candidate_lines,
-    refine_bin_width_mev=4.0e-6,
+    energy_transform="log10",     # required by the v0.8 mixture head
 )
 magi.report_feature_dataframe(feature_pack)
 \end{lstlisting}
@@ -538,12 +537,21 @@ produces physically wrong output.
 Line handling is the part of the pipeline most specific to v0.8, and the part
 where a silent mistake is most expensive.
 
+Note the ordering: lines are detected on the \emph{raw} energies, on their own
+fine binning, \emph{before} \code{build\_feature\_dataframe} is called. The
+feature frame's binning is a separate, coarser thing --- with the mixture head
+it no longer constrains where a line can be placed, only how the continuum is
+described. The resulting gate targets are then carried into the dataset as
+extra feature columns.
+
 \begin{lstlisting}[language=Python]
 payload = magi.load_candidate_energy_lines("CandidateLines/cryosphere_lines.json")
 candidate_lines = payload["lines"]
 
-res = magi.detect_energy_lines(E, energy_bins, candidate_lines,
-                               refine_bin_width_mev=4.0e-6)
+res = magi.detect_energy_lines(
+    E, binning_mode="log_fixed_count", n_bins=1024,
+    candidate_lines=candidate_lines,
+    refine_bin_width_mev=4.0e-6)   # refine to the pinned line width
 magi.print_detected_energy_lines(res)
 
 matched = [m for m in res["matched_lines"] if m["count"] >= 100]
@@ -551,11 +559,11 @@ matched += magi.confirm_unresolved_candidate_lines(
     E, candidate_lines, matched, resolution_ev=4.0)
 
 gate_targets = magi.build_gate_targets(
-    E, energy_bins, matched,
-    bandwidth_mode="resolution",   # the default; see the note below
-)
+    E, feature_pack["energy_bins"], matched,
+    bandwidth_mode="resolution",       # the default; see the warning below
+    bandwidth_fwhm_mev=4.0e-6)
 line_logsigma = magi.line_logsigma_from_resolution(
-    [m["candidate_energy_mev"] for m in matched], resolution_ev=4.0)
+    [m["candidate_energy_mev"] for m in matched], resolution_ev=4.0, fwhm=True)
 \end{lstlisting}
 
 \begin{magiwarn}[\code{bandwidth\_mode}: a case where the more correct label trained worse]
@@ -879,37 +887,47 @@ prep = magi.build_physical_features(
     df, center=(0.0, 0.0, -507.66), radius=100.0, source_type="cosmic_ray")
 magi.print_physical_summary(prep)
 
-# --- 3. candidate lines and the feature frame ------------------------
+# --- 3. lines: detect on the RAW energies, before the feature frame --
 candidate_lines = magi.load_candidate_energy_lines(
     "CandidateLines/cryosphere_lines.json")["lines"]
+E = prep["features"]["Energy"].to_numpy()
 
-feature_pack = magi.build_feature_dataframe(
-    prep, energy_binning_mode="log_fixed_count", n_bins=1024, min_counts=20,
-    geometry_transform="quantile_u_r_u_v_phi_r_phi_v",
-    candidate_energy_lines=candidate_lines,
+res = magi.detect_energy_lines(
+    E, binning_mode="log_fixed_count", n_bins=1024,
+    prominence_factor=3.0, window=5, candidate_lines=candidate_lines,
     refine_bin_width_mev=4.0e-6)
-magi.report_feature_dataframe(feature_pack)
-
-E           = feature_pack["filtered_prep"]["features"]["Energy"].to_numpy()
-energy_bins = feature_pack["energy_bins"]
-
-# --- 4. lines: detect, confirm doublets, build gate targets ----------
-res = feature_pack["line_detection"]
 matched = [m for m in res["matched_lines"] if m["count"] >= 100]
 matched += magi.confirm_unresolved_candidate_lines(
     E, candidate_lines, matched, resolution_ev=4.0)
+magi.print_detected_energy_lines(res)
+
+# --- 4. feature frame ------------------------------------------------
+feature_pack = magi.build_feature_dataframe(
+    prep, energy_binning_mode="log_fixed_count", n_bins=512, min_counts=20,
+    geometry_transform="quantile_u_r_u_v_phi_r_phi_v",
+    energy_transform="log10")          # the v0.8 head needs y = log10(E)
+magi.report_feature_dataframe(feature_pack)
+
+E_full = feature_pack["filtered_prep"]["features"]["Energy"].to_numpy()
 
 gate_targets = magi.build_gate_targets(
-    E, energy_bins, matched, bandwidth_mode="exact")
+    E_full, feature_pack["energy_bins"], matched,
+    bandwidth_mode="resolution", bandwidth_fwhm_mev=4.0e-6)
 
 line_positions_y = np.log10(
     [m["candidate_energy_mev"] for m in matched]).astype(np.float32)
 line_logsigma = magi.line_logsigma_from_resolution(
-    [m["candidate_energy_mev"] for m in matched], resolution_ev=4.0)
+    10.0 ** line_positions_y, resolution_ev=4.0, fwhm=True)
 
-# --- 5. dataset ------------------------------------------------------
+# --- 5. dataset: the gate targets ride along as extra feature columns -
+feat = feature_pack["feat"].copy()
+for j in range(gate_targets.shape[1]):
+    feat[f"gate_target_{j}"] = gate_targets[:, j]
+cont_cols = ("u_r_q", "u_v_q", "phi_r_q", "phi_v_q", "energy_y") + tuple(
+    f"gate_target_{j}" for j in range(gate_targets.shape[1]))
+
 dataset_pack   = magi.filter_particle_types_continuous_geometry(
-                     feature_pack["feat"], prob_threshold=1e-5)
+                     feat=feat, prob_threshold=1e-5, cont_cols=cont_cols)
 split_pack     = magi.split_feature_data(dataset_pack, random_state=42)
 magi.report_split_summary(split_pack, dataset_pack["n_types"])
 scaled_pack    = magi.scale_continuous_features(split_pack, scale_cols=())

@@ -8,7 +8,16 @@ running full Geant4 transport.
 **Full usage guide, model overview, and — importantly — current limitations (e.g. the
 sphere-only geometry assumption) are in [`docs/USAGE.md`](docs/USAGE.md).** A runnable,
 fully-commented walkthrough on synthetic data is at
-[`../Example_Usage.ipynb`](../Example_Usage.ipynb).
+[`../Example_Usage.ipynb`](../Example_Usage.ipynb). The long-form reference is the
+user manual, [`../docs/manual/magi_manual.pdf`](../docs/manual/magi_manual.pdf).
+
+> **v0.8.2 is a beta.** It reproduces the joint phase-space distribution
+> (energy–position–direction correlations) and the energy continuum to within its
+> acceptance bars, on three seeds and two reference sources. It does **not** yet
+> reproduce spectral-line *intensities*: measured per-line recovery runs 0.7×–4.9× and
+> is unstable across seeds. Line *positions* are reliable to ≤0.5 eV. See
+> [Accuracy you can rely on](docs/USAGE.md#accuracy-you-can-rely-on) before quoting any
+> number derived from a generated source.
 
 ## Installation
 
@@ -25,16 +34,19 @@ magi.initialize_environment(seed=42)
 
 ## Tests
 
-A minimal regression suite (v0.8.1 Phase 4) covers the pieces that fail silently
-rather than loudly: flow/prior round-trip identity, line-integral recovery on
-synthetic spectra, the coupling prior actually fitting an injected coupling, the
-checkpoint config-match guard, and the Geant4 export script end-to-end. Runs in
-under 30s, CPU only.
+118 tests covering the pieces that fail silently rather than loudly: flow/prior
+round-trip identity, line-integral recovery on synthetic spectra, the coupling
+prior actually fitting an injected coupling, prior zone-conditioning, gate-target
+construction, the checkpoint config-match guard, the Geant4 export script
+end-to-end, and public-API docstring coverage. CPU only, ~3 minutes.
 
 ```bash
 pip install pytest
 pytest MAGI_package/tests/
 ```
+
+They catch mechanical regressions. They do **not** tell you a trained model
+reproduced your source — that is `tools/acceptance_v0_8.py`'s job.
 
 ## Package structure
 

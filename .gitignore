@@ -25,3 +25,4 @@ docs/manual/*.log
 docs/manual/*.out
 docs/manual/*.toc
 docs/manual/*.blg
+docs/manual/*.bbl
