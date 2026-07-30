@@ -114,6 +114,9 @@ from .utils import (
     _save_and_show,
     render_routing_circuit_html,
     save_routing_circuit,
+    compute_full_circuit_trace,
+    render_full_circuit_html,
+    save_full_circuit,
 )
 
 # ==========================================================
@@ -191,6 +194,9 @@ __all__ = [
     "_save_and_show",
     "render_routing_circuit_html",
     "save_routing_circuit",
+    "compute_full_circuit_trace",
+    "render_full_circuit_html",
+    "save_full_circuit",
     "build_energy_bins",
     "DEFAULT_CANDIDATE_ENERGY_LINES",
     "detect_energy_lines",

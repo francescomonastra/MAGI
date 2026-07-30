@@ -27,6 +27,12 @@ from .circuit_viz import (
     save_routing_circuit,
 )
 
+from .full_circuit import (
+    compute_full_circuit_trace,
+    render_full_circuit_html,
+    save_full_circuit,
+)
+
 __all__ = [
     "set_plot_theme",
     "plot_history",
@@ -43,4 +49,7 @@ __all__ = [
     "_save_and_show",
     "render_routing_circuit_html",
     "save_routing_circuit",
+    "compute_full_circuit_trace",
+    "render_full_circuit_html",
+    "save_full_circuit",
 ]
