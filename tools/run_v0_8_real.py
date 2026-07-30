@@ -331,6 +331,13 @@ for name in args.sources:
         "n_types": int(dataset_pack["n_types"]),
         "radius": R,
         "center": list(center),
+        # Needed to recover real transition names (Cu Kalpha1 vs Kbeta) from
+        # the checkpoint alone later, e.g. magi.save_routing_circuit -
+        # line_positions_y in model_config gives the energy but not the label.
+        "matched_lines": [
+            {"label": m["label"], "candidate_energy_mev": float(m["candidate_energy_mev"])}
+            for m in matched
+        ],
     }
     magi.save_final_trained_model(model=model, save_dir=save_dir, model_name=f"mix_{name}",
                                   model_config=model.to_generation_config(),

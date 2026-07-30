@@ -112,6 +112,8 @@ from .utils import (
     print_model_tree_with_params,
     print_duplicate_trainable_variables,
     _save_and_show,
+    render_routing_circuit_html,
+    save_routing_circuit,
 )
 
 # ==========================================================
@@ -187,6 +189,8 @@ __all__ = [
     "plot_pairwise_sample",
     "plot_pairgrid_physics",
     "_save_and_show",
+    "render_routing_circuit_html",
+    "save_routing_circuit",
     "build_energy_bins",
     "DEFAULT_CANDIDATE_ENERGY_LINES",
     "detect_energy_lines",

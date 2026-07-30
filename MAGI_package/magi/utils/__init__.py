@@ -21,6 +21,12 @@ from .model_inspection import (
     print_duplicate_trainable_variables
 
 )
+
+from .circuit_viz import (
+    render_routing_circuit_html,
+    save_routing_circuit,
+)
+
 __all__ = [
     "set_plot_theme",
     "plot_history",
@@ -34,5 +40,7 @@ __all__ = [
     "print_trainable_status",
     "print_model_tree_with_params",
     "print_duplicate_trainable_variables",
-    "_save_and_show"
+    "_save_and_show",
+    "render_routing_circuit_html",
+    "save_routing_circuit",
 ]
