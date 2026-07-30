@@ -1,0 +1,231 @@
+{
+  "resolution_ev": 4.0,
+  "thresholds": {
+    "line": [
+      0.8,
+      1.2
+    ],
+    "continuum": [
+      0.85,
+      1.15
+    ],
+    "wasserstein_max": 0.05,
+    "coupling_max": 0.05
+  },
+  "sources": {
+    "Small": {
+      "n_real": 1873609,
+      "n_gen": 1873609,
+      "recovery": [
+        {
+          "label": "e+e- annihilation",
+          "origin": "instrumental",
+          "candidate_energy_mev": 0.510999,
+          "window_half_width_mev": 8.49321800288019e-06,
+          "window_mode": "5sigma@4eV",
+          "overlaps_lines": [],
+          "n_real": 7412,
+          "n_gen": 7849,
+          "n_real_continuum": 11.0,
+          "n_gen_continuum": 20.0,
+          "n_real_line": 7401.0,
+          "n_gen_line": 7829.0,
+          "gen_scale": 1.0,
+          "line_significance": 85.90148545134836,
+          "low_significance": false,
+          "sideband_contaminated": false,
+          "blended_lines": [],
+          "sideband_contaminants": [],
+          "recovery_ratio": 1.057830022969869,
+          "recovery_ratio_window": 1.0589584457636265,
+          "recovery_ratio_raw": 1.0589584457636265,
+          "real_fraction": 0.003956001492307093,
+          "real_fraction_line": 0.00395013047012477,
+          "component_fraction": 0.004179100335235366,
+          "component_recovery": 1.0579651398459666
+        },
+        {
+          "label": "Al K-alpha2",
+          "origin": "instrumental",
+          "candidate_energy_mev": 0.0014687,
+          "window_half_width_mev": 8.49321800288019e-06,
+          "window_mode": "5sigma@4eV",
+          "overlaps_lines": [
+            "Al K-alpha1"
+          ],
+          "n_real": 102,
+          "n_gen": 342,
+          "n_real_continuum": 0.0,
+          "n_gen_continuum": 0.0,
+          "n_real_line": 102.0,
+          "n_gen_line": 342.0,
+          "gen_scale": 1.0,
+          "line_significance": 10.09950493836208,
+          "low_significance": false,
+          "sideband_contaminated": false,
+          "blended_lines": [
+            "Al K-alpha1"
+          ],
+          "sideband_contaminants": [],
+          "recovery_ratio": 3.3529411764705883,
+          "recovery_ratio_window": 3.3529411764705883,
+          "recovery_ratio_raw": 3.3529411764705883,
+          "real_fraction": 5.4440387508813206e-05,
+          "real_fraction_line": 5.4440387508813206e-05,
+          "component_fraction": 0.00018253541694131486,
+          "component_recovery": 3.3529411764705883
+        },
+        {
+          "label": "Cu K-alpha1",
+          "origin": "instrumental",
+          "candidate_energy_mev": 0.00800571,
+          "window_half_width_mev": 8.49321800288019e-06,
+          "window_mode": "5sigma@4eV",
+          "overlaps_lines": [
+            "Cu K-alpha2"
+          ],
+          "n_real": 125,
+          "n_gen": 356,
+          "n_real_continuum": 63.0,
+          "n_gen_continuum": 0.0,
+          "n_real_line": 62.0,
+          "n_gen_line": 356.0,
+          "gen_scale": 1.0,
+          "line_significance": 4.521814736434731,
+          "low_significance": false,
+          "sideband_contaminated": true,
+          "blended_lines": [],
+          "sideband_contaminants": [
+            "Cu K-alpha2"
+          ],
+          "recovery_ratio": null,
+          "recovery_ratio_window": 2.848,
+          "recovery_ratio_raw": 2.848,
+          "real_fraction": 6.671616116276128e-05,
+          "real_fraction_line": 3.3091215936729596e-05,
+          "component_fraction": 0.00019000762699154412,
+          "component_recovery": 5.741935483870967
+        }
+      ],
+      "near_line_continuum": [
+        {
+          "label": "e+e- annihilation",
+          "n_real": 11.0,
+          "n_gen": 20.0,
+          "ratio": 1.8181818181818181,
+          "sideband_contaminated": false,
+          "sideband_contaminants": []
+        },
+        {
+          "label": "Al K-alpha2",
+          "n_real": 0.0,
+          "n_gen": 0.0,
+          "ratio": null,
+          "sideband_contaminated": false,
+          "sideband_contaminants": []
+        },
+        {
+          "label": "Cu K-alpha1",
+          "n_real": 63.0,
+          "n_gen": 0.0,
+          "ratio": null,
+          "sideband_contaminated": true,
+          "sideband_contaminants": [
+            "Cu K-alpha2"
+          ]
+        }
+      ],
+      "wasserstein_logE": {
+        "global": 0.0052274774632977165,
+        "[-2.96,-2.44)": 0.057984597057428776,
+        "[-2.44,-1.92)": 0.02864394002754405,
+        "[-1.92,-1.40)": 0.056459122360333514,
+        "[-1.40,-0.88)": 0.0036914795487244527,
+        "[-0.88,-0.36)": 0.0022181501224331126,
+        "[-0.36,0.16)": 0.011174934952499823
+      },
+      "coupling": {
+        "max_abs": 0.026503331346774787,
+        "worst_pair": "u_v<->phi_v",
+        "real": -0.004774165840725859,
+        "gen": 0.021729165506048927,
+        "matrix_real": [
+          [
+            0.9999999999999999,
+            -0.042151970664925854,
+            0.2068879717845436,
+            0.0007984366624344472,
+            -0.0023512166096593882
+          ],
+          [
+            -0.04215197066492586,
+            1.0,
+            -0.16698455161047124,
+            -0.0016296239662681724,
+            0.0020971852457314067
+          ],
+          [
+            0.20688797178454357,
+            -0.16698455161047124,
+            0.9999999999999998,
+            0.00353160499946033,
+            -0.004774165840725859
+          ],
+          [
+            0.0007984366624344472,
+            -0.0016296239662681724,
+            0.00353160499946033,
+            1.0,
+            -0.10667206843109057
+          ],
+          [
+            -0.0023512166096593882,
+            0.0020971852457314067,
+            -0.004774165840725858,
+            -0.10667206843109057,
+            1.0
+          ]
+        ],
+        "matrix_gen": [
+          [
+            1.0,
+            -0.04039956999092839,
+            0.1982761779758431,
+            0.014693687033390782,
+            -0.011152297076960504
+          ],
+          [
+            -0.04039956999092839,
+            1.0,
+            -0.18066788140136233,
+            0.01079531541545928,
+            -0.01265636971615517
+          ],
+          [
+            0.1982761779758431,
+            -0.18066788140136233,
+            0.9999999999999998,
+            -0.011123860234530377,
+            0.021729165506048927
+          ],
+          [
+            0.014693687033390782,
+            0.01079531541545928,
+            -0.011123860234530375,
+            0.9999999999999999,
+            -0.08591931874042419
+          ],
+          [
+            -0.011152297076960506,
+            -0.012656369716155169,
+            0.021729165506048927,
+            -0.08591931874042419,
+            1.0
+          ]
+        ]
+      },
+      "pass": false
+    }
+  },
+  "pass": false
+}
