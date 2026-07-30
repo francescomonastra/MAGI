@@ -1,0 +1,92 @@
+% Shared preamble for the MAGI user manual.
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage[a4paper,margin=2.4cm,headheight=15pt]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{enumitem}
+\usepackage{microtype}
+\usepackage{caption}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{tcolorbox}
+\usepackage[hidelinks,breaklinks]{hyperref}
+
+\tcbuselibrary{skins,breakable}
+
+% ---------------------------------------------------------------- colours
+\definecolor{magiblue}{HTML}{1F4E79}
+\definecolor{magigrey}{HTML}{4A4A4A}
+\definecolor{codebg}{HTML}{F6F8FA}
+\definecolor{codekw}{HTML}{A626A4}
+\definecolor{codestr}{HTML}{50A14F}
+\definecolor{codecom}{HTML}{9CA0A4}
+\definecolor{warnbg}{HTML}{FFF4E5}
+\definecolor{warnrule}{HTML}{C77700}
+\definecolor{notebg}{HTML}{EEF4FB}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=magiblue,
+  urlcolor=magiblue,
+  citecolor=magiblue,
+}
+
+% ---------------------------------------------------------------- headers
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\textcolor{magigrey}{MAGI \magiversion{} --- User Manual}}
+\fancyhead[R]{\small\textcolor{magigrey}{\leftmark}}
+\fancyfoot[C]{\small\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+\titleformat{\section}{\Large\bfseries\color{magiblue}}{\thesection}{0.7em}{}
+\titleformat{\subsection}{\large\bfseries\color{magiblue}}{\thesubsection}{0.7em}{}
+
+% ---------------------------------------------------------------- listings
+\lstdefinestyle{magi}{
+  backgroundcolor=\color{codebg},
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{codekw}\bfseries,
+  stringstyle=\color{codestr},
+  commentstyle=\color{codecom}\itshape,
+  breaklines=true,
+  breakatwhitespace=false,
+  showstringspaces=false,
+  frame=single,
+  rulecolor=\color{codebg!60!black!20},
+  framesep=5pt,
+  xleftmargin=6pt,
+  columns=fullflexible,
+  keepspaces=true,
+  upquote=true,
+  literate={-}{{-}}1 {_}{{\_}}1,
+}
+\lstset{style=magi}
+\lstdefinelanguage{shell}{
+  keywords={python,pytest,pip,cd,export,bash},
+  sensitive=true,
+  comment=[l]{\#},
+}
+\newcommand{\py}[1]{\lstinline[language=Python]|#1|}
+\newcommand{\code}[1]{\texttt{\small #1}}
+
+% ---------------------------------------------------------------- callouts
+\newtcolorbox{magiwarn}[1][]{
+  breakable, enhanced, colback=warnbg, colframe=warnrule,
+  boxrule=0pt, leftrule=3pt, arc=1pt,
+  fonttitle=\bfseries, coltitle=warnrule, title={#1},
+  left=7pt, right=7pt, top=5pt, bottom=5pt,
+}
+\newtcolorbox{maginote}[1][]{
+  breakable, enhanced, colback=notebg, colframe=magiblue,
+  boxrule=0pt, leftrule=3pt, arc=1pt,
+  fonttitle=\bfseries, coltitle=magiblue, title={#1},
+  left=7pt, right=7pt, top=5pt, bottom=5pt,
+}

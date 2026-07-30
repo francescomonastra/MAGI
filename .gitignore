@@ -18,3 +18,10 @@ __pycache__/
 *.npz
 *.h5
 *.hdf5
+
+# LaTeX build artifacts (the manual PDF itself is versioned)
+docs/manual/*.aux
+docs/manual/*.log
+docs/manual/*.out
+docs/manual/*.toc
+docs/manual/*.blg

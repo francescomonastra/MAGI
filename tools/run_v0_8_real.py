@@ -51,15 +51,18 @@ parser.add_argument("--warp-boost-cr", action="store_true",
                     help="Add extra CDF-warp knots across CR's 0.39-13.2 keV line "
                          "band (log10 MeV in [-3.41,-1.88], +64 knots). No-op for "
                          "other sources. See docs/v0.8.1_line_truth.md section 11.")
-parser.add_argument("--gate-target-bandwidth-mode", default="exact",
+parser.add_argument("--gate-target-bandwidth-mode", default="resolution",
                     choices=["bins", "resolution", "exact"],
                     help="How magi.build_gate_targets decides which real events "
-                         "are 'line' events. 'exact' (new default) matches the "
-                         "simulation's own ground truth: fluorescence lines are "
-                         "exactly monoenergetic in the raw data, so membership is "
-                         "a tight numerical match, not a detector-resolution "
-                         "kernel. Pass 'resolution' to reproduce pre-v0.8.2 runs. "
-                         "See docs/v0.8.1_line_truth.md section 14.2.")
+                         "are 'line' events. 'resolution' is the default and is "
+                         "what every confirmed result was produced with. 'exact' "
+                         "matches the simulation's own ground truth (fluorescence "
+                         "lines are exactly monoenergetic in the raw data) and is "
+                         "the more physically faithful LABEL, but it was measured "
+                         "on CR and made things worse, not better - it did NOT fix "
+                         "the Cu K-alpha1 overshoot it was built for and it broke "
+                         "the confirmed Al K-alpha1 result. Do not switch without "
+                         "re-reading docs/v0.8.1_line_truth.md section 14.2.")
 parser.add_argument("--prior-zone-conditioning", action="store_true",
                     help="v0.8.2 Phase C candidate 1: widen the coupling prior's "
                          "conditioning with the per-event [continuum, line_1..line_L] "

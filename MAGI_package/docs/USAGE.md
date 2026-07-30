@@ -81,6 +81,35 @@ The models form a version lineage — check which one a given trained run actual
   (`prior="coupling"`). See `magi.print_model_structure(model)` for a printed
   description of a built model, including the formulas and the configured line table.
 
+  Two v0.8.2 additions are worth knowing about:
+
+  - **`prior_zone_conditioning=True`** widens what the learned prior is conditioned on
+    from the particle-type one-hot alone to `[type, zone]`, where zone is the
+    continuum/line routing target. The gate is trained on `z ~ q(z|x)` but generates
+    from `z ~ p(z|cond)`; without the zone in `cond` the prior cannot express which
+    component an event belongs to, and rare lines are routed by whatever the type
+    marginal happens to imply. Requires `zone_probs`, the per-type zone distribution
+    measured from the training data. This fixed CR's Al Kα1 (0.702 ± 0.290 → 0.959 ±
+    0.025) while leaving coupling intact.
+  - **`build_gate_targets(..., bandwidth_mode="exact")`** decides which real events
+    belong to a line by exact energy match rather than by a Gaussian kernel of the
+    detector's resolution width. In raw Geant4 crossing data **no detector response has
+    been applied**, so simulated fluorescence lines are exactly monoenergetic — every Cu
+    Kα1 event shares one identical float64 energy, verified directly against the data.
+
+    **This is a research option, not a recommendation. `"resolution"` remains the
+    default.** Measured on CR, the exact label did *not* fix the Cu Kα1 overshoot it was
+    built for (2.011 vs 2.052, inside the noise), regressed the previously-passing Al
+    Kα1 from 0.959 ± 0.025 to 0.578, and pushed the coupling residual outside its bar.
+    The tight tolerance also drove Cu Kα2's zone probability to zero, deleting it as a
+    modelled component. The soft resolution kernel appears to regularize the gate in a
+    way a hard 0/1 target does not. Full write-up:
+    [`../../docs/v0.8.1_line_truth.md`](../../docs/v0.8.1_line_truth.md) §14.2.
+
+  Checkpoints written by v0.8.2 carry `config_version: 2`. Older `config_version: 1`
+  checkpoints load unchanged — `prior_zone_conditioning` defaults to `False`, which
+  reconstructs the exact pre-existing architecture.
+
 The first four use per-variable heads (categorical for logE, Gaussian for radial/angular
 variables, unit-circle-regularized 2D heads for angles) rather than one flat output,
 because narrow spectral energy lines and boundary-heavy angular variables (`u_v`
@@ -88,6 +117,65 @@ concentrates near ±1) don't fit a naive Gaussian/flat output well. v0.8 keeps t
 principle for geometry and takes the energy head further: a categorical head can never
 place a line more precisely than one bin, so the line positions become fixed physical
 inputs instead of something the model has to learn.
+
+## Accuracy you can rely on
+
+**Read this before quoting any number a MAGI-generated source produces.** v0.8.2 is a
+**beta**. The table below is what has actually been measured, as mean ± std over three
+seeds (42/7/13) on the two reference sources, scored with `tools/acceptance_v0_8.py`.
+Reproduce it yourself with:
+
+```bash
+python tools/acceptance_v0_8.py --sources CR Small --seeds 42 7 13
+```
+
+### Validated
+
+| Quantity | CryoSphere-CR | CryoSphere-Small | Bar |
+|---|---|---|---|
+| Coupling, max\|Δcorr\| over (logE, u_r, u_v, φ_r, φ_v) | 0.0285 ± 0.0101 | 0.0357 ± 0.0102 | ≤ 0.05 |
+| Energy marginal, Wasserstein on log₁₀E | 0.0241 ± 0.0046 | 0.0065 ± 0.0006 | ≤ 0.05 |
+
+The **joint** distribution is what v0.8 exists for and it holds up with error bars: every
+real cross-correlation between energy and the four geometry variables is reproduced
+inside the bar, on both sources, across seeds. If your downstream use depends on
+energy–direction or energy–position correlations, this is the result that matters, and
+it is one the v0.7.2 categorical head does not deliver (its coupling residual is 0.226,
+8× worse).
+
+### Not validated — known limitations
+
+Per-line **intensities** are wrong by factors of roughly 0.7× to 4.9×, and unstable
+across seeds:
+
+| Line | Recovery (mean ± std) | Status |
+|---|---|---|
+| CR Al Kα1 | 0.959 ± 0.025 | in band |
+| CR Cu Kβ | 1.034 ± 0.050 | in band |
+| CR e⁺e⁻ 511 keV | 1.825 ± 0.324 | **over-generated, unstable** |
+| CR Cu Kα1 | 2.052 ± 0.034 (routing) | **over-generated** |
+| Small Al Kα2 | 3.412 ± 0.376 | **far over** |
+| Small Cu Kα1 | 4.903 ± 0.356 (routing) | **far over** |
+
+Practical consequences:
+
+- Line **positions** are reliable — they are pinned physical inputs, audited to ≤0.5 eV
+  against the measured spectrum on all sources (`tools/line_centroid_audit.py`). It is
+  the number of events in each line that is not.
+- Do **not** use generated output to estimate a fluorescence or annihilation line flux,
+  or any quantity dominated by one.
+- The continuum between lines, and the total energy marginal, are within the bar.
+- Rare lines are worse than strong ones, and the failure is source-dependent — measure
+  on *your* source with the acceptance harness rather than assuming these numbers carry
+  over.
+- v0.7.2 (`CVAE_CatEnergy_ContPhi_TaskAdaptive`) remains the conservative fallback for
+  the energy marginal alone (CR Wasserstein 0.0141 vs 0.0241), but it produces **zero**
+  events in the 511 keV window against 52,225 real, and 8× worse coupling. Neither head
+  is correct for lines today.
+
+The open diagnostic work behind these numbers is written up in
+[`../../docs/v0.8.1_line_truth.md`](../../docs/v0.8.1_line_truth.md); the remaining plan
+is in [`../../docs/v0.8.2_RoadmapForAdoption.md`](../../docs/v0.8.2_RoadmapForAdoption.md).
 
 ## Limitations & things to watch during training and adaptation
 
@@ -141,11 +229,17 @@ wrong flux-normalization factor. See `compute_primary_fraction` /
 `save_normalization_summary` / `load_normalization_summary` for measuring and persisting
 this factor.
 
-**No automated test suite.** Validation is empirical, via `magi.validation` and notebook
-plots — there's no CI, and a geometry round-trip identity test (physics → features →
-transforms → reconstruction → physics, asserting the output matches the input within
-tolerance) is a known, not-yet-built gap. If you change anything in the geometry-transform
-layer, re-validate by hand against real data before trusting generated output.
+**Line intensities are not yet validated — see [Accuracy you can rely on](#accuracy-you-can-rely-on)
+below before quoting a generated line flux.**
+
+**Unit tests cover the machinery, not the physics.** `MAGI_package/tests/` holds 118
+tests (`python -m pytest MAGI_package/tests/`) covering flow round-trips, checkpoint
+save/load config matching, gate-target construction, prior zone-conditioning, and public
+API docstring coverage. They catch mechanical regressions. They do **not** tell you a
+trained model reproduced your source: that is still empirical, via `magi.validation`,
+`tools/acceptance_v0_8.py` and notebook plots. If you change anything in the
+geometry-transform layer, re-validate by hand against real data before trusting
+generated output.
 
 **CPU-only by default.** `magi.initialize_environment(cpu_only=True)` is the default —
 GPU/`tensorflow-metal` acceleration needs explicit opt-in.

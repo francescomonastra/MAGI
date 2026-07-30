@@ -1,0 +1,153 @@
+% =====================================================================
+% MAGI user manual — theoretical-foundation references.
+%
+% This file holds the entries UNIQUE to the manual. The entries it shares
+% with paper/magi_references.bib live in magi_shared.bib, copied there
+% because paper/ is gitignored and the manual must build from a fresh
+% clone. The manual cites both:
+%     \bibliography{magi_shared,magi_theory}
+%
+% Collected 2026-07-30 for the v0.8.2-beta manual. These are the methods
+% the code in MAGI_package/magi/core/ directly implements, so each entry
+% is load-bearing rather than decorative; the section of the manual and
+% the module that implements it are named in the `note` field.
+%
+% -------------------------------------------------------------------
+% VERIFICATION STATUS: every entry below is flagged "% VERIFY".
+% The arXiv identifiers and titles are believed correct, but NO HUMAN HAS
+% YET OPENED THESE SOURCES to confirm author lists, venue, volume, pages
+% or year. Confirm each on NASA ADS, INSPIRE, DBLP or the publisher
+% before this bibliography is used in anything citable. Do not promote an
+% entry out of this state on the strength of it merely compiling.
+% -------------------------------------------------------------------
+% =====================================================================
+
+
+% ---------------------------------------------------------------------
+% A. The continuum density: rational-quadratic spline coupling flows.
+%    Implemented in magi/core/flows.py (ConditionalRQSFlow).
+% ---------------------------------------------------------------------
+
+% VERIFY authors/pages
+@inproceedings{Durkan2019NeuralSplineFlows,
+  author    = {Durkan, Conor and Bekasov, Artur and Murray, Iain and
+               Papamakarios, George},
+  title     = {{Neural Spline Flows}},
+  booktitle = {Advances in Neural Information Processing Systems (NeurIPS)},
+  volume    = {32},
+  year      = {2019},
+  eprint    = {1906.04032},
+  archivePrefix = {arXiv},
+  primaryClass  = {stat.ML},
+  note      = {Monotonic rational-quadratic spline transforms; the
+               continuum density in magi/core/flows.py. VERIFY metadata.}
+}
+
+% VERIFY venue/pages
+@inproceedings{Dinh2017RealNVP,
+  author    = {Dinh, Laurent and Sohl-Dickstein, Jascha and Bengio, Samy},
+  title     = {{Density Estimation using Real NVP}},
+  booktitle = {International Conference on Learning Representations (ICLR)},
+  year      = {2017},
+  eprint    = {1605.08803},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.LG},
+  note      = {Affine coupling layers; the architectural basis of the
+               conditional prior in magi/core/priors.py. VERIFY metadata.}
+}
+
+
+% ---------------------------------------------------------------------
+% B. Learned (non-N(0,I)) latent priors.
+%    Motivates magi/core/priors.py ConditionalCouplingPrior.
+% ---------------------------------------------------------------------
+
+% VERIFY authors/pages
+@inproceedings{Tomczak2018VampPrior,
+  author    = {Tomczak, Jakub M. and Welling, Max},
+  title     = {{VAE with a VampPrior}},
+  booktitle = {International Conference on Artificial Intelligence and
+               Statistics (AISTATS)},
+  year      = {2018},
+  eprint    = {1705.07120},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.LG},
+  note      = {The aggregated-posterior/prior mismatch argument for
+               replacing N(0,I) with a learned prior. VERIFY metadata.}
+}
+
+
+% ---------------------------------------------------------------------
+% C. Class-imbalance weighting of the mixture gate.
+%    Implemented as gate_focal_gamma in magi/core/model.py.
+% ---------------------------------------------------------------------
+
+% VERIFY venue/pages
+@inproceedings{Lin2017FocalLoss,
+  author    = {Lin, Tsung-Yi and Goyal, Priya and Girshick, Ross and
+               He, Kaiming and Doll\'ar, Piotr},
+  title     = {{Focal Loss for Dense Object Detection}},
+  booktitle = {IEEE International Conference on Computer Vision (ICCV)},
+  year      = {2017},
+  eprint    = {1708.02002},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.CV},
+  note      = {Focal down-weighting of easy examples; the gate loss must
+               route lines that are 1e-5 of the sample. VERIFY metadata.}
+}
+
+
+% ---------------------------------------------------------------------
+% D. Optimizer.
+% ---------------------------------------------------------------------
+
+% VERIFY pages
+@inproceedings{Kingma2015Adam,
+  author    = {Kingma, Diederik P. and Ba, Jimmy},
+  title     = {{Adam: A Method for Stochastic Optimization}},
+  booktitle = {International Conference on Learning Representations (ICLR)},
+  year      = {2015},
+  eprint    = {1412.6980},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.LG},
+  note      = {Default optimizer in magi.compile_model. VERIFY metadata.}
+}
+
+
+% ---------------------------------------------------------------------
+% E. Atomic transition energies — the line-position work.
+%    MAGI pins mixture components at EADL energies while keeping Bearden
+%    transition LABELS, because the simulation emitted EADL. Getting this
+%    backwards displaces every instrumental line by up to 10 FWHM; see
+%    the manual's line-handling section and tools/
+%    build_candidate_lines_from_geant4.py.
+% ---------------------------------------------------------------------
+
+% VERIFY volume/pages
+@article{Bearden1967XRayWavelengths,
+  author  = {Bearden, J. A.},
+  title   = {{X-Ray Wavelengths}},
+  journal = {Reviews of Modern Physics},
+  volume  = {39},
+  number  = {1},
+  pages   = {78--124},
+  year    = {1967},
+  doi     = {10.1103/RevModPhys.39.78},
+  note    = {Source of the transition labels in the candidate-line table.
+             VERIFY metadata.}
+}
+
+% VERIFY report number/volume
+@techreport{Perkins1991EADL,
+  author      = {Perkins, S. T. and Cullen, D. E. and Chen, M. H. and
+                 Hubbell, J. H. and Rathkopf, J. and Scofield, J.},
+  title       = {{Tables and Graphs of Atomic Subshell and Relaxation Data
+                 Derived from the LLNL Evaluated Atomic Data Library
+                 (EADL), Z = 1--100}},
+  institution = {Lawrence Livermore National Laboratory},
+  number      = {UCRL-50400, Vol.~30},
+  year        = {1991},
+  note        = {The fluorescence energies Geant4 actually emits, and
+                 therefore the ones MAGI pins its line components at.
+                 VERIFY metadata.}
+}
