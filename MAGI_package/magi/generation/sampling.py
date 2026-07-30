@@ -18,6 +18,24 @@ def sample_types(n_samples, type_probs, rng=None):
 
     Pass the training-set type fractions to reproduce the natural mix, or a
     different vector to deliberately re-weight the generated source.
+
+    Parameters
+    ----------
+    n_samples : int
+        How many events to draw.
+
+    type_probs : array-like of float
+        Categorical probabilities over particle types, summing to 1. Use
+        `dataset_pack["type_probs"]` for the natural mix.
+
+    rng : np.random.Generator or None
+        Generator to draw from. Pass one seeded explicitly for a
+        reproducible source file; None (default) uses fresh entropy.
+
+    Returns
+    -------
+    np.ndarray
+        int32 array of shape (n_samples,) holding type indices.
     """
     rng = np.random.default_rng() if rng is None else rng
     idx = rng.choice(len(type_probs), size=n_samples, p=type_probs)
@@ -25,13 +43,54 @@ def sample_types(n_samples, type_probs, rng=None):
 
 
 def one_hot_from_idx(idx, n_types):
-    """One-hot the type indices into the `cond` tensor the models expect."""
+    """One-hot the type indices into the `cond` tensor the models expect.
+
+    Parameters
+    ----------
+    idx : array-like of int
+        Particle-type indices, e.g. from sample_types.
+
+    n_types : int
+        One-hot depth. Must equal the `n_types` the model was built with.
+
+    Returns
+    -------
+    tf.Tensor
+        float32 tensor of shape (len(idx), n_types), ready to pass as `cond`.
+    """
     return tf.one_hot(idx, depth=n_types, dtype=tf.float32)
 
 
 def energy_from_idx(idx, energy_bins, mode="uniform", rng=None):
     """
     Reconstruct physical energy from categorical bin indices.
+
+    Only used by the categorical-energy heads (v0.6 - v0.7.2). The v0.8
+    mixture head emits a continuous energy directly and never goes through
+    this function.
+
+    Parameters
+    ----------
+    idx : array-like of int
+        Bin indices in [0, len(energy_bins) - 2].
+
+    energy_bins : array-like of float
+        Bin edges in MeV, as returned by build_energy_bins. Must be the same
+        edges the run was trained with - they are saved in the checkpoint
+        metadata for exactly this reason.
+
+    mode : str
+        "uniform" (default) draws uniformly inside the bin, which avoids the
+        comb-like artifact that bin centres would imprint on the spectrum.
+        Any other value returns the bin centre.
+
+    rng : np.random.Generator or None
+        Generator used when `mode` is "uniform". None uses fresh entropy.
+
+    Returns
+    -------
+    np.ndarray
+        float32 energies in MeV, shape (len(idx),).
     """
     idx = np.asarray(idx, dtype=np.int32)
     left = energy_bins[idx]
@@ -60,6 +119,36 @@ def generate_latent_outputs(
     Supports:
       - v0.6 legacy models with categorical u_v
       - v0.7 continuous-geometry models with u_r_q/u_v_q
+
+    The returned keys depend on which head produced them, so downstream code
+    should test for a key rather than assume it. reconstruct_generated_features
+    does exactly that.
+
+    Parameters
+    ----------
+    model : keras.Model
+        A built MAGI model exposing `.generate(cond, n)`. Typically returned
+        by load_task_adaptive_model_for_generation.
+
+    n_samples : int
+        How many events to generate. For validation, set this to the real
+        event count: the line-recovery metrics compare raw counts, and a
+        smaller generated sample silently deflates every ratio.
+
+    type_probs : array-like of float
+        Categorical probabilities over particle types, summing to 1.
+
+    n_types : int
+        One-hot depth; must match the model's conditioning width.
+
+    idx_to_type : dict[int, str] or None
+        Index-to-name map. When given, the result also carries
+        "ParticleName", "idx_to_type" and "generated_type_counts", which the
+        export helpers need to write a Geant4 source file.
+
+    rng : np.random.Generator or None
+        Generator for the type draw. Note this does not seed the model's own
+        sampling - use magi.initialize_environment for that.
 
     Returns
     -------

@@ -27,6 +27,38 @@ def build_default_callbacks(
     Compatible with both:
       - v0.6 discrete-u_v models
       - v0.7 continuous-geometry models
+
+    Returns EarlyStopping (restoring the best weights) and
+    ReduceLROnPlateau. The task-adaptive callbacks in
+    magi.training.adaptive_callbacks are NOT included - add them yourself
+    when training a TaskAdaptive head.
+
+    Parameters
+    ----------
+    monitor : str
+        Metric the callbacks watch. "val_loss" by default.
+
+    early_patience : int
+        Epochs without improvement before EarlyStopping fires. Should stay
+        larger than `lr_patience`, so a learning-rate drop gets a chance to
+        help before the run is abandoned.
+
+    lr_patience : int
+        Epochs without improvement before the learning rate is reduced.
+
+    factor : float
+        Multiplier applied to the learning rate on each reduction.
+
+    min_lr : float
+        Floor on the learning rate.
+
+    verbose : int
+        Keras verbosity for both callbacks.
+
+    Returns
+    -------
+    list[keras.callbacks.Callback]
+        Ready to pass as `callbacks` to fit_model or train_single_run.
     """
     return [
         keras.callbacks.EarlyStopping(
@@ -68,7 +100,14 @@ def compile_model(
           - "adamw"
 
     clipnorm : float or None
-        Optional gradient clipping norm.
+        Optional gradient clipping norm. Worth setting for the v0.8 mixture
+        head, whose flow and line terms can produce occasional large
+        gradients early in training.
+
+    Returns
+    -------
+    keras.Model
+        The same `model`, compiled in place and returned for chaining.
     """
     optimizer = str(optimizer).lower()
 
@@ -102,6 +141,34 @@ def fit_model(
 ):
     """
     Fit the model and return the Keras history object.
+
+    The model must already be compiled - use train_single_run if you want
+    compile and fit in one call.
+
+    Parameters
+    ----------
+    model : keras.Model
+        A compiled MAGI model.
+
+    train_ds, val_ds : tf.data.Dataset
+        Batched datasets from build_tf_datasets, i.e.
+        `dataset_tf_pack["train_ds"]` and `["val_ds"]`.
+
+    epochs : int
+        Maximum epochs. EarlyStopping usually stops sooner.
+
+    callbacks : list or None
+        Callbacks to use. None means Keras defaults only - pass
+        build_default_callbacks() explicitly to get early stopping and
+        learning-rate reduction.
+
+    verbose : int
+        Keras verbosity. Use 2 for one line per epoch in a log file.
+
+    Returns
+    -------
+    keras.callbacks.History
+        Pass `history.history` to save_final_trained_model and plot_history.
     """
     history = model.fit(
         train_ds,
@@ -127,6 +194,37 @@ def train_single_run(
 ):
     """
     Convenience wrapper for compile + fit.
+
+    Parameters
+    ----------
+    model : keras.Model
+        An uncompiled MAGI model.
+
+    train_ds, val_ds : tf.data.Dataset
+        Batched datasets from build_tf_datasets.
+
+    learning_rate : float
+        Optimizer learning rate, passed to compile_model.
+
+    epochs : int
+        Maximum epochs.
+
+    callbacks : list or None
+        Callbacks to use; None means Keras defaults only.
+
+    verbose : int
+        Keras verbosity.
+
+    optimizer : str
+        "adam" or "adamw", passed to compile_model.
+
+    clipnorm : float or None
+        Gradient clipping norm, passed to compile_model.
+
+    Returns
+    -------
+    keras.callbacks.History
+        The fit history, as from fit_model.
     """
     compile_model(
         model,

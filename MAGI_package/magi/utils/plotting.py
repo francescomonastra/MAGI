@@ -15,6 +15,15 @@ def set_plot_theme(theme="light"):
     ----------
     theme : str
         "light" or "dark"
+
+    Returns
+    -------
+    None
+
+    Notes
+    -----
+    Sets matplotlib rcParams globally for the process, so call it once at the
+    top of a notebook rather than before each plot.
     """
 
     if theme == "dark":
@@ -53,6 +62,32 @@ def set_plot_theme(theme="light"):
 def plot_history(history, keys=None, show_available=True):
     """
     Plot selected metrics from a Keras History object.
+
+    One figure per metric, each overlaying its "val_" counterpart when
+    present. The "loss" figure additionally plots the learning rate on a
+    right-hand axis, so a ReduceLROnPlateau step lines up visibly with the
+    change in the curve.
+
+    Parameters
+    ----------
+    history : keras.callbacks.History
+        The object returned by fit_model or train_single_run. Note this must
+        be the History object, not a plain dict - for a run reloaded from
+        `<model_name>_history.json`, wrap it in an object exposing
+        `.history`.
+
+    keys : list[str] or None
+        Metric names to plot. Names absent from the history are skipped
+        silently, so the default list covers every head's metrics and only
+        the relevant ones appear.
+
+    show_available : bool
+        Print the metric names actually present in `history` - the easiest
+        way to discover what `keys` accepts for a given head.
+
+    Returns
+    -------
+    None
     """
     h = history.history
 
@@ -127,8 +162,45 @@ def plot_history(history, keys=None, show_available=True):
 def plot_dist(data, name, bins=200, range_=None, density=True, figsize=(7, 4), xscale="linear", yscale="linear", savepath=None, dpi=300, show=True):
     """Step histogram of one 1-D quantity.
 
-    Returns whatever _save_and_show returns (the figure, unless show closes it).
     Use xscale/yscale="log" for energy spectra, which span many decades.
+
+    Parameters
+    ----------
+    data : array-like of float
+        The 1-D sample to histogram.
+
+    name : str
+        Variable name, used for the axis label and title.
+
+    bins : int
+        Number of histogram bins.
+
+    range_ : tuple[float, float] or None
+        Histogram range. None lets numpy pick from the data; set it
+        explicitly to compare plots across runs.
+
+    density : bool
+        Normalize to a density rather than raw counts.
+
+    figsize : tuple[float, float]
+        Figure size in inches.
+
+    xscale, yscale : str
+        Matplotlib axis scales, "linear" or "log".
+
+    savepath : str or None
+        Where to write the figure. None does not save.
+
+    dpi : int
+        Save resolution.
+
+    show : bool
+        Call plt.show(). Set False in scripted runs that only save.
+
+    Returns
+    -------
+    matplotlib.figure.Figure or None
+        Whatever _save_and_show returns - the figure, unless `show` closed it.
     """
     fig = plt.figure(figsize=figsize)
     plt.hist(
@@ -162,6 +234,37 @@ def plot_dist_by_class(
     """Step histogram of `value_col`, optionally restricted to one particle type.
 
     With selected_class=None the whole column is plotted.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Table holding both `value_col` and `class_col`, e.g. df_real or
+        df_gen from build_real_generated_featureframes.
+
+    value_col : str
+        Column to histogram.
+
+    class_col : str
+        Column identifying the particle type.
+
+    selected_class : str or None
+        Restrict to rows whose `class_col` equals this. None plots all rows.
+
+    bins : int
+        Number of histogram bins.
+
+    range_ : tuple[float, float] or None
+        Histogram range; None lets numpy pick from the data.
+
+    density : bool
+        Normalize to a density rather than raw counts.
+
+    figsize : tuple[float, float]
+        Figure size in inches.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
     """
     if selected_class is None:
         data = df[value_col].to_numpy()
@@ -190,9 +293,43 @@ def plot_dist_by_class(
 def plot_correlation_matrix(df, cols, method="pearson", figsize=(8, 6), cmap="coolwarm", savepath=None, dpi=300, show=True):
     """Plot the correlation matrix of `cols`, fixed to the [-1, 1] color scale.
 
-    Returns (figure_result, corr_dataframe). Comparing the real and generated
-    matrices is the main check that the model reproduced the *joint*
-    distribution and not just the marginals.
+    Comparing the real and generated matrices is the main check that the
+    model reproduced the *joint* distribution and not just the marginals -
+    the max absolute difference between the two is the "coupling residual"
+    the acceptance harness reports.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Table holding `cols`.
+
+    cols : list[str]
+        Columns to correlate, in the order they should appear.
+
+    method : str
+        Passed to pandas: "pearson", "spearman" or "kendall".
+
+    figsize : tuple[float, float]
+        Figure size in inches.
+
+    cmap : str
+        Matplotlib colormap. A diverging map is appropriate here since the
+        scale is fixed to [-1, 1] around zero.
+
+    savepath : str or None
+        Where to write the figure. None does not save.
+
+    dpi : int
+        Save resolution.
+
+    show : bool
+        Call plt.show().
+
+    Returns
+    -------
+    tuple[matplotlib.figure.Figure or None, pd.DataFrame]
+        (figure_result, corr_dataframe). Keep the dataframe to difference it
+        against the other sample's matrix.
     """
     corr = df[cols].corr(method=method)
 
@@ -207,11 +344,40 @@ def plot_correlation_matrix(df, cols, method="pearson", figsize=(8, 6), cmap="co
 
 
 def plot_covariance_matrix(df, cols, figsize=(8, 6), cmap="viridis", savepath=None, dpi=300, show=True):
-    """Plot the covariance matrix of `cols`. Returns (figure_result, cov_dataframe).
+    """Plot the covariance matrix of `cols`.
 
     Unlike the correlation matrix this keeps the variable scales, so it is the
     one to read when a generated variable has the right shape but the wrong
     spread.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Table holding `cols`.
+
+    cols : list[str]
+        Columns to include, in display order.
+
+    figsize : tuple[float, float]
+        Figure size in inches.
+
+    cmap : str
+        Matplotlib colormap. A sequential map suits covariance, whose scale
+        is not centred on zero.
+
+    savepath : str or None
+        Where to write the figure. None does not save.
+
+    dpi : int
+        Save resolution.
+
+    show : bool
+        Call plt.show().
+
+    Returns
+    -------
+    tuple[matplotlib.figure.Figure or None, pd.DataFrame]
+        (figure_result, cov_dataframe).
     """
     cov = df[cols].cov()
 
@@ -239,6 +405,41 @@ def plot_pairwise_sample(
     Subsampled because these datasets run to millions of events and a full
     pairplot is neither fast nor readable. Pass class_col to color by particle
     type.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Table holding `cols`. Pass df_both from
+        build_real_generated_featureframes with class_col="sample" to
+        overlay real and generated.
+
+    cols : list[str]
+        Columns to include in the grid. Keep this short - the grid is
+        quadratic in len(cols).
+
+    class_col : str or None
+        Column to color by. None draws a single ungrouped sample.
+
+    sample_size : int
+        Rows drawn at random for the plot.
+
+    diag_kind : str
+        Seaborn diagonal kind, "hist" or "kde".
+
+    theme : str or None
+        "light" or "dark". None keeps whatever set_plot_theme last set.
+
+    palette : str
+        Seaborn palette name for the class colors.
+
+    Returns
+    -------
+    seaborn.axisgrid.PairGrid
+
+    See Also
+    --------
+    plot_pairgrid_physics : slower but far more configurable, with contour
+        lower panels and per-pair correlation annotations.
     """
     import seaborn as sns
 
@@ -323,6 +524,75 @@ def plot_pairgrid_physics(
         grid_color="#2a2f3a",
         contour_color="white",
     )
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Table holding `cols`. Pass df_both from
+        build_real_generated_featureframes with class_col="sample" to
+        overlay real and generated.
+
+    cols : list[str]
+        Columns to include. The grid is quadratic in len(cols), so keep it
+        to the handful of variables under investigation.
+
+    class_col : str or None
+        Column to color by. None draws a single ungrouped sample.
+
+    sample_size : int or None
+        Rows drawn at random. None uses every row, which is slow on
+        multi-million-event sources.
+
+    lower_mode : str
+        Lower-triangle panels: "scatter" or "contour".
+
+    diag_mode : str
+        Diagonal panels: "hist" or "kde".
+
+    bins : int
+        Bin count for histogram panels.
+
+    contour_levels : int
+        Number of contour levels when `lower_mode` is "contour".
+
+    figsize_scale : float
+        Inches per panel; the figure scales with len(cols).
+
+    alpha_scatter : float
+        Point opacity in scatter panels. Low values keep dense regions
+        readable.
+
+    scatter_size : float
+        Marker size in scatter panels.
+
+    cmap : str
+        Colormap for the density/contour panels.
+
+    corr_cmap : str
+        Diverging colormap for the upper-triangle correlation cells.
+
+    palette : str
+        Seaborn palette for the class colors.
+
+    contour_color, background_color, figure_color, grid_color, text_color, axis_color : str or None
+        Explicit color overrides. None takes the value from the active
+        matplotlib theme - see the dark-mode example above.
+
+    corr_methods : tuple[str, ...]
+        Correlation methods annotated in each upper-triangle cell.
+
+    show_legend : bool
+        Draw the class legend.
+
+    random_state : int
+        Seed for the subsample, so the same rows are drawn across runs.
+
+    theme : str or None
+        "light" or "dark", applied via set_plot_theme before drawing.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
     """
     import seaborn as sns
     from matplotlib.patches import Ellipse

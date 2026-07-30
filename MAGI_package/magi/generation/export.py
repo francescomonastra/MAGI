@@ -108,6 +108,30 @@ def generated_physics_to_detector_dataframe(
 
     Optionally:
         EventId ParticleName Energy X Y Z Vx Vy Vz
+
+    Parameters
+    ----------
+    generated_data : dict or pd.DataFrame
+        Generated events, typically the result of
+        reconstruct_generated_physics. Column names are matched against the
+        same alias sets save_detector_table accepts.
+
+    idx_to_type : dict[int, str] or None
+        Index-to-name map, needed when `generated_data` carries integer type
+        indices rather than a ready "ParticleName" column.
+
+    include_event_id : bool
+        Prepend an EventId column.
+
+    event_id_offset : int
+        First EventId value. Use it to keep IDs unique when concatenating
+        several generated batches into one source file.
+
+    Returns
+    -------
+    pd.DataFrame
+        Detector-schema table in output column order, ready for
+        save_detector_table.
     """
     required = [
         "E_gen",
@@ -360,8 +384,83 @@ def generate_detector_table_to_file(
           energy_transform="log10" or a fitted qt_energy (equivalently through
           energy_metadata, mirroring geometry_metadata).
 
+    All arguments are keyword-only.
+
     Parameters
     ----------
+    model : keras.Model
+        A loaded MAGI model exposing `.generate(cond, n)`.
+
+    filepath : str
+        Output path. Parent directories are created if missing. Any existing
+        file is truncated.
+
+    n_events : int
+        Number of events. Whether this counts raw samples or written
+        particles depends on `generate_until_n_written`.
+
+    type_probs : array-like of float
+        Categorical probabilities over particle types, summing to 1.
+
+    n_types : int
+        One-hot depth; must match the model's conditioning width.
+
+    idx_to_type : dict[int, str]
+        Index-to-name map, required here because the output format is keyed
+        by particle name.
+
+    energy_bins : array-like or None
+        Bin edges in MeV. Required for categorical heads, unused for mixture.
+
+    geometry_metadata : dict or None
+        Checkpoint metadata block supplying the geometry transform name and
+        the fitted `qt_*` transformers.
+
+    s_r_mean, s_r_std : float or None
+        v0.6 only, for unscaling s_r.
+
+    u_v_bins : array-like or None
+        v0.6 only, edges of the categorical u_v binning.
+
+    energy_head_mode : str or None
+        "categorical" or "mixture".
+
+    energy_transform : str or None
+        Energy transform name for mixture heads, e.g. "log10".
+
+    qt_energy : sklearn QuantileTransformer or None
+        Fitted energy transform for mixture heads.
+
+    energy_metadata : dict or None
+        Checkpoint metadata block supplying the two entries above.
+
+    center : tuple[float, float, float]
+        Sphere centre in mm. Must match the training geometry - the default
+        (0, 0, 0) is almost certainly not what your run used.
+
+    radius : float
+        Sphere radius in mm. Same caveat as `center`.
+
+    energy_mode : str
+        Within-bin draw for categorical heads; see energy_from_idx.
+
+    chunk_size : int
+        Events generated and written per iteration. Bounds peak memory, so
+        arbitrarily large `n_events` stays feasible.
+
+    seed : int
+        Seed for the type and energy draws, making the source file
+        reproducible.
+
+    include_event_id : bool
+        Text format only: prepend an EventId column.
+
+    float_format : str
+        Text format only: printf-style numeric format.
+
+    output_format : str
+        "text"/"txt" or "binary"/"bin".
+
     excluded_particle_names : set/list or None
         Particle names removed before writing. By default this removes neutrinos.
 
@@ -375,6 +474,16 @@ def generate_detector_table_to_file(
 
     max_empty_chunks : int
         Safety stop if filtering removes entire chunks repeatedly.
+
+    verbose : int
+        1 (default) reports chunk progress and the final written count.
+
+    Returns
+    -------
+    dict
+        Summary of the write: the output path, format, the number of raw
+        samples attempted and the number of particles actually written.
+        These differ whenever filtering removed events.
     """
     output_format = _normalize_output_format(output_format)
     idx_to_type = _normalize_idx_to_type(idx_to_type)
@@ -543,6 +652,103 @@ def generate_detector_input_file(
     energy_bins is only needed by categorical-energy models (v0.6/v0.7/v0.7.2).
     v0.8 mixture-energy models instead need the energy transform, supplied
     through energy_transform / qt_energy / energy_metadata.
+
+    This is the one-call entry point: it loads the checkpoint with
+    load_task_adaptive_model_for_generation and then streams the events to
+    disk with generate_detector_table_to_file. It is what
+    scripts/generate_geant_source.py wraps, and therefore what the companion
+    Geant4 project's `/generator/mlScript` macro ultimately drives.
+
+    All arguments are keyword-only.
+
+    Parameters
+    ----------
+    save_dir : str
+        Run directory holding the weights and JSON files.
+
+    model_name : str
+        Filename stem used when the run was saved.
+
+    model_config : dict
+        The saved architecture config, from `<model_name>_config.json`.
+
+    energy_bins : array-like or None
+        Bin edges in MeV. Required for categorical heads only.
+
+    n_types : int
+        Number of particle types; must match the checkpoint.
+
+    type_weights : array-like
+        Per-type loss weights from the run. Not used for sampling, but
+        required to rebuild the model.
+
+    type_probs : array-like of float
+        Categorical probabilities over particle types for the generated
+        source. Pass the training fractions to reproduce the natural mix.
+
+    idx_to_type : dict[int, str]
+        Index-to-name map.
+
+    geometry_metadata : dict or None
+        Checkpoint metadata block with the geometry transform and fitted
+        `qt_*` transformers, loaded from the run's
+        `*_quantile_transformers.joblib`.
+
+    u_v_bins, s_r_mean, s_r_std : optional
+        v0.6-only reconstruction parameters.
+
+    energy_head_mode : str or None
+        "categorical" or "mixture".
+
+    energy_transform : str or None
+        Energy transform name for mixture heads, e.g. "log10".
+
+    qt_energy : sklearn QuantileTransformer or None
+        Fitted energy transform for mixture heads.
+
+    energy_metadata : dict or None
+        Checkpoint metadata block supplying the two entries above.
+
+    output_file : str
+        Path of the Geant4 source file to write.
+
+    n_events : int
+        Number of source particles to produce.
+
+    radius : float
+        Sphere radius in mm. Must match the training geometry.
+
+    center : tuple[float, float, float]
+        Sphere centre in mm. The default is the reference X-IFU cryostat
+        crossing sphere; override it for another mass model.
+
+    seed : int
+        Seed for the sampling, making the source file reproducible.
+
+    chunk_size : int
+        Events generated and written per iteration.
+
+    energy_mode : str
+        Within-bin draw for categorical heads.
+
+    output_format : str
+        "text"/"txt" or "binary"/"bin".
+
+    excluded_particle_names : set/list or None
+        Particle names removed before writing; neutrinos by default.
+
+    generate_until_n_written : bool
+        Keep generating until `n_events` transportable particles have been
+        written, rather than stopping after `n_events` raw samples. True by
+        default, so Geant4 receives exactly the requested count.
+
+    verbose : int
+        1 (default) reports load and chunk progress.
+
+    Returns
+    -------
+    dict
+        The write summary from generate_detector_table_to_file.
     """
     from magi.training.checkpointing import load_task_adaptive_model_for_generation
 

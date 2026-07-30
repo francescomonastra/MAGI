@@ -47,9 +47,36 @@ def compute_primary_fraction(df, primary_col="PrimBool", primary_value=1):
         source_type="radioactive" in build_physical_features instead of
         setting these directly. See SOURCE_TYPE_PRIMARY_DEFAULTS.
 
-    Returns None if `primary_col` is not present (e.g. legacy 9-column
-    data, or a lineage column requested on a file that doesn't have it),
-    so downstream code can treat "no normalization info" uniformly.
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Detector table from load_detector_table, before any type filtering -
+        the fraction is a property of the source, not of the modelled subset.
+
+    primary_col : str
+        Column marking primaries. "PrimBool" (Geant4 ParentID==0) by default;
+        use "CreatorProcessName" for sources where no crossing is a Geant4
+        primary, such as decay chains in bulk material.
+
+    primary_value : int or str
+        Value in `primary_col` that counts as primary. 1 for PrimBool,
+        "RadioactiveDecay" for the lineage column.
+
+    Returns
+    -------
+    dict or None
+        Counts and the derived primary fraction, suitable for
+        save_normalization_summary and carried unchanged through the dataset
+        builders into checkpoint metadata. Returns None if `primary_col` is
+        not present (e.g. legacy 9-column data, or a lineage column requested
+        on a file that doesn't have it), so downstream code can treat "no
+        normalization info" uniformly.
+
+    See Also
+    --------
+    SOURCE_TYPE_PRIMARY_DEFAULTS : the per-source-type defaults, selected by
+        passing source_type to build_physical_features rather than setting
+        the two arguments above by hand.
     """
     if primary_col not in df.columns:
         return None
@@ -276,6 +303,17 @@ def build_physical_features(
 def print_physical_summary(prep):
     """
     Print a compact summary of the preprocessed dataset.
+
+    Printed sanity check only; nothing is returned.
+
+    Parameters
+    ----------
+    prep : dict
+        Result of build_physical_features.
+
+    Returns
+    -------
+    None
     """
     raw = prep["raw"]
     proj = prep["projected"]
@@ -549,6 +587,14 @@ def refine_peak_energy(
         sub-bin count to be accepted as a line.
     centroid_halfwidth_sub_bins : int
         Number of sub-bins either side of the winner included in the centroid.
+
+    Returns
+    -------
+    float or None
+        The refined peak energy in MeV, or None when the bin has too few
+        events or no sub-bin stands out - i.e. the "peak" is a continuum
+        fluctuation, not a line. Callers should treat None as "not a line"
+        rather than falling back to the bin centre.
     """
     E = np.asarray(E, dtype=np.float64)
     sub = E[(E >= bin_lo) & (E < bin_hi)]
@@ -801,6 +847,24 @@ def detect_energy_lines(
 def print_detected_energy_lines(result):
     """
     Print a compact summary of a detect_energy_lines() result.
+
+    Lists the matched lines with their catalogue and measured energies and
+    the offset between them - the quickest way to spot a mispositioned or
+    mislabelled line before committing to a training run.
+
+    Parameters
+    ----------
+    result : dict
+        Result of detect_energy_lines.
+
+    Returns
+    -------
+    None
+
+    See Also
+    --------
+    measure_line_centroid : the quantitative version, used by
+        tools/line_centroid_audit.py to fail loudly on large offsets.
     """
     print("\n--- Energy line detection ---")
     print(
@@ -1011,6 +1075,44 @@ def confirm_unresolved_candidate_lines(
     represents and gets "confirmed" as a redundant, nearly-degenerate second
     component pinned 0.5 eV away. Cu Kalpha1/Kalpha2 (21 eV apart, genuinely
     two distinguishable peaks in the data) are far enough apart to both pass.
+
+    Parameters
+    ----------
+    E : array-like of float
+        All physical energies in MeV, unbinned - the fine measurement
+        re-histograms the raw events rather than reusing the coarse grid.
+
+    candidate_lines : list[dict]
+        Full candidate table, each entry carrying "label" and "energy_mev".
+        Typically `load_candidate_energy_lines(...)["lines"]`.
+
+    matched_lines : list[dict]
+        Lines detect_energy_lines already matched, with the `min_count`
+        filter applied. Used both to skip candidates by label and to skip
+        candidates sitting within one FWHM of an already-matched position.
+
+    resolution_ev : float
+        Detector energy resolution as FWHM in eV - 4.0 for X-IFU. Sets the
+        scale for both the proximity skip and the search window.
+
+    min_count : int
+        Minimum line events for a candidate to be confirmed. Keep this equal
+        to the filter applied to `matched_lines`.
+
+    search_fwhm : float
+        Half-width of the search window around the catalogue position, in
+        FWHM units, within which the centroid is measured.
+
+    fail_fwhm : float
+        Maximum |measured - catalogue| offset, in FWHM units, for a candidate
+        to count as confirmed rather than rejected.
+
+    Returns
+    -------
+    list[dict]
+        Confirmed extra lines in matched-line shape, ready to append to
+        `matched_lines`. Empty when nothing new clears the thresholds, which
+        is a correct result rather than a failure.
     """
     E = np.asarray(E, dtype=np.float64)
     E_sorted = np.sort(E)
@@ -1768,6 +1870,20 @@ def build_feature_dataframe(
 def report_feature_dataframe(feature_pack):
     """
     Print checks and summaries for the final feature dataframe.
+
+    Covers row counts, the energy binning actually used, and - when the
+    quantile geometry columns are present - their mean/std/min/max, which
+    should sit near 0/1 and within roughly +/-5 if the transforms were fitted
+    correctly.
+
+    Parameters
+    ----------
+    feature_pack : dict
+        Result of build_feature_dataframe.
+
+    Returns
+    -------
+    None
     """
     feat = feature_pack["feat"]
     energy_bins = feature_pack["energy_bins"]
@@ -1857,7 +1973,42 @@ def fit_quantile_geometry_transforms(
     """
     Standalone helper for exploratory tests.
 
-    Prefer using build_feature_dataframe(...) for production preprocessing.
+    Prefer using build_feature_dataframe(...) for production preprocessing:
+    it fits the same transforms but also records them in the metadata that
+    generation needs to invert them, which this function does not.
+
+    Parameters
+    ----------
+    feat : pd.DataFrame
+        Feature frame that already carries u_r and u_v (and phi_r/phi_v when
+        `include_phi` is True), or that can be completed from `derived`.
+
+    derived : dict or None
+        Fallback source for any of u_r/u_v/phi_r/phi_v missing from `feat`.
+
+    n_quantiles : int
+        Number of quantiles in each sklearn QuantileTransformer. 10000 is
+        fine-grained enough for multi-million-event sources without making
+        the transform itself expensive to store.
+
+    random_state : int
+        Seed for the transformer's internal subsampling.
+
+    include_phi : bool
+        Also fit transforms for phi_r and phi_v, i.e. the v0.7.2 layout.
+        False (default) fits only u_r and u_v, the v0.7 layout.
+
+    Returns
+    -------
+    dict
+        The quantile-space columns ("u_r_q", "u_v_q", and with
+        `include_phi` also "phi_r_q"/"phi_v_q") alongside the fitted
+        transformers ("qt_u_r", "qt_u_v", "qt_phi_r", "qt_phi_v").
+
+    Raises
+    ------
+    ValueError
+        If a required column is in neither `feat` nor `derived`.
     """
     feat = feat.copy()
 

@@ -72,9 +72,51 @@ def load_detector_table(
                   "eBrem") for sources where PrimBool alone can't define
                   "primary" (see compute_primary_fraction).
 
-    has_primary_flag, has_lineage_cols : bool or None
-        If None (default), inferred from field count (>=10 => PrimBool
-        present, >=13 => lineage columns present).
+    Parameters
+    ----------
+    filepath : str
+        Path to the whitespace- or `sep`-delimited detector table.
+
+    columns : list[str] or None
+        Explicit column names. If None (default) the schema is auto-detected
+        from the field count and one of DEFAULT_COLUMNS_DET,
+        DEFAULT_COLUMNS_DET_PRIM or DEFAULT_COLUMNS_DET_LINEAGE is used.
+        Passing this disables auto-detection entirely.
+
+    drop_event_id : bool
+        Drop the "EventId" column after loading. True by default: the
+        downstream pipeline is per-crossing and never uses it.
+
+    sep : str or None
+        Field delimiter, following pandas' convention: None means any run of
+        whitespace, a single character is a literal delimiter, and anything
+        longer (e.g. r"\\s+") is treated as a regex.
+
+    has_primary_flag : bool or None
+        Whether the file carries the PrimBool column (Geant4 ParentID==0).
+        If None (default), inferred as `n_cols >= 10`.
+
+    has_lineage_cols : bool or None
+        Whether the file carries ParticleId / ParentParticleId /
+        CreatorProcessName. If None (default), inferred as `n_cols >= 13`.
+
+    drop_primary_flag : bool
+        Drop PrimBool after loading, even when present.
+
+    drop_lineage_cols : bool
+        Drop the three lineage columns after loading, even when present.
+
+    Returns
+    -------
+    pd.DataFrame
+        One row per detector crossing, with float energy/position/direction
+        columns and string ParticleName. Energy is in MeV and positions in
+        mm, matching the Geant4 output convention.
+
+    See Also
+    --------
+    compute_primary_fraction : uses the lineage columns to define "primary"
+        for sources where PrimBool is never true (e.g. decay chains).
     """
     if columns is None:
         n_cols = _peek_ncols(filepath, sep)
@@ -128,6 +170,25 @@ def load_detector_table(
 def report_basic_table_checks(df, numeric_cols=None):
     """
     Print basic integrity checks on the loaded dataframe.
+
+    Prints row count, a head preview, per-column NaN counts, a warning for any
+    non-finite numeric value, and - when the corresponding columns are present
+    - the measured primary fraction and the CreatorProcessName breakdown.
+    Diagnostic only; nothing is returned and the dataframe is not modified.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Table as returned by load_detector_table.
+
+    numeric_cols : list[str] or None
+        Columns to check for non-finite values. Defaults to
+        ["Energy", "X", "Y", "Z", "Vx", "Vy", "Vz"]. Names absent from `df`
+        are skipped silently.
+
+    Returns
+    -------
+    None
     """
     if numeric_cols is None:
         numeric_cols = ["Energy", "X", "Y", "Z", "Vx", "Vy", "Vz"]
@@ -162,6 +223,26 @@ def save_normalization_summary(normalization, filepath):
     dict as a small standalone JSON file, so it can be read from outside the
     MAGI package (e.g. a Geant4-side analysis notebook in another repo)
     without pulling in the full trained-model metadata.
+
+    Parameters
+    ----------
+    normalization : dict
+        JSON-serializable normalization summary. Typically the dict returned
+        by compute_primary_fraction, carrying the chi / f_primary factors the
+        Geant4-side analysis needs to rescale generated fluxes.
+
+    filepath : str
+        Destination path. Parent directories are created if missing.
+
+    Returns
+    -------
+    str
+        The `filepath` written, for chaining.
+
+    Raises
+    ------
+    ValueError
+        If `normalization` is None.
     """
     import json
 
@@ -183,6 +264,16 @@ def save_normalization_summary(normalization, filepath):
 def load_normalization_summary(filepath):
     """
     Load a normalization dict previously written by save_normalization_summary().
+
+    Parameters
+    ----------
+    filepath : str
+        Path to the JSON file.
+
+    Returns
+    -------
+    dict
+        The normalization summary, exactly as saved.
     """
     import json
 
@@ -196,6 +287,27 @@ def save_candidate_energy_lines(payload, filepath):
     tools/build_candidate_lines_from_geant4.py - a dict with a "lines" list
     plus mass-model/dataset provenance) as a standalone JSON file, so the
     experiment-specific line table lives as data rather than package source.
+
+    Parameters
+    ----------
+    payload : dict
+        Dict with a "lines" list - each entry carrying at least
+        "candidate_energy_mev" and "label" - plus provenance keys recording
+        which GDML mass model and fluorescence table it was derived from.
+
+    filepath : str
+        Destination path. Parent directories are created if missing.
+        By convention these live under CandidateLines/ in the repo.
+
+    Returns
+    -------
+    str
+        The `filepath` written, for chaining.
+
+    Raises
+    ------
+    ValueError
+        If `payload` is None.
     """
     import json
 
@@ -218,6 +330,17 @@ def load_candidate_energy_lines(filepath):
     """
     Load a candidate-energy-lines payload previously written by
     save_candidate_energy_lines() / tools/build_candidate_lines_from_geant4.py.
+
+    Parameters
+    ----------
+    filepath : str
+        Path to the JSON file.
+
+    Returns
+    -------
+    dict
+        The payload, exactly as saved. Pass `payload["lines"]` to
+        detect_energy_lines or build_gate_targets.
     """
     import json
 
@@ -239,6 +362,48 @@ def save_detector_table(
         ParticleName Energy X Y Z Vx Vy Vz
 
     Compatible with gen_phys returned by reconstruct_generated_physics().
+
+    Parameters
+    ----------
+    data : pd.DataFrame or dict
+        Generated events. A DataFrame must already carry the eight output
+        columns. A dict is matched key-by-key against a set of accepted
+        aliases per column ("Energy"/"E_gen"/"energy", "X"/"x_gen"/"x", ...),
+        so the raw output of reconstruct_generated_physics can be passed
+        directly. Values may be TensorFlow tensors; they are converted and
+        squeezed to 1D.
+
+    filepath : str
+        Destination path. Parent directories are created if missing.
+
+    include_event_id : bool
+        Prepend a 0-based integer EventId column, matching the 9-column
+        input schema that load_detector_table reads back.
+
+    sep : str
+        Field delimiter. Tab by default.
+
+    float_format : str
+        printf-style format for the numeric columns. The default "%.8e"
+        preserves full float32 precision through the text round-trip.
+
+    Returns
+    -------
+    pd.DataFrame
+        The exact table written, with columns in output order.
+
+    Raises
+    ------
+    ValueError
+        If a required quantity is missing from a dict input, or a value is
+        not 1D after squeezing.
+    TypeError
+        If `data` is neither a DataFrame nor a dict.
+
+    See Also
+    --------
+    generate_detector_table_to_file : streams large runs in chunks instead of
+        materializing the whole table in memory.
     """
     import os
     import numpy as np

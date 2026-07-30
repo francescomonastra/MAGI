@@ -24,6 +24,44 @@ def compare_hist_with_residuals(
     where the real density is ~0 are floored by `eps_res` and will show large
     residuals; `ratio_clip` bounds the residual axis so a handful of empty-bin
     spikes do not flatten the rest of the panel.
+
+    Parameters
+    ----------
+    real, gen : array-like of float
+        The two 1-D samples to compare. They need not be the same length -
+        both histograms are density-normalized.
+
+    name : str
+        Variable name, used for the axis label and title.
+
+    bins : int
+        Number of histogram bins, shared by both samples.
+
+    range_ : tuple[float, float] or None
+        Histogram range. None (default) lets numpy pick from the combined
+        data. Set it explicitly when comparing plots across runs.
+
+    eps_res : float
+        Floor applied to the real density before dividing, so empty real bins
+        give a large-but-finite residual instead of inf.
+
+    ratio_clip : float or None
+        Symmetric limit on the residual axis, e.g. 1.0 for +/-100%. None
+        leaves the axis unbounded.
+
+    savepath : str or None
+        Where to write the figure. None does not save.
+
+    dpi : int
+        Save resolution.
+
+    show : bool
+        Call plt.show(). Set False in scripted runs that only save.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+        The figure, so a caller can annotate it further before saving.
     """
     real = np.asarray(real)
     gen = np.asarray(gen)
@@ -68,6 +106,18 @@ def report_final_ranges(real_pack, gen_pack):
     A coarse but effective check: a generated range that overshoots the real one
     usually means a Gaussian head extrapolating past the support of its quantile
     transform.
+
+    Parameters
+    ----------
+    real_pack : dict
+        Real physical arrays, from reconstruct_real_test_physics.
+
+    gen_pack : dict
+        Generated physical arrays, from reconstruct_generated_physics.
+
+    Returns
+    -------
+    None
     """
     print("\n--- RANGE CHECK ---")
     print("logE real/gen:",
@@ -104,6 +154,21 @@ def report_norm_checks(real_pack, gen_pack):
     These should sit at 1: the angle heads predict a 2-D vector that is only
     softly regularized onto the unit circle, so a mean below 1 means the
     regularizer is losing and the reconstructed angles are less reliable.
+
+    Only meaningful for v0.7 (cos/sin phi) heads. The v0.7.2+ heads predict
+    phi directly through a quantile transform and have no norm to check.
+
+    Parameters
+    ----------
+    real_pack : dict
+        Real physical arrays, from reconstruct_real_test_physics.
+
+    gen_pack : dict
+        Generated physical arrays, from reconstruct_generated_physics.
+
+    Returns
+    -------
+    None
     """
     norm_phi_r_real = np.sqrt(real_pack["cphi_r_real"]**2 + real_pack["sphi_r_real"]**2)
     norm_phi_r_gen = np.sqrt(gen_pack["cphi_r_gen"]**2 + gen_pack["sphi_r_gen"]**2)
@@ -119,9 +184,20 @@ def report_norm_checks(real_pack, gen_pack):
 def build_real_generated_featureframes(real_pack, gen_pack):
     """Pack the real and generated arrays into DataFrames for the plot helpers.
 
-    Returns (df_real, df_gen, df_both), where df_both is the concatenation with
-    a "sample" column of "real"/"generated" - the form plot_pairwise_sample and
-    the correlation/covariance plots expect.
+    Parameters
+    ----------
+    real_pack : dict
+        Real physical arrays, from reconstruct_real_test_physics.
+
+    gen_pack : dict
+        Generated physical arrays, from reconstruct_generated_physics.
+
+    Returns
+    -------
+    tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]
+        (df_real, df_gen, df_both), where df_both is the concatenation with a
+        "sample" column of "real"/"generated" - the form plot_pairwise_sample
+        and the correlation/covariance plots expect.
     """
     real_dict = {
         "sample": "real",

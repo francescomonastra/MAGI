@@ -52,11 +52,43 @@ def filter_particle_types_and_discretize_uv(
     Expected columns:
         ParticleName, E_idx, s_r, cphi_r, sphi_r, u_v, cphi_v, sphi_v
 
+    This is the v0.6 path, kept for reloading old runs. New work should use
+    filter_particle_types_continuous_geometry.
+
+    Parameters
+    ----------
+    feat : pd.DataFrame
+        Feature frame from build_feature_dataframe, in the legacy
+        discrete-u_v column layout listed above.
+
+    prob_threshold : float
+        Drop any ParticleName whose population fraction is below this. Rare
+        species cannot be conditioned on reliably and destabilize the type
+        one-hot; 1e-5 is the notebook default.
+
+    uv_nbins : int
+        Requested number of u_v bins. The effective count
+        ("uv_nbins_eff" in the result) can be lower if the data does not
+        populate them all.
+
+    uv_eps : float
+        Margin used to keep u_v strictly inside [-1, 1] before binning,
+        avoiding an edge bin that only ever receives boundary values.
+
     normalization : dict or None
         Dataset-level primary/secondary crossing counts from
         build_feature_dataframe(...)["normalization"], carried through
         unchanged (not a per-row model input) so it survives to
         checkpointing metadata.
+
+    Returns
+    -------
+    dict
+        Dataset pack with "dataset_mode" == "discrete_uv" and keys:
+        "feat", "cont_cols", "X_cont_raw", "E_idx", "u_v_idx", "y_type",
+        "type_names", "type_to_idx", "idx_to_type", "type_probs", "n_types",
+        "u_v_bins", "u_v_centers", "u_v_values", "uv_nbins_requested",
+        "uv_nbins_eff", "normalization". Pass it to split_feature_data.
     """
     feat = feat.copy()
 
@@ -121,6 +153,17 @@ def filter_particle_types_and_discretize_uv(
 def report_discretized_features(dataset_pack):
     """
     Report diagnostics for the legacy discrete-u_v dataset.
+
+    Printed sanity check only; nothing is returned.
+
+    Parameters
+    ----------
+    dataset_pack : dict
+        Result of filter_particle_types_and_discretize_uv.
+
+    Returns
+    -------
+    None
     """
     feat = dataset_pack["feat"]
     X_cont_raw = dataset_pack["X_cont_raw"]
@@ -197,11 +240,46 @@ def filter_particle_types_continuous_geometry(
         ParticleName, E_idx,
         u_r_q, u_v_q, phi_r_q, phi_v_q
 
+    This is the current path, used by every v0.7+ head including the v0.8
+    mixture head. Which of the two layouts a run used is recorded as
+    "continuous_geometry_version" and must match at generation time.
+
+    Parameters
+    ----------
+    feat : pd.DataFrame
+        Feature frame from build_feature_dataframe, already carrying the
+        quantile-transformed geometry columns from
+        fit_quantile_geometry_transforms.
+
+    prob_threshold : float
+        Drop any ParticleName whose population fraction is below this.
+        1e-5 is the notebook default.
+
+    cont_cols : tuple[str, ...] or None
+        Explicit continuous-feature columns, in model input order. If None
+        (default) the layout is inferred from which columns are present,
+        preferring v0.7.2 (continuous phi) over v0.7 (cos/sin phi).
+
     normalization : dict or None
         Dataset-level primary/secondary crossing counts from
         build_feature_dataframe(...)["normalization"], carried through
         unchanged (not a per-row model input) so it survives to
         checkpointing metadata.
+
+    Returns
+    -------
+    dict
+        Dataset pack with "dataset_mode" == "continuous_geometry" and keys:
+        "continuous_geometry_version", "feat", "cont_cols", "X_cont_raw",
+        "E_idx", "y_type", "type_names", "type_to_idx", "idx_to_type",
+        "type_probs", "n_types", "normalization". Pass it to
+        split_feature_data.
+
+    Raises
+    ------
+    ValueError
+        If neither the v0.7 nor the v0.7.2 column set is present and
+        `cont_cols` was not given explicitly.
     """
     feat = feat.copy()
 
@@ -270,6 +348,17 @@ def filter_particle_types_continuous_geometry(
 def report_continuous_geometry_features(dataset_pack):
     """
     Report diagnostics for the v0.7 continuous-geometry dataset.
+
+    Printed sanity check only; nothing is returned.
+
+    Parameters
+    ----------
+    dataset_pack : dict
+        Result of filter_particle_types_continuous_geometry.
+
+    Returns
+    -------
+    None
     """
     feat = dataset_pack["feat"]
     X_cont_raw = dataset_pack["X_cont_raw"]
@@ -319,6 +408,38 @@ def split_feature_data(
     Works for both:
       - dataset_mode == "discrete_uv"
       - dataset_mode == "continuous_geometry"
+
+    The split is stratified on particle type, so every species keeps its
+    population fraction in all three splits - the conditioning is a type
+    one-hot, and a species missing from validation cannot be monitored.
+
+    Parameters
+    ----------
+    dataset_pack : dict
+        Result of filter_particle_types_continuous_geometry (or the legacy
+        filter_particle_types_and_discretize_uv).
+
+    test_size_total : float
+        Fraction held out of train, later halved into val and test. The
+        default 0.30 gives a 70/15/15 split.
+
+    val_size_from_temp : float
+        Fraction of that held-out part that becomes test rather than val.
+        0.50 (default) splits it evenly.
+
+    random_state : int
+        Seed for both train_test_split calls. Fixing it is what makes a run
+        reproducible end-to-end; the multi-seed acceptance harness varies it.
+
+    Returns
+    -------
+    dict
+        `dataset_pack` extended with "idx_train"/"idx_val"/"idx_test",
+        "X_cont_{train,val,test}", "E_{train,val,test}",
+        "y_{train,val,test}", and - when the source columns exist -
+        "E_{train,val,test}_raw" (physical MeV) and, in discrete_uv mode,
+        "u_v_{train,val,test}" plus their "_raw" counterparts. Pass it to
+        scale_continuous_features.
     """
     X_cont_raw = dataset_pack["X_cont_raw"]
     E_idx = dataset_pack["E_idx"]
@@ -397,6 +518,18 @@ def report_split_summary(split_pack, n_types):
 
     Printed sanity check only - confirms the split did not skew the particle-type
     mix, which matters because the conditioning is a type one-hot.
+
+    Parameters
+    ----------
+    split_pack : dict
+        Result of split_feature_data.
+
+    n_types : int
+        Number of particle types, i.e. `dataset_pack["n_types"]`.
+
+    Returns
+    -------
+    None
     """
     print(
         "Train:", split_pack["X_cont_train"].shape,
@@ -418,6 +551,31 @@ def scale_continuous_features(split_pack, scale_cols=(0,)):
         scale_cols=()
 
     because u_r_q and u_v_q are already quantile-normalized.
+
+    The scaler is fit on the training split only and then applied to val and
+    test, so no validation statistics leak into training. It is returned in
+    the pack and saved with the checkpoint, because generation must invert
+    exactly this transform.
+
+    Parameters
+    ----------
+    split_pack : dict
+        Result of split_feature_data.
+
+    scale_cols : tuple[int, ...]
+        Column indices of X_cont to standardize. The default (0,) scales only
+        the first column, which is s_r in the legacy layout. Pass an empty
+        tuple for v0.7+ quantile geometry, where every geometry column is
+        already standardized by its own transform.
+
+    Returns
+    -------
+    dict
+        `split_pack` extended with "X_cont_{train,val,test}_s" (float32),
+        "scaler" (a fitted sklearn StandardScaler, or None when
+        `scale_cols` is empty), "scaler_sr" (alias kept for older notebooks)
+        and "scale_cols". When column 0 is scaled, also "s_r_mean" and
+        "s_r_std". Pass it to build_conditioning_and_weights.
     """
     scale_cols = tuple(scale_cols)
 
@@ -436,6 +594,11 @@ def scale_continuous_features(split_pack, scale_cols=(0,)):
     scaler.fit(split_pack["X_cont_train"][:, list(scale_cols)])
 
     def apply_selected_scaler(X_in):
+        """Standardize only the `scale_cols` columns, leaving the rest as-is.
+
+        Closes over the scaler fitted on the training split above, so val and
+        test go through the identical transform.
+        """
         X_out = X_in.copy()
         X_out[:, list(scale_cols)] = scaler.transform(
             X_in[:, list(scale_cols)]
@@ -470,6 +633,15 @@ def report_scaled_features(scaled_pack):
     Printed sanity check only. Columns left out of `scale_cols` are reported
     unscaled, which is expected for the quantile-transformed geometry columns -
     they are already standardized by their own transform.
+
+    Parameters
+    ----------
+    scaled_pack : dict
+        Result of scale_continuous_features.
+
+    Returns
+    -------
+    None
     """
     cont_cols = scaled_pack.get("cont_cols", None)
 
@@ -510,7 +682,21 @@ def report_scaled_features(scaled_pack):
 
 
 def to_one_hot(y_idx, n_types):
-    """One-hot encode integer particle-type indices as a float32 tensor."""
+    """One-hot encode integer particle-type indices as a float32 tensor.
+
+    Parameters
+    ----------
+    y_idx : array-like of int
+        Particle-type indices, as produced by the dataset builders.
+
+    n_types : int
+        One-hot depth, i.e. `dataset_pack["n_types"]`.
+
+    Returns
+    -------
+    tf.Tensor
+        float32 tensor of shape (len(y_idx), n_types).
+    """
     y_idx = np.asarray(y_idx, dtype=np.int32)
     return tf.one_hot(y_idx, depth=n_types, dtype=tf.float32)
 
@@ -536,8 +722,30 @@ def build_conditioning_and_weights(
     to keep rare species from being ignored, not so much that the common ones
     are under-fit.
 
-    Returns `scaled_pack` extended with cond_train/val/test, type_weights,
-    counts_train and freq_train.
+    Parameters
+    ----------
+    scaled_pack : dict
+        Result of scale_continuous_features.
+
+    n_types : int
+        Number of particle types, i.e. `dataset_pack["n_types"]`.
+
+    idx_to_type : dict[int, str] or None
+        Index-to-name map. If given it is copied into the result, so the
+        reporting helpers can label the classes; otherwise whatever the
+        upstream pack already carried is kept.
+
+    alpha : float
+        Exponent in the weight formula above, in [0, 1]. See the discussion
+        of the extremes in the summary; 0.5 is the default.
+
+    Returns
+    -------
+    dict
+        `scaled_pack` extended with "cond_train"/"cond_val"/"cond_test"
+        (float32 one-hot tensors), "type_weights" (a float32 tf constant of
+        length n_types, mean 1), "counts_train" and "freq_train". Pass it to
+        build_tf_datasets.
     """
     cond_train = to_one_hot(scaled_pack["y_train"], n_types)
     cond_val = to_one_hot(scaled_pack["y_val"], n_types)
@@ -570,7 +778,23 @@ def build_conditioning_and_weights(
 
 
 def report_conditioning(condition_pack, n_types):
-    """Print the conditioning shapes, class fractions, counts and type weights."""
+    """Print the conditioning shapes, class fractions, counts and type weights.
+
+    Printed sanity check only; nothing is returned.
+
+    Parameters
+    ----------
+    condition_pack : dict
+        Result of build_conditioning_and_weights.
+
+    n_types : int
+        Number of particle types. Class fractions are only printed when the
+        pack carries an "idx_to_type" map to label them with.
+
+    Returns
+    -------
+    None
+    """
     print("\ncond_train shape:", condition_pack["cond_train"].shape)
     print("cond_val shape  :", condition_pack["cond_val"].shape)
     print("cond_test shape :", condition_pack["cond_test"].shape)
@@ -614,6 +838,37 @@ def build_tf_datasets(
 
     v0.7 continuous-geometry output batch:
         (X_cont, E_idx, cond), dummy
+
+    Only the training dataset is shuffled. The targets are dummies: every
+    model computes its own loss inside train_step from the inputs (see
+    make_dummy_targets).
+
+    Parameters
+    ----------
+    condition_pack : dict
+        Result of build_conditioning_and_weights.
+
+    batch_size : int
+        Examples per batch. 4096 is the notebook default - these are small
+        per-event feature vectors, and large batches keep the CPU-only
+        training throughput reasonable.
+
+    shuffle_buffer_cap : int
+        Upper bound on the shuffle buffer, which is otherwise the training
+        set size. Caps memory on multi-million-event sources; the buffer is
+        still far larger than the batch, so shuffling stays effective.
+
+    Returns
+    -------
+    dict
+        `condition_pack` extended with "train_ds", "val_ds", "test_ds"
+        (batched, prefetched tf.data.Dataset) and "batch_size". Pass
+        "train_ds"/"val_ds" to fit_model or train_single_run.
+
+    See Also
+    --------
+    report_tf_datasets : prints the resulting element layout, which differs
+        between the two dataset modes.
     """
     dataset_mode = condition_pack.get("dataset_mode", "discrete_uv")
 
@@ -687,6 +942,15 @@ def report_tf_datasets(dataset_tf_pack):
     Worth running once after build_tf_datasets: the element layout differs
     between the legacy discrete-u_v models and the continuous-geometry ones, and
     a mismatch surfaces here rather than as an unpacking error inside train_step.
+
+    Parameters
+    ----------
+    dataset_tf_pack : dict
+        Result of build_tf_datasets.
+
+    Returns
+    -------
+    None
     """
     dataset_mode = dataset_tf_pack.get("dataset_mode", "discrete_uv")
 
@@ -727,6 +991,39 @@ def report_energy_binning_diagnostics(
     Covers bin count and widths, how the training events distribute across bins,
     and empty/underpopulated bins. Use it to check that the binning resolves the
     spectral features you care about before committing to a long run.
+
+    Parameters
+    ----------
+    energy_bins : dict
+        Result of build_energy_bins, carrying at least the bin edges.
+
+    E_idx : array-like of int
+        Per-event bin index, over the whole dataset.
+
+    E_values : array-like of float
+        Per-event physical energy in MeV, over the whole dataset.
+
+    idx_train : array-like of int
+        Row indices of the training split, so the occupancy report reflects
+        what the model will actually see.
+
+    energy_binning_mode : str
+        Which mode produced the binning: "fixed_width", "min_counts" or
+        "log_fixed_count". Only used to label the report and to decide which
+        of the three parameters below are meaningful.
+
+    bin_width : float or None
+        Bin width in MeV, for "fixed_width".
+
+    n_bins : int or None
+        Bin count, for "log_fixed_count".
+
+    min_counts : int or None
+        Minimum events per bin, for "min_counts".
+
+    Returns
+    -------
+    None
     """
     E_train_values = E_values[idx_train].astype(np.float64)
     E_train_idx = E_idx[idx_train].astype(np.int32)

@@ -100,6 +100,20 @@ def extract_callback_metadata(callbacks):
       - adaptive scheduler state, when available
 
     The goal is to make the run scientifically reproducible.
+
+    Parameters
+    ----------
+    callbacks : list or None
+        The callback list actually passed to fit. Unrecognized callbacks are
+        skipped rather than raising, so this is safe to call on any list.
+        None returns an empty dict.
+
+    Returns
+    -------
+    dict
+        Per-callback configuration, plus adaptive-scheduler state for the
+        MAGI task-adaptive callbacks. Stored inside the checkpoint metadata
+        by save_training_checkpoint and save_final_trained_model.
     """
     metadata = {}
 
@@ -289,7 +303,59 @@ def save_training_checkpoint(
       - metadata
       - callback configuration/state
 
-    This is useful during development or after a run.
+    This is useful during development or after a run. For a run you intend
+    to keep and generate from, use save_final_trained_model instead - it also
+    writes the model config and human-readable summary.
+
+    All arguments are keyword-only.
+
+    Parameters
+    ----------
+    model : keras.Model
+        The trained (or partly trained) MAGI model.
+
+    checkpoint_dir : str
+        Directory to write into; created if missing.
+
+    checkpoint_name : str
+        Filename stem for every artifact in this checkpoint.
+
+    epoch : int or None
+        When given, appended to the stem as `_epoch_NNN`, so successive
+        checkpoints in one run do not overwrite each other.
+
+    history : keras.callbacks.History or dict or None
+        Training history to persist alongside the weights.
+
+    model_config : dict or None
+        Architecture config. For v0.8 heads pass
+        `model.to_generation_config()` - the loader requires its keys.
+
+    preprocessing_metadata : dict or None
+        Everything needed to reproduce the preprocessing at generation time:
+        energy bins, geometry transform name, candidate lines, and the
+        fitted transformers' filenames.
+
+    training_metadata : dict or None
+        Free-form record of the training setup (epochs, learning rate, seed).
+
+    evaluation_metadata : dict or None
+        Free-form record of any scores computed for this checkpoint.
+
+    callbacks : list or None
+        The callback list used, passed through extract_callback_metadata.
+
+    notes : str or None
+        Free-text note stored in the metadata.
+
+    normalization_metadata : dict or None
+        The compute_primary_fraction summary, so flux normalization survives
+        with the run.
+
+    Returns
+    -------
+    dict
+        Paths of the files written, keyed by artifact.
     """
     os.makedirs(checkpoint_dir, exist_ok=True)
 
@@ -359,6 +425,62 @@ def save_final_trained_model(
       - human-readable summary
 
     This should be used for a model considered good enough to archive.
+
+    The six files it writes under `save_dir` are ONE unit - weights, config,
+    metadata, history, task weights and summary. Generation needs the config
+    and metadata as much as the weights, so copy or move them together. For
+    quantile-geometry runs the `*_quantile_transformers.joblib` file saved
+    separately belongs to the same unit.
+
+    All arguments are keyword-only.
+
+    Parameters
+    ----------
+    model : keras.Model
+        The trained MAGI model.
+
+    save_dir : str
+        Directory to write into; created if missing. By convention
+        `trained_models/<run_name>/`.
+
+    model_name : str
+        Filename stem shared by all six artifacts.
+
+    history : keras.callbacks.History or dict or None
+        Training history, written to `<model_name>_history.json`.
+
+    model_config : dict or None
+        Architecture config, written to `<model_name>_config.json`. For v0.8
+        heads pass `model.to_generation_config()`: every key it emits is
+        required by load_task_adaptive_model_for_generation, which raises on
+        a missing one rather than silently rebuilding a different
+        architecture.
+
+    preprocessing_metadata : dict or None
+        Energy bins, geometry transform name, candidate/matched lines and
+        transformer filenames - everything needed to invert the preprocessing
+        at generation time.
+
+    training_metadata : dict or None
+        Free-form record of the training setup (epochs, learning rate, seed).
+
+    evaluation_metadata : dict or None
+        Free-form record of any scores computed for this run.
+
+    callbacks : list or None
+        The callback list used, passed through extract_callback_metadata.
+
+    notes : str or None
+        Free-text note stored in the metadata.
+
+    normalization_metadata : dict or None
+        The compute_primary_fraction summary, so flux normalization survives
+        with the run.
+
+    Returns
+    -------
+    dict
+        Paths of the six files written, keyed by artifact.
     """
     os.makedirs(save_dir, exist_ok=True)
 
@@ -435,6 +557,17 @@ def save_final_trained_model(
 def load_metadata(metadata_path):
     """
     Load a saved metadata JSON file.
+
+    Parameters
+    ----------
+    metadata_path : str
+        Path to `<model_name>_metadata.json` inside a run directory.
+
+    Returns
+    -------
+    dict
+        The metadata, carrying the "preprocessing_metadata" and
+        "model_config" blocks that generation needs.
     """
     with open(metadata_path, "r") as f:
         return json.load(f)
@@ -443,6 +576,17 @@ def load_metadata(metadata_path):
 def load_json(path):
     """
     Load a generic JSON file.
+
+    Parameters
+    ----------
+    path : str
+        Path to any JSON file, e.g. a run's `_config.json` or
+        `_history.json`.
+
+    Returns
+    -------
+    dict or list
+        The parsed JSON content.
     """
     with open(path, "r") as f:
         return json.load(f)
@@ -520,6 +664,61 @@ def load_task_adaptive_model_for_generation(
     each checkpoint's JSON files together with its weights - the guard catches
     a missing/renamed *key*, not a value that was saved wrong in the first
     place.
+
+    All arguments are keyword-only.
+
+    Parameters
+    ----------
+    save_dir : str
+        Run directory holding the weights and JSON files.
+
+    model_name : str
+        Filename stem used when the run was saved.
+
+    model_config : dict
+        The saved architecture config, i.e.
+        `load_json(f"{save_dir}/{model_name}_config.json")`. Its
+        "model_class" selects which head is rebuilt.
+
+    energy_bins : array-like or None
+        Bin edges in MeV. Required for the categorical-energy heads
+        (v0.6 - v0.7.2); the v0.8 mixture head does not use them.
+
+    u_v_bins : array-like or None
+        v0.6 only: edges of the categorical u_v binning.
+
+    n_types : int or None
+        Number of particle types. Taken from `model_config` when omitted.
+
+    type_weights : array-like or None
+        Per-type loss weights. Only affects further training, not
+        generation, so it can be left None when only sampling.
+
+    radius : float
+        Sphere radius in mm, used to rebuild the geometry-aware heads. Must
+        match the training geometry.
+
+    compile_model_fn : callable or None
+        Optional compile hook, called as `compile_model_fn(model)` after the
+        weights load. Only needed if you intend to keep training.
+
+    learning_rate : float or None
+        Passed to `compile_model_fn` when compiling.
+
+    verbose : int
+        1 (default) prints which class was rebuilt and which files were read.
+
+    Returns
+    -------
+    keras.Model
+        The rebuilt model with its trained weights loaded, ready for
+        `.generate(cond, n)` or generate_latent_outputs.
+
+    Raises
+    ------
+    KeyError
+        If `model_config` is a v0.8 mixture config missing any key in
+        `_V08_MIXTURE_REQUIRED_KEYS`.
     """
     import os
     import json

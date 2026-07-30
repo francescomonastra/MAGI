@@ -21,7 +21,22 @@ def compute_wasserstein_scores(real_pack, gen_pack):
     are NOT normalized, so compare them across runs on the same source rather
     than across variables.
 
-    Returns a dict keyed by variable name.
+    Parameters
+    ----------
+    real_pack : dict
+        Real physical arrays, from reconstruct_real_test_physics.
+
+    gen_pack : dict
+        Generated physical arrays, from reconstruct_generated_physics. Only
+        variables present in both packs are scored; anything missing from
+        either is skipped silently rather than raising.
+
+    Returns
+    -------
+    dict[str, float]
+        Wasserstein distance per variable name, in that variable's own units.
+        The acceptance harness reads "logE" from here as the global
+        energy-marginal score.
     """
     scores = {
         "logE": wasserstein_distance(real_pack["logE_real"], gen_pack["logE_gen"]),
@@ -350,6 +365,19 @@ def report_generated_constraints(gen_pack, radius=100.0):
     unit vector, and each angle's (cos, sin) pair should have norm 1. Large
     deviations point at a reconstruction/transform mismatch rather than at an
     under-trained model.
+
+    Parameters
+    ----------
+    gen_pack : dict
+        Generated physical arrays, from reconstruct_generated_physics.
+
+    radius : float
+        Expected sphere radius in mm. Must match the `radius` used during
+        reconstruction; a mismatch shows up here as a uniform offset.
+
+    Returns
+    -------
+    None
     """
     print("--- CONSTRAINT CHECKS ---")
 

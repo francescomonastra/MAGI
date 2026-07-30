@@ -10,6 +10,20 @@ def renorm_cos_sin(c, s, eps=1e-12):
 
     The angle heads are only softly regularized towards norm 1, so the raw
     output has to be renormalized before an angle can be read off it.
+
+    Parameters
+    ----------
+    c, s : array-like of float
+        Raw predicted cosine and sine components, elementwise paired.
+
+    eps : float
+        Floor on the norm, guarding against division by zero when a
+        predicted pair collapses to the origin.
+
+    Returns
+    -------
+    tuple[np.ndarray, np.ndarray]
+        The (cos, sin) pair rescaled to unit norm.
     """
     r = np.sqrt(c * c + s * s) + eps
     return c / r, s / r
@@ -20,6 +34,16 @@ def u_from_s(s):
 
     u_v is bounded and piles up at the edges, which a Gaussian head fits badly;
     the model works in s-space and this brings the sample back.
+
+    Parameters
+    ----------
+    s : array-like of float
+        Unbounded s-space values, as produced by the model's head.
+
+    Returns
+    -------
+    np.ndarray
+        The corresponding u = tanh(s) values, in (-1, 1).
     """
     return np.tanh(s)
 
@@ -77,6 +101,74 @@ def reconstruct_generated_features(
       - "mixture" (v0.8): inverse the energy transform T on the model's raw
           energy_y_gen sample - via qt_energy.inverse_transform if T was a
           QuantileTransformer, or 10**y if T was log10 (energy_transform="log10").
+
+    The transforms passed here MUST be the ones fitted during training, not
+    refitted on generated data. In practice pass `geometry_metadata` and
+    `energy_metadata` straight from the loaded checkpoint and leave the
+    individual transformer arguments alone.
+
+    Parameters
+    ----------
+    gen_pack : dict
+        Result of generate_latent_outputs, carrying at least "y_cont_gen_s"
+        plus whichever energy keys the head produced.
+
+    energy_bins : array-like or None
+        Bin edges in MeV. Required for `energy_head_mode="categorical"`,
+        ignored for "mixture".
+
+    energy_mode : str
+        Passed to energy_from_idx for categorical heads: "uniform" (default)
+        draws inside the bin, anything else takes the bin centre.
+
+    rng : np.random.Generator or None
+        Generator for the within-bin energy draw. Categorical heads only.
+
+    s_r_mean, s_r_std : float or None
+        v0.6 only. Mean/std used to unscale s_r, from
+        `scaled_pack["s_r_mean"]` / `["s_r_std"]`.
+
+    u_v_bins : array-like or None
+        v0.6 only. Edges of the categorical u_v binning.
+
+    qt_u_r, qt_u_v, qt_phi_r, qt_phi_v : sklearn QuantileTransformer or None
+        Fitted geometry transforms, inverted to recover physical u_r, u_v,
+        phi_r and phi_v. Values found in `geometry_metadata` take precedence
+        over these.
+
+    geometry_mode : str or None
+        One of "arctanh_uv_discrete", "quantile_u_r_u_v",
+        "quantile_u_r_u_v_phi_r_phi_v". If None it is inferred from which
+        transformers were supplied, but passing it explicitly (or via
+        metadata) is safer - a mismatch here silently produces wrong angles
+        rather than an error.
+
+    geometry_metadata : dict or None
+        Checkpoint metadata block. When given, its "geometry_transform" and
+        "qt_*" entries override the corresponding arguments above.
+
+    energy_head_mode : str or None
+        "categorical" or "mixture". Selects which energy path runs.
+
+    qt_energy : sklearn QuantileTransformer or None
+        Fitted energy transform, for mixture heads whose transform was a
+        quantile transform.
+
+    energy_transform : str or None
+        Name of the energy transform for mixture heads, e.g. "log10", in
+        which case energy is recovered as 10**y.
+
+    energy_metadata : dict or None
+        Checkpoint metadata block supplying `energy_transform` / `qt_energy`.
+
+    Returns
+    -------
+    dict
+        Physical feature arrays: "E" (MeV), "u_r", "u_v", "phi_r", "phi_v",
+        and - for v0.8 packs - the pass-through "energy_component_idx_gen"
+        identifying which mixture component each event came from, which the
+        line-recovery metric uses. Pass the result to
+        reconstruct_generated_physics.
     """
     from .sampling import energy_from_idx
 
@@ -295,6 +387,36 @@ def reconstruct_generated_physics(
 ):
     """
     Reconstruct x, y, z, vx, vy, vz from generated feature variables.
+
+    Applies the sphere-surface coordinate transforms in magi.core.geometry:
+    (u_r, phi_r) place the crossing point on the sphere, (u_v, phi_v) give
+    the direction. The geometry is currently sphere-only, so `center` and
+    `radius` must match the virtual surface used in the Geant4 run.
+
+    Parameters
+    ----------
+    reco_pack : dict
+        Result of reconstruct_generated_features.
+
+    center : tuple[float, float, float]
+        Sphere centre in mm. The default is the crossing sphere of the
+        reference X-IFU cryostat mass model.
+
+    radius : float
+        Sphere radius in mm.
+
+    eps : float
+        Numerical margin keeping u_r/u_v strictly inside (-1, 1) before the
+        trigonometric inversion, so an event exactly at a pole does not
+        produce a NaN.
+
+    Returns
+    -------
+    dict
+        Physical event arrays "E", "x", "y", "z", "vx", "vy", "vz" (energies
+        in MeV, positions in mm, directions unit-normalized), plus the
+        feature arrays carried through. Pass it to
+        generated_physics_to_detector_dataframe or save_detector_table.
     """
     C = np.asarray(center, dtype=np.float64)
     R = float(radius)
@@ -376,6 +498,54 @@ def reconstruct_real_test_physics(
     
       - v0.7.2:
           X_cont_test = [u_r_q, u_v_q, phi_r_q, phi_v_q]
+
+    This is the real-data counterpart of reconstruct_generated_physics: it
+    runs the held-out test split back through the same inverse transforms, so
+    the validation metrics compare like with like rather than comparing
+    generated physical values against real quantile-space ones.
+
+    Parameters
+    ----------
+    X_cont_test : np.ndarray
+        Test-split continuous features, in one of the layouts above. Use the
+        unscaled `split_pack["X_cont_test"]` for quantile geometry.
+
+    E_test_raw : array-like of float
+        Test-split physical energies in MeV, i.e. `split_pack["E_test_raw"]`.
+
+    center : tuple[float, float, float]
+        Sphere centre in mm; must match the training geometry.
+
+    radius : float
+        Sphere radius in mm.
+
+    eps : float
+        Numerical margin keeping u_r/u_v strictly inside (-1, 1).
+
+    u_v_test_raw : array-like or None
+        v0.6 only. Raw u_v values, bypassing the categorical binning.
+
+    u_v_bins : array-like or None
+        v0.6 only. Edges of the categorical u_v binning.
+
+    qt_u_r, qt_u_v, qt_phi_r, qt_phi_v : sklearn QuantileTransformer or None
+        The same fitted transforms used at training time, inverted here.
+        Entries in `geometry_metadata` take precedence.
+
+    geometry_mode : str or None
+        Which layout X_cont_test is in. Inferred from the supplied
+        transformers when None.
+
+    geometry_metadata : dict or None
+        Checkpoint metadata block supplying `geometry_transform` and the
+        `qt_*` transformers.
+
+    Returns
+    -------
+    dict
+        Real physical arrays in the same key layout as
+        reconstruct_generated_physics, so the two can be passed directly to
+        compute_wasserstein_scores or build_real_generated_featureframes.
     """
     C = np.asarray(center, dtype=np.float64)
     R = float(radius)

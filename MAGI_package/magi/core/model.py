@@ -280,6 +280,16 @@ class CVAE_CatEnergy_CatUV(keras.Model):
 
     @property
     def metrics(self):
+        """Trackers Keras resets each epoch and reports in the logs.
+
+        Every entry here becomes a column in the History object, so this
+        list is the authoritative set of names plot_history can plot for
+        this head.
+
+        Returns
+        -------
+        list[keras.metrics.Metric]
+        """
         return [
             self.loss_tracker,
             self.rec_tracker,
@@ -457,6 +467,23 @@ class CVAE_CatEnergy_CatUV(keras.Model):
     # Keras train/test
     # ==========================================================
     def train_step(self, data):
+        """Run one gradient step on one batch. Called by Keras, not directly.
+
+        The loss is computed here from the inputs rather than by Keras from
+        a target tensor, which is why the datasets carry dummy targets (see
+        magi.data.dataset.make_dummy_targets).
+
+        Parameters
+        ----------
+        data : tuple
+            One dataset element, unpacked as `(y_cont, E_idx_true, uv_idx_true, cond), _`,
+            as built by magi.data.dataset.build_tf_datasets.
+
+        Returns
+        -------
+        dict[str, tf.Tensor]
+            Current value of every tracker in `metrics`.
+        """
         (y_cont, E_idx_true, uv_idx_true, cond), _ = data
 
         E_onehot = tf.one_hot(E_idx_true, depth=self.n_energy_bins, dtype=tf.float32)
@@ -518,6 +545,22 @@ class CVAE_CatEnergy_CatUV(keras.Model):
         return {m.name: m.result() for m in self.metrics}
 
     def test_step(self, data):
+        """Run one validation step on one batch. Called by Keras, not directly.
+
+        Same loss as train_step with no gradient update, so val_* metrics
+        are directly comparable to their training counterparts.
+
+        Parameters
+        ----------
+        data : tuple
+            One dataset element, unpacked as `(y_cont, E_idx_true, uv_idx_true, cond), _`,
+            as built by magi.data.dataset.build_tf_datasets.
+
+        Returns
+        -------
+        dict[str, tf.Tensor]
+            Current value of every tracker in `metrics`.
+        """
         (y_cont, E_idx_true, uv_idx_true, cond), _ = data
 
         E_onehot = tf.one_hot(E_idx_true, depth=self.n_energy_bins, dtype=tf.float32)
@@ -906,6 +949,16 @@ class CVAE_CatEnergy_CatUV_TaskAdaptive(keras.Model):
 
     @property
     def metrics(self):
+        """Trackers Keras resets each epoch and reports in the logs.
+
+        Every entry here becomes a column in the History object, so this
+        list is the authoritative set of names plot_history can plot for
+        this head.
+
+        Returns
+        -------
+        list[keras.metrics.Metric]
+        """
         return [
             self.loss_tracker,
             self.rec_tracker,
@@ -1126,6 +1179,23 @@ class CVAE_CatEnergy_CatUV_TaskAdaptive(keras.Model):
     # Keras train/test
     # ==========================================================
     def train_step(self, data):
+        """Run one gradient step on one batch. Called by Keras, not directly.
+
+        The loss is computed here from the inputs rather than by Keras from
+        a target tensor, which is why the datasets carry dummy targets (see
+        magi.data.dataset.make_dummy_targets).
+
+        Parameters
+        ----------
+        data : tuple
+            One dataset element, unpacked as `(y_cont, E_idx_true, uv_idx_true, cond), _`,
+            as built by magi.data.dataset.build_tf_datasets.
+
+        Returns
+        -------
+        dict[str, tf.Tensor]
+            Current value of every tracker in `metrics`.
+        """
         (y_cont, E_idx_true, uv_idx_true, cond), _ = data
 
         E_onehot = tf.one_hot(E_idx_true, depth=self.n_energy_bins, dtype=tf.float32)
@@ -1207,6 +1277,22 @@ class CVAE_CatEnergy_CatUV_TaskAdaptive(keras.Model):
         return {m.name: m.result() for m in self.metrics}
 
     def test_step(self, data):
+        """Run one validation step on one batch. Called by Keras, not directly.
+
+        Same loss as train_step with no gradient update, so val_* metrics
+        are directly comparable to their training counterparts.
+
+        Parameters
+        ----------
+        data : tuple
+            One dataset element, unpacked as `(y_cont, E_idx_true, uv_idx_true, cond), _`,
+            as built by magi.data.dataset.build_tf_datasets.
+
+        Returns
+        -------
+        dict[str, tf.Tensor]
+            Current value of every tracker in `metrics`.
+        """
         (y_cont, E_idx_true, uv_idx_true, cond), _ = data
 
         E_onehot = tf.one_hot(E_idx_true, depth=self.n_energy_bins, dtype=tf.float32)
@@ -1616,6 +1702,16 @@ class CVAE_CatEnergy_ContGeom_TaskAdaptive(keras.Model):
 
     @property
     def metrics(self):
+        """Trackers Keras resets each epoch and reports in the logs.
+
+        Every entry here becomes a column in the History object, so this
+        list is the authoritative set of names plot_history can plot for
+        this head.
+
+        Returns
+        -------
+        list[keras.metrics.Metric]
+        """
         return [
             self.loss_tracker,
             self.rec_tracker,
@@ -1846,6 +1942,23 @@ class CVAE_CatEnergy_ContGeom_TaskAdaptive(keras.Model):
     # Keras train/test
     # ==========================================================
     def train_step(self, data):
+        """Run one gradient step on one batch. Called by Keras, not directly.
+
+        The loss is computed here from the inputs rather than by Keras from
+        a target tensor, which is why the datasets carry dummy targets (see
+        magi.data.dataset.make_dummy_targets).
+
+        Parameters
+        ----------
+        data : tuple
+            One dataset element, unpacked as `(y_cont, E_idx_true, cond), _`,
+            as built by magi.data.dataset.build_tf_datasets.
+
+        Returns
+        -------
+        dict[str, tf.Tensor]
+            Current value of every tracker in `metrics`.
+        """
         (y_cont, E_idx_true, cond), _ = data
 
         E_onehot = tf.one_hot(
@@ -1927,6 +2040,22 @@ class CVAE_CatEnergy_ContGeom_TaskAdaptive(keras.Model):
         return {m.name: m.result() for m in self.metrics}
 
     def test_step(self, data):
+        """Run one validation step on one batch. Called by Keras, not directly.
+
+        Same loss as train_step with no gradient update, so val_* metrics
+        are directly comparable to their training counterparts.
+
+        Parameters
+        ----------
+        data : tuple
+            One dataset element, unpacked as `(y_cont, E_idx_true, cond), _`,
+            as built by magi.data.dataset.build_tf_datasets.
+
+        Returns
+        -------
+        dict[str, tf.Tensor]
+            Current value of every tracker in `metrics`.
+        """
         (y_cont, E_idx_true, cond), _ = data
 
         E_onehot = tf.one_hot(
@@ -2303,6 +2432,16 @@ class CVAE_CatEnergy_ContPhi_TaskAdaptive(keras.Model):
 
     @property
     def metrics(self):
+        """Trackers Keras resets each epoch and reports in the logs.
+
+        Every entry here becomes a column in the History object, so this
+        list is the authoritative set of names plot_history can plot for
+        this head.
+
+        Returns
+        -------
+        list[keras.metrics.Metric]
+        """
         return [
             self.loss_tracker,
             self.rec_tracker,
@@ -2538,6 +2677,23 @@ class CVAE_CatEnergy_ContPhi_TaskAdaptive(keras.Model):
     # Keras train/test
     # ==========================================================
     def train_step(self, data):
+        """Run one gradient step on one batch. Called by Keras, not directly.
+
+        The loss is computed here from the inputs rather than by Keras from
+        a target tensor, which is why the datasets carry dummy targets (see
+        magi.data.dataset.make_dummy_targets).
+
+        Parameters
+        ----------
+        data : tuple
+            One dataset element, unpacked as `(y_cont, E_idx_true, cond), _`,
+            as built by magi.data.dataset.build_tf_datasets.
+
+        Returns
+        -------
+        dict[str, tf.Tensor]
+            Current value of every tracker in `metrics`.
+        """
         (y_cont, E_idx_true, cond), _ = data
 
         E_onehot = tf.one_hot(
@@ -2614,6 +2770,22 @@ class CVAE_CatEnergy_ContPhi_TaskAdaptive(keras.Model):
         return {m.name: m.result() for m in self.metrics}
 
     def test_step(self, data):
+        """Run one validation step on one batch. Called by Keras, not directly.
+
+        Same loss as train_step with no gradient update, so val_* metrics
+        are directly comparable to their training counterparts.
+
+        Parameters
+        ----------
+        data : tuple
+            One dataset element, unpacked as `(y_cont, E_idx_true, cond), _`,
+            as built by magi.data.dataset.build_tf_datasets.
+
+        Returns
+        -------
+        dict[str, tf.Tensor]
+            Current value of every tracker in `metrics`.
+        """
         (y_cont, E_idx_true, cond), _ = data
 
         E_onehot = tf.one_hot(
@@ -3374,6 +3546,16 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
 
     @property
     def metrics(self):
+        """Trackers Keras resets each epoch and reports in the logs.
+
+        Every entry here becomes a column in the History object, so this
+        list is the authoritative set of names plot_history can plot for
+        this head.
+
+        Returns
+        -------
+        list[keras.metrics.Metric]
+        """
         return [
             self.loss_tracker,
             self.rec_tracker,

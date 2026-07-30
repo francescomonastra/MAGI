@@ -246,6 +246,16 @@ def print_model_structure(model, explain=True, summaries=True):
         with their formulas. Set False for the bare configuration + summaries.
     summaries : bool
         Include the per-submodule `keras.Model.summary()` dumps.
+
+    Returns
+    -------
+    None
+
+    Notes
+    -----
+    The model must have been built (called at least once, or loaded with its
+    weights) - an unbuilt subclassed model reports no layers and the
+    parameter counts come out as zero.
     """
     print("\n===== MAGI MODEL STRUCTURE =====")
     print(f"Model class   = {model.__class__.__name__}")
@@ -472,6 +482,15 @@ def print_trainable_status(model):
     Print trainable/frozen status and parameter counts of the main model blocks.
 
     Works for both the standard and task-adaptive CVAE variants.
+
+    Parameters
+    ----------
+    model : keras.Model
+        A built MAGI model.
+
+    Returns
+    -------
+    None
 
     """
 
@@ -708,6 +727,20 @@ def print_model_tree_with_params(model):
     - CVAE_CatEnergy_ContPhi_TaskAdaptive
     - CVAE_MixEnergy_ContPhi_TaskAdaptive (v0.8: gate + flow continuum +
       fixed lines + learned conditional prior, all shown with their formulas)
+
+    Parameters
+    ----------
+    model : keras.Model
+        A built MAGI model.
+
+    Returns
+    -------
+    None
+
+    See Also
+    --------
+    print_model_structure : the prose version, with the generative formulas
+        and the configured line table rather than the tree.
     """
     print("\n===== MAGI MODEL TREE (WITH PARAMS) =====")
     print(f"{model.__class__.__name__}")
