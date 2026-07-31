@@ -43,7 +43,7 @@ Built on `keras`/`tensorflow`. Author: Francesco Monastra (INAF).
 ## Quick start
 
 ```bash
-git clone https://github.com/Fchewie/MAGI.git
+git clone https://github.com/francescomonastra/MAGI.git
 cd MAGI
 pip install -e MAGI_package/
 ```
