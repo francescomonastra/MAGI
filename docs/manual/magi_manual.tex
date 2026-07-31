@@ -323,7 +323,9 @@ magi/
   utils/
     plotting.py         all plot_* helpers, light/dark theme
     model_inspection.py introspect a built model
-tests/              118 tests; see Section~\ref{sec:tools}
+    circuit_viz.py       interactive routing-circuit HTML (Section~\ref{sec:visualization})
+    full_circuit.py      interactive per-event gradient-circuit HTML (Section~\ref{sec:visualization})
+tests/              135 tests; see Section~\ref{sec:tools}
 docs/USAGE.md       short-form user guide
 \end{lstlisting}
 
@@ -760,6 +762,69 @@ background here). With \code{generate\_until\_n\_written=True}, the default,
 generation continues until \code{n\_events} \emph{transportable} particles have
 been written, so Geant4 receives exactly the requested count.
 
+\subsection{Visualization}
+\label{sec:visualization}
+
+Two self-contained, interactive HTML tools in \code{magi.utils} inspect a
+trained v0.8 mixture run without a plotting library or a running kernel ---
+each call writes one \code{.html} file that opens in any browser, with its own
+light/dark palette and no external dependency.
+
+\paragraph{\code{save\_routing\_circuit}} The gate's conditional routing, per
+type: for each particle type, a fan-out diagram of one-hot conditioning
+$\to$ gate $\to$ zone, colored by the checkpoint's own \code{zone\_probs} ---
+the same per-type empirical routing frequency the learned conditional prior
+is conditioned on (\S\ref{sec:theory}).
+
+\begin{lstlisting}[language=Python]
+magi.save_routing_circuit(save_dir="trained_models/v0_8_2_priorzone_CR",
+                           model_name="mix_CR")
+\end{lstlisting}
+
+Reads only the checkpoint's own config/metadata --- no raw data, no loaded
+model, so it runs in under a second. Requires
+\code{prior\_zone\_conditioning=True} at training time: a \code{config\_version
+1} checkpoint (or any run with zone-conditioning off) has no \code{zone\_probs}
+to plot and raises \code{KeyError}.
+
+\paragraph{\code{save\_full\_circuit}} A deeper, per-event trace: for one real
+held-out event per type, gradient$\times$activation attribution through
+\emph{every} stage --- encoder, latent $z$, decoder stem, deep trunk, and all
+three heads (energy, position, direction) --- ending in the real marginal
+energy spectrum, with the selected type's own contribution shaded on top of
+the combined one. The attribution target is the model's own per-event
+reconstruction loss, not just the gate logit, so branches with no gradient
+path to the gate at all --- the energy branch reads the decoder stem directly,
+bypassing the deep trunk that feeds position and direction --- still get
+genuine, nonzero attribution. An adjustable ``highlight top $N$\,\%'' slider
+and a light/dark toggle are built into the page.
+
+\begin{lstlisting}[language=Python]
+magi.save_full_circuit(
+    save_dir="trained_models/v0_8_2_priorzone_CR", model_name="mix_CR",
+    training_data_filepath="TrainingData/alloutputDSCryoSphereCR.dat",
+    candidate_lines_file="CandidateLines/CANDIDATE_ENERGY_LINES_"
+                          "SRON_CCNwithXFDM_NoShield_FlowerCryoAC_fixed_EADL.json",
+    center=(0.0, 0.0, -507.66), radius=100.0)
+\end{lstlisting}
+
+\begin{magiwarn}[This one re-derives your preprocessing --- budget the time]
+Unlike the routing circuit, \code{save\_full\_circuit} needs a real held-out
+sample to trace, which a checkpoint alone does not carry. It re-runs line
+matching, gate-target construction, and the quantile/log10 transforms against
+the raw detector table you point it at, then rebuilds the same train/test
+split (\code{random\_state=42} by default, matching
+\code{tools/run\_v0\_8\_real.py}) before loading the model. Expect roughly one
+preprocessing pass over your source: a couple of minutes for the 3.4\,M-event
+CR file, longer for a bigger one (Torio's 8.8\,M events takes several minutes
+on CPU).
+\end{magiwarn}
+
+The stage layout (how many encoder/trunk/branch columns are drawn, and where
+they connect) is derived from the loaded checkpoint's own architecture, not
+hardcoded to any one source --- it renders correctly whether the checkpoint
+has two particle types and four gate zones (Small/K-40) or six and six (CR).
+
 % =====================================================================
 \section{The tools}
 \label{sec:tools}
@@ -845,10 +910,11 @@ run on it; they finish in minutes.
 python -m pytest MAGI_package/tests/ -q
 \end{lstlisting}
 
-118 tests covering flow round-trip identity, checkpoint save/load config
+135 tests covering flow round-trip identity, checkpoint save/load config
 matching, gate-target construction (including the exact/resolution A/B), prior
-zone-conditioning, and public API docstring coverage. They catch mechanical
-regressions; they do not tell you a trained model reproduced your source.
+zone-conditioning, the two visualization tools (\S\ref{sec:visualization}), and
+public API docstring coverage. They catch mechanical regressions; they do not
+tell you a trained model reproduced your source.
 
 % =====================================================================
 \section{Example: a full run}

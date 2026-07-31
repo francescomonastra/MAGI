@@ -34,11 +34,12 @@ magi.initialize_environment(seed=42)
 
 ## Tests
 
-118 tests covering the pieces that fail silently rather than loudly: flow/prior
+135 tests covering the pieces that fail silently rather than loudly: flow/prior
 round-trip identity, line-integral recovery on synthetic spectra, the coupling
 prior actually fitting an injected coupling, prior zone-conditioning, gate-target
 construction, the checkpoint config-match guard, the Geant4 export script
-end-to-end, and public-API docstring coverage. CPU only, ~3 minutes.
+end-to-end, the two visualization tools' HTML/JS generation, and public-API
+docstring coverage. CPU only, ~3 minutes.
 
 ```bash
 pip install pytest
@@ -82,14 +83,20 @@ MAGI_package/
     ├── validation/        # Wasserstein / histogram-residual / line-recovery metrics
     │   ├── metrics.py
     │   └── compare.py
-    └── utils/             # plotting, model introspection
+    └── utils/             # plotting, model introspection, interactive HTML diagnostics
         ├── plotting.py
-        └── model_inspection.py
+        ├── model_inspection.py
+        ├── circuit_viz.py     #   save_routing_circuit: gate routing per type
+        └── full_circuit.py    #   save_full_circuit: per-event gradient-attribution trace
 ```
 
 `magi.print_model_structure(model)` and `magi.print_model_tree_with_params(model)` print
 a description of a built model — its generative structure and the formulas behind it, the
 configured mixture/prior/flow settings, and the parameter counts per block.
+
+`magi.save_routing_circuit(...)` and `magi.save_full_circuit(...)` write a self-contained,
+interactive HTML file for inspecting a trained run in a browser — see
+[Inspecting a trained model](docs/USAGE.md#inspecting-a-trained-model) in the usage guide.
 
 ## Author
 

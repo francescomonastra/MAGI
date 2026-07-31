@@ -118,7 +118,14 @@ See also `MAGI_package/docs/USAGE.md` for the user-facing version of this workfl
   work" is assessed here.
 - `utils/` — `plotting.py` (all the `plot_*` helpers used in notebooks, with a
   dark/light theme switch via `set_plot_theme`), `model_inspection.py` (introspect
-  layer/parameter structure of a built model).
+  layer/parameter structure of a built model), `circuit_viz.py`
+  (`save_routing_circuit`: interactive HTML of the v0.8 gate's per-type routing,
+  from a checkpoint's own `zone_probs`) and `full_circuit.py`
+  (`save_full_circuit`: interactive HTML gradient-attribution trace of one real
+  held-out event per type through every stage — encoder, z, decoder stem, trunk,
+  and all three heads — ending in the real energy spectrum; re-derives the
+  held-out split from the raw detector table, so unlike the other two it needs
+  real data, not just the checkpoint).
 - `magi/magi.py` is a simplified high-level API (`setup`, `build_model`, `train_model`,
   `plot_training`) layered on top of the modules above for quick notebook use;
   `__init__.py` re-exports the full public surface (this is the canonical list of what's

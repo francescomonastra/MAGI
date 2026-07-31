@@ -118,6 +118,45 @@ principle for geometry and takes the energy head further: a categorical head can
 place a line more precisely than one bin, so the line positions become fixed physical
 inputs instead of something the model has to learn.
 
+## Inspecting a trained model
+
+Two functions in `magi.utils` write a self-contained, interactive HTML file for
+looking inside a trained v0.8 mixture run — no plotting library, no running
+kernel, just open the file in a browser:
+
+- **`magi.save_routing_circuit(save_dir, model_name)`** — the gate's conditional
+  routing per type, colored by the checkpoint's own `zone_probs`. Reads only the
+  checkpoint's saved config/metadata, so it runs in under a second. Requires
+  `prior_zone_conditioning=True` at training time; raises `KeyError` otherwise
+  (no `zone_probs` to plot).
+- **`magi.save_full_circuit(save_dir, model_name, training_data_filepath, candidate_lines_file, center, radius)`**
+  — a per-event trace: for one real held-out event per type, gradient×activation
+  attribution through every stage (encoder, latent `z`, decoder stem, deep
+  trunk, and all three heads), ending in the real marginal energy spectrum with
+  the selected type's contribution shaded on top. Unlike the routing circuit,
+  this needs a real held-out sample to trace, so it re-derives the
+  training-time preprocessing (line matching, gate targets, quantile/log10
+  transforms, the train/test split) from the raw detector table you point it
+  at — budget roughly one preprocessing pass over your source (minutes, not
+  seconds; longer for a bigger source). Both an adjustable "highlight top N%"
+  slider and a light/dark toggle are built into the page (the toggle is manual
+  rather than `prefers-color-scheme`-driven, since that wasn't reliably honored
+  by every viewer this was tested in).
+
+```python
+magi.save_routing_circuit(save_dir="trained_models/v0_8_2_priorzone_CR", model_name="mix_CR")
+
+magi.save_full_circuit(
+    save_dir="trained_models/v0_8_2_priorzone_CR", model_name="mix_CR",
+    training_data_filepath="TrainingData/alloutputDSCryoSphereCR.dat",
+    candidate_lines_file="CandidateLines/CANDIDATE_ENERGY_LINES_SRON_CCNwithXFDM_NoShield_FlowerCryoAC_fixed_EADL.json",
+    center=(0.0, 0.0, -507.66), radius=100.0)
+```
+
+Both derive their layout from the loaded checkpoint's own architecture (number
+of types, gate zones, encoder/branch depth) rather than assuming one source's
+shape, so the same call works unchanged on CR, Small, or any other source.
+
 ## Accuracy you can rely on
 
 **Read this before quoting any number a MAGI-generated source produces.** v0.8.2 is a
@@ -232,10 +271,11 @@ this factor.
 **Line intensities are not yet validated — see [Accuracy you can rely on](#accuracy-you-can-rely-on)
 below before quoting a generated line flux.**
 
-**Unit tests cover the machinery, not the physics.** `MAGI_package/tests/` holds 118
+**Unit tests cover the machinery, not the physics.** `MAGI_package/tests/` holds 135
 tests (`python -m pytest MAGI_package/tests/`) covering flow round-trips, checkpoint
-save/load config matching, gate-target construction, prior zone-conditioning, and public
-API docstring coverage. They catch mechanical regressions. They do **not** tell you a
+save/load config matching, gate-target construction, prior zone-conditioning, the two
+visualization tools, and public API docstring coverage. They catch mechanical
+regressions. They do **not** tell you a
 trained model reproduced your source: that is still empirical, via `magi.validation`,
 `tools/acceptance_v0_8.py` and notebook plots. If you change anything in the
 geometry-transform layer, re-validate by hand against real data before trusting
