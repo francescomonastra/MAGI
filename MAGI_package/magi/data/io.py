@@ -292,7 +292,7 @@ def save_candidate_energy_lines(payload, filepath):
     ----------
     payload : dict
         Dict with a "lines" list - each entry carrying at least
-        "candidate_energy_mev" and "label" - plus provenance keys recording
+        "energy_mev" and "label" - plus provenance keys recording
         which GDML mass model and fluorescence table it was derived from.
 
     filepath : str
