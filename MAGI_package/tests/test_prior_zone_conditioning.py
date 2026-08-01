@@ -31,6 +31,7 @@ def _zone_probs():
 
 def _build_model(**kwargs):
     model = magi.CVAE_MixEnergy_ContPhi_TaskAdaptive(
+        gate_focal_gamma=0.0,  # pinned: was the default before v0.8.2 flipped it
         n_types=N_TYPES, line_positions_y=LINE_POSITIONS_Y, latent_dim=4,
         hidden=(16, 16), beta=0.2, continuum_mode="flow",
         continuum_flow_bins=8, continuum_flow_transforms=2,

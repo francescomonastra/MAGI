@@ -3032,7 +3032,7 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
         w_phi_v=1.0,
         w_gate_aux=0.3,
         gate_class_weights=None,
-        gate_focal_gamma=0.0,
+        gate_focal_gamma=1.0,
         w_continuum_repulsion=0.3,
         continuum_repulsion_margin=0.05,
         w_flow_line_repulsion=0.0,
@@ -3040,7 +3040,7 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
         w_continuum_balance=1.0,
         continuum_mu_init=None,
 
-        continuum_mode="gaussian",
+        continuum_mode="flow",
         energy_flow_condition="z_cond",
         continuum_flow_bins=8,
         continuum_flow_transforms=2,
@@ -3048,11 +3048,21 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
         continuum_flow_conditioner_hidden=(64,),
         continuum_flow_y_mean=None,
         continuum_flow_y_scale=None,
+        # NOT flipped to "cdf" with the other v0.8.2 defaults, despite "cdf"
+        # being the recommended setting: it is the one recommended value that
+        # cannot be a default. ConditionalRQSFlow raises unless
+        # continuum_flow_warp_y_knots/_z_knots are supplied too, and those are
+        # fit from the training energies (magi.fit_cdf_warp_knots), so the
+        # constructor - which never sees the data - has nothing sensible to
+        # default them to. Defaulting the mode without the knots would make
+        # every bare construction raise; silently falling back to affine when
+        # the knots are absent would be exactly the wrong-architecture-without-
+        # an-error failure the checkpoint config guard exists to prevent.
         continuum_flow_warp="affine",
         continuum_flow_warp_y_knots=None,
         continuum_flow_warp_z_knots=None,
 
-        prior="gaussian",
+        prior="coupling",
         prior_n_layers=6,
         prior_hidden=(64, 64),
         prior_log_scale_clamp=3.0,

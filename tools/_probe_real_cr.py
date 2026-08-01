@@ -48,6 +48,7 @@ print(f"[{time.time()-t0:.0f}s] tf datasets ready; total events {n_train:,}; n_t
 ey = feat["energy_y"].to_numpy()
 lls = magi.line_logsigma_from_resolution(10.0**line_positions_y, 4.0, fwhm=True)
 model = magi.CVAE_MixEnergy_ContPhi_TaskAdaptive(
+    gate_focal_gamma=0.0,  # pinned: was the default before v0.8.2 flipped it
     n_types=dataset_pack["n_types"], line_positions_y=line_positions_y, latent_dim=8,
     hidden=(128,128,64), beta=0.2, continuum_mode="flow",
     continuum_flow_y_mean=float(ey.mean()), continuum_flow_y_scale=float(ey.std()),

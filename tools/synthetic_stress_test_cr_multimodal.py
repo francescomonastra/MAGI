@@ -265,7 +265,8 @@ if args.continuum_mode == "flow":
     print(f"  flow: bins={args.continuum_flow_bins} transforms={args.continuum_flow_transforms} "
           f"warp={args.continuum_warp} prior={args.prior} n_layers={args.prior_n_layers} hidden={tuple(args.prior_hidden)}")
 
-model = magi.CVAE_MixEnergy_ContPhi_TaskAdaptive(**model_kwargs)
+model = magi.CVAE_MixEnergy_ContPhi_TaskAdaptive(
+        gate_focal_gamma=0.0,  # pinned: was the default before v0.8.2 flipped it**model_kwargs)
 magi.compile_model(model, learning_rate=2e-4)
 
 history = model.fit(train_ds, validation_data=val_ds, epochs=args.epochs, verbose=2)

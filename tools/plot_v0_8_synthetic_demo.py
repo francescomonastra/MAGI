@@ -107,7 +107,9 @@ val_ds = make_ds(val_idx, 512, shuffle=False)
 
 
 def train_and_generate(model_kwargs):
-    model = magi.CVAE_MixEnergy_ContPhi_TaskAdaptive(**model_kwargs)
+    model = magi.CVAE_MixEnergy_ContPhi_TaskAdaptive(
+    gate_focal_gamma=0.0,  # pinned: was the default before v0.8.2 flipped it
+    prior="gaussian",  # pinned: was the default before v0.8.2 flipped it**model_kwargs)
     magi.compile_model(model, learning_rate=2e-4)
     model.fit(train_ds, validation_data=val_ds, epochs=args.epochs, verbose=0)
     gen = model.generate(tf.constant(cond), n)
