@@ -1,3 +1,7 @@
+% Verified 2026-08-01 against Crossref (DOI entries: title, year, volume,
+% pages, first author) and Semantic Scholar (arXiv entries: title, author
+% list, venue). Conference entries carry the PUBLISHED venue and year,
+% which differ from the arXiv preprint year - that is intentional.
 % =====================================================================
 % MAGI user manual - references carried over from paper/magi_references.bib.
 %
@@ -8,9 +12,8 @@
 % If you change an entry in paper/magi_references.bib, change it here too.
 % Entries unique to the manual live in magi_theory.bib.
 %
-% Verification status is inherited from the paper file: these were
-% collected 2026-07-19 and the ones without a VERIFY note were believed
-% confirmed at that time. Re-check before citing in a submission.
+% Every entry here was re-verified on the date at the top of this file.
+% If you change an entry, re-verify it and update that date.
 % =====================================================================
 
 @inproceedings{Kingma2014VAE,
@@ -117,8 +120,11 @@
 
 @article{Krause2021CaloFlow,
   author  = {Krause, Claudius and Shih, David},
-  title   = {{CaloFlow: Fast and Accurate Generation of Calorimeter
-             Showers with Normalizing Flows}},
+  % Published title differs from the arXiv:2106.05285 preprint title
+  % ("CaloFlow: Fast and Accurate Generation of Calorimeter Showers with
+  % Normalizing Flows"); this is the one that matches the DOI below.
+  title   = {{Fast and accurate simulations of calorimeter showers with
+             normalizing flows}},
   journal = {Physical Review D},
   volume  = {107},
   number  = {11},

@@ -130,18 +130,20 @@ kernel, just open the file in a browser:
   `prior_zone_conditioning=True` at training time; raises `KeyError` otherwise
   (no `zone_probs` to plot).
 - **`magi.save_full_circuit(save_dir, model_name, training_data_filepath, candidate_lines_file, center, radius)`**
-  — a per-event trace: for one real held-out event per type, gradient×activation
-  attribution through every stage (encoder, latent `z`, decoder stem, deep
-  trunk, and all three heads), ending in the real marginal energy spectrum with
-  the selected type's contribution shaded on top. Unlike the routing circuit,
-  this needs a real held-out sample to trace, so it re-derives the
-  training-time preprocessing (line matching, gate targets, quantile/log10
-  transforms, the train/test split) from the raw detector table you point it
-  at — budget roughly one preprocessing pass over your source (minutes, not
-  seconds; longer for a bigger source). Both an adjustable "highlight top N%"
-  slider and a light/dark toggle are built into the page (the toggle is manual
-  rather than `prefers-color-scheme`-driven, since that wasn't reliably honored
-  by every viewer this was tested in).
+  — how heavily every unit in the network is actually used, per particle type,
+  across many real held-out events. Each unit in every stage (encoder, latent
+  `z`, decoder stem, deep trunk, and all three heads) is colored by its usage,
+  and wires join the 10 most-used units of each stage to the next, taking the
+  color of their weaker end. One button per type, plus an "All types" button
+  that pools every type's sampled events into a single whole-network view.
+  Unlike the routing circuit, this needs real held-out events to measure, so it
+  re-derives the training-time preprocessing (line matching, gate targets,
+  quantile/log10 transforms, the train/test split) from the raw detector table
+  you point it at, then runs the attribution itself — budget several minutes
+  per source (~4–8 min measured for CR's 3.4M events; longer for a bigger one).
+  A light/dark toggle is built into the page (manual rather than
+  `prefers-color-scheme`-driven, since that wasn't reliably honored by every
+  viewer this was tested in).
 
 ```python
 magi.save_routing_circuit(save_dir="trained_models/v0_8_2_priorzone_CR", model_name="mix_CR")
@@ -156,6 +158,45 @@ magi.save_full_circuit(
 Both derive their layout from the loaded checkpoint's own architecture (number
 of types, gate zones, encoder/branch depth) rather than assuming one source's
 shape, so the same call works unchanged on CR, Small, or any other source.
+
+### What "usage" means, and what it does not
+
+`save_full_circuit` measures **Expected Conductance** — the generalization of
+Integrated Gradients from input features to *internal* units ([Dhamdhere et al.
+2019](https://arxiv.org/abs/1805.12233)), averaged over baselines drawn from the
+real data rather than a single synthetic zero vector ([Erion et al.
+2021](https://arxiv.org/abs/1906.10670)). A zero baseline would be meaningless
+here: the model's inputs are quantile-transformed, so "0" is a real, specific
+quantile, not the absence of a signal. Only the continuous feature block is
+interpolated along the attribution path — the one-hot type conditioning is held
+fixed, which is what makes "usage when the network processes type *t*" a
+well-defined quantity. Tunable via `n_events_per_type` (default 128),
+`n_baselines` (16) and `n_steps` (32).
+
+**The node colors are percentile ranks, not magnitudes.** Usage is heavy-tailed,
+so a linear or log scale leaves most units in the colormap's near-black lower
+third and the whole diagram reads as uniformly dark. Ranking spreads units
+evenly across the color range, pooled over all types so the buttons stay
+comparable. The consequence: *some units always look dark, whatever the true
+distribution is.* A dark unit is low-ranked, not unused — do not read the colors
+as evidence of spare capacity.
+
+For that question, open the **per-layer absolute usage** panel below the
+diagram, which reports the unnormalized magnitudes: each layer's `share` of the
+network's total conductance, its `load` (that share divided by its share of the
+network's units — 1.0x means the layer pulls its weight, 0.2x means it holds
+five times more units than its contribution justifies), `top-20%` concentration,
+and `faint` (fraction of units under 1% of that layer's busiest). Rows flag red
+when `load < 0.5x` *and* there is a real population of faint units; concentration
+alone does not flag, since a layer can be peaky and still carry its weight.
+
+A flag marks where to run an experiment, not a verdict. Attribution says the
+loss gradient does not flow much through a unit at the current optimum — not
+that the network computes the same function without it. It is also blind to
+redundancy in both directions: two duplicated units each look moderately used,
+while a unit that is dormant on average may be the one carrying rare line
+events. Only shrinking the layer, retraining, and re-scoring with
+`tools/acceptance_v0_8.py` settles it.
 
 ## Accuracy you can rely on
 

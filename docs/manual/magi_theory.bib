@@ -1,3 +1,7 @@
+% Verified 2026-08-01 against Crossref (DOI entries: title, year, volume,
+% pages, first author) and Semantic Scholar (arXiv entries: title, author
+% list, venue). Conference entries carry the PUBLISHED venue and year,
+% which differ from the arXiv preprint year - that is intentional.
 % =====================================================================
 % MAGI user manual — theoretical-foundation references.
 %
@@ -13,10 +17,6 @@
 % the module that implements it are named in the `note` field.
 %
 % -------------------------------------------------------------------
-% VERIFICATION STATUS: every entry below is flagged "% VERIFY".
-% The arXiv identifiers and titles are believed correct, but NO HUMAN HAS
-% YET OPENED THESE SOURCES to confirm author lists, venue, volume, pages
-% or year. Confirm each on NASA ADS, INSPIRE, DBLP or the publisher
 % before this bibliography is used in anything citable. Do not promote an
 % entry out of this state on the strength of it merely compiling.
 % -------------------------------------------------------------------
@@ -28,7 +28,6 @@
 %    Implemented in magi/core/flows.py (ConditionalRQSFlow).
 % ---------------------------------------------------------------------
 
-% VERIFY authors/pages
 @inproceedings{Durkan2019NeuralSplineFlows,
   author    = {Durkan, Conor and Bekasov, Artur and Murray, Iain and
                Papamakarios, George},
@@ -40,10 +39,9 @@
   archivePrefix = {arXiv},
   primaryClass  = {stat.ML},
   note      = {Monotonic rational-quadratic spline transforms; the
-               continuum density in magi/core/flows.py. VERIFY metadata.}
+               continuum density in magi/core/flows.py.}
 }
 
-% VERIFY venue/pages
 @inproceedings{Dinh2017RealNVP,
   author    = {Dinh, Laurent and Sohl-Dickstein, Jascha and Bengio, Samy},
   title     = {{Density Estimation using Real NVP}},
@@ -53,7 +51,7 @@
   archivePrefix = {arXiv},
   primaryClass  = {cs.LG},
   note      = {Affine coupling layers; the architectural basis of the
-               conditional prior in magi/core/priors.py. VERIFY metadata.}
+               conditional prior in magi/core/priors.py.}
 }
 
 
@@ -62,7 +60,6 @@
 %    Motivates magi/core/priors.py ConditionalCouplingPrior.
 % ---------------------------------------------------------------------
 
-% VERIFY authors/pages
 @inproceedings{Tomczak2018VampPrior,
   author    = {Tomczak, Jakub M. and Welling, Max},
   title     = {{VAE with a VampPrior}},
@@ -73,7 +70,7 @@
   archivePrefix = {arXiv},
   primaryClass  = {cs.LG},
   note      = {The aggregated-posterior/prior mismatch argument for
-               replacing N(0,I) with a learned prior. VERIFY metadata.}
+               replacing N(0,I) with a learned prior.}
 }
 
 
@@ -82,7 +79,6 @@
 %    Implemented as gate_focal_gamma in magi/core/model.py.
 % ---------------------------------------------------------------------
 
-% VERIFY venue/pages
 @inproceedings{Lin2017FocalLoss,
   author    = {Lin, Tsung-Yi and Goyal, Priya and Girshick, Ross and
                He, Kaiming and Doll\'ar, Piotr},
@@ -93,7 +89,7 @@
   archivePrefix = {arXiv},
   primaryClass  = {cs.CV},
   note      = {Focal down-weighting of easy examples; the gate loss must
-               route lines that are 1e-5 of the sample. VERIFY metadata.}
+               route lines that are 1e-5 of the sample.}
 }
 
 
@@ -101,7 +97,6 @@
 % D. Optimizer.
 % ---------------------------------------------------------------------
 
-% VERIFY pages
 @inproceedings{Kingma2015Adam,
   author    = {Kingma, Diederik P. and Ba, Jimmy},
   title     = {{Adam: A Method for Stochastic Optimization}},
@@ -110,7 +105,7 @@
   eprint    = {1412.6980},
   archivePrefix = {arXiv},
   primaryClass  = {cs.LG},
-  note      = {Default optimizer in magi.compile\_model. VERIFY metadata.}
+  note      = {Default optimizer in magi.compile\_model.}
 }
 
 
@@ -123,7 +118,6 @@
 %    build_candidate_lines_from_geant4.py.
 % ---------------------------------------------------------------------
 
-% VERIFY volume/pages
 @article{Bearden1967XRayWavelengths,
   author  = {Bearden, J. A.},
   title   = {{X-Ray Wavelengths}},
@@ -133,11 +127,9 @@
   pages   = {78--124},
   year    = {1967},
   doi     = {10.1103/RevModPhys.39.78},
-  note    = {Source of the transition labels in the candidate-line table.
-             VERIFY metadata.}
+  note    = {Source of the transition labels in the candidate-line table.}
 }
 
-% VERIFY report number/volume
 @techreport{Perkins1991EADL,
   author      = {Perkins, S. T. and Cullen, D. E. and Chen, M. H. and
                  Hubbell, J. H. and Rathkopf, J. and Scofield, J.},
@@ -148,6 +140,48 @@
   number      = {UCRL-50400, Vol.~30},
   year        = {1991},
   note        = {The fluorescence energies Geant4 actually emits, and
-                 therefore the ones MAGI pins its line components at.
-                 VERIFY metadata.}
+                 therefore the ones MAGI pins its line components at.}
+}
+
+@inproceedings{Sundararajan2017IG,
+  author    = {Sundararajan, Mukund and Taly, Ankur and Yan, Qiqi},
+  title     = {{Axiomatic Attribution for Deep Networks}},
+  booktitle = {International Conference on Machine Learning (ICML)},
+  volume    = {70},
+  pages     = {3319--3328},
+  year      = {2017},
+  eprint    = {1703.01365},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.LG},
+  note      = {Integrated Gradients; the input-feature attribution that
+               conductance generalizes to internal units.}
+}
+
+@inproceedings{Dhamdhere2019Conductance,
+  author    = {Dhamdhere, Kedar and Sundararajan, Mukund and Yan, Qiqi},
+  title     = {{How Important Is a Neuron?}},
+  booktitle = {International Conference on Learning Representations (ICLR)},
+  year      = {2019},
+  eprint    = {1805.12233},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.LG},
+  note      = {Conductance. The usage metric behind magi.save\_full\_circuit.}
+}
+
+@article{Erion2021ExpectedGradients,
+  author  = {Erion, Gabriel and Janizek, Joseph D. and Sturmfels, Pascal and
+             Lundberg, Scott M. and Lee, Su-In},
+  % Published title differs from the arXiv:1906.10670 preprint title
+  % ("Learning Explainable Models Using Attribution Priors").
+  title   = {{Improving performance of deep learning models with axiomatic
+             attribution priors and expected gradients}},
+  journal = {Nature Machine Intelligence},
+  volume  = {3},
+  pages   = {620--631},
+  year    = {2021},
+  doi     = {10.1038/s42256-021-00343-w},
+  eprint  = {1906.10670},
+  archivePrefix = {arXiv},
+  note    = {Expected gradients: baselines drawn from the data distribution
+             instead of a single arbitrary reference.}
 }

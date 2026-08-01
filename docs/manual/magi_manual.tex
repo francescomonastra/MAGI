@@ -3,8 +3,9 @@
 \newcommand{\magiversion}{v0.8.2-beta}
 \input{preamble}
 
-\title{\vspace{-1.5cm}\textcolor{magiblue}{\Huge\bfseries MAGI}\\[0.3cm]
-  {\Large A CVAE-based generative particle source for Geant4}\\[0.5cm]
+\title{\vspace{-1.5cm}\textcolor{magiblue}{\Huge\bfseries MAGI}\\[0.2cm]
+  {\large\itshape Multivariate Autoencoder for particle Generative Inference}\\[0.35cm]
+  {\Large A CVAE-based generative particle source for Monte Carlo transport}\\[0.5cm]
   {\large User Manual --- \magiversion}}
 \author{Francesco Monastra\\\small INAF --- \texttt{francesco.monastra@inaf.it}}
 \date{\today}
@@ -36,42 +37,61 @@ annihilation line flux.
 
 \subsection{What MAGI is}
 
-MAGI is a Conditional Variational Autoencoder
+MAGI --- \emph{Multivariate Autoencoder for particle Generative Inference} ---
+is a Conditional Variational Autoencoder
 (CVAE)~\cite{Kingma2014VAE,Sohn2015CVAE}, implemented in Keras/TensorFlow,
-that learns the phase-space distribution of particles crossing a detector
-surface in a Geant4~\cite{Agostinelli2003Geant4,Allison2016Geant4} Monte Carlo
-simulation --- their energy, position, direction and particle type --- and then
-samples new, physically consistent events at a small fraction of the cost of
-running full Geant4 transport.
+that learns the joint phase-space distribution of particles crossing a surface
+in a Monte Carlo simulation --- their energy, position, direction and particle
+type --- and then samples new, physically consistent events at a small fraction
+of the cost of running the full transport again.
+
+Development and validation have been done against
+Geant4~\cite{Agostinelli2003Geant4,Allison2016Geant4}, and the shipped exporter
+writes Geant4-ready files, but nothing in the model is specific to it: MAGI
+learns from a table of crossing records and writes back a table in the same
+format it was given, so any consumer that can read that format can be driven
+from it.
 
 The package is installed and imported as \code{magi}.
 
 \subsection{What it is for}
 
-The intended use is as a \textbf{drop-in replacement for a Geant4 particle
-source}. Run the expensive full-physics simulation once to obtain a reference
-sample of particles crossing some surface; train MAGI on that sample; then use
-MAGI's output as the source for downstream simulations that would otherwise
-require repeating the expensive upstream physics.
+The intended use is as a \textbf{drop-in replacement for a particle source} in
+a multi-stage simulation. Run the expensive full-physics simulation once to
+obtain a reference sample of particles crossing some surface; train MAGI on
+that sample; then use MAGI's output as the source for downstream simulations
+that would otherwise require repeating the expensive upstream physics.
 
 This pays off when
 
 \begin{itemize}[nosep]
   \item large numbers of particles are needed downstream;
   \item the events reaching the surface of interest are rare relative to the
-    number of primaries thrown, so direct simulation is statistics-starved;
+    number of primaries thrown, so direct simulation is statistics-starved ---
+    whether the rarity is physical (a small interaction cross-section, a steep
+    spectrum) or geometrical (a small solid angle, a deeply shielded volume);
   \item the same downstream simulation is run many times with different
     geometry or configuration choices, and re-deriving the upstream flux each
     time is wasteful.
 \end{itemize}
+
+Because MAGI's output schema matches its input schema, the natural way to use
+it is to cut a long simulation at a surface and resume from there --- a
+decomposition that is useful in any transport problem with the statistics
+bottleneck above, not only the instrument-background case it was built for.
 
 \subsection{What it is not for}
 
 \begin{itemize}[nosep]
   \item Estimating the intensity of an individual spectral line
     (Section~\ref{sec:envelope}).
-  \item Detector geometries other than a sphere. The crossing surface is
-    hard-coded as a sphere; see Section~\ref{sec:limits}.
+  \item Crossing surfaces that are not spheres. The surface MAGI is trained on
+    is parametrized as a sphere (\code{center}/\code{radius}); see
+    Section~\ref{sec:limits}. Note this constrains the \emph{scoring} surface,
+    not the geometry being simulated: the surface is an intermediate bookkeeping
+    step, so it is perfectly legitimate to place a dummy spherical tracking
+    volume in an otherwise arbitrary mass model purely to give MAGI something to
+    learn on. What is not supported is a non-spherical crossing surface.
   \item Extrapolating outside the energy range or particle mix of the training
     sample. MAGI is a density model of the data it was shown, not a physics
     engine.
@@ -191,11 +211,50 @@ near-line continuum ratio degrades monotonically across a $\gamma$ sweep.
 
 With a standard $p(z) = \mathcal{N}(0,I)$, two problems arise. First, the
 decoder alone must carry every correlation between energy and geometry.
-Second, and more subtly, the model is trained on $z \sim q(z|x)$ but generates
-from $z \sim p(z)$; when the aggregated posterior does not match the prior, the
-decoder is evaluated at generation time in regions of latent space it was never
-trained on~\cite{Tomczak2018VampPrior}. On the reference sources this gap is
-large --- validation KL of 21--28 nats at $\texttt{latent\_dim}=8$.
+Second, and more subtly, there is a \textbf{train/generate mismatch}. During
+training the decoder only ever sees latent codes produced by the encoder from a
+real event, $z \sim q(z \mid x)$. At generation time there is no real event to
+encode, so codes are drawn from the prior instead, $z \sim p(z)$. These two
+distributions are the same only if the \emph{aggregated} posterior
+$q(z) = \mathbb{E}_{x}\,q(z \mid x)$ --- the pooled cloud of codes over the
+whole dataset --- happens to coincide with the prior. When it does not, the
+generator samples regions of latent space the decoder was never trained on and
+produces events from an extrapolation~\cite{Tomczak2018VampPrior}.
+
+\begin{maginote}[How to read the reported KL, and how not to]
+The \code{kl}/\code{val\_kl} numbers in the training log are the ELBO's own
+regularization term, $\mathrm{KL}(q(z \mid x) \,\|\, p(z \mid c))$, averaged
+over events. They measure the encoder against the prior in \emph{latent} space
+only, and say nothing directly about the generated energies, positions or
+directions --- that is what Section~\ref{sec:validation} measures.
+
+On the reference sources this sits at 21--28 nats with
+$\texttt{latent\_dim}=8$, i.e. roughly 3 nats per latent dimension. Two things
+are worth reading off it, and one is not:
+
+\begin{itemize}[nosep]
+  \item \textbf{It is not collapse.} The classic VAE failure is
+    $\mathrm{KL} \to 0$: the encoder ignores the input and the decoder ignores
+    $z$. Nothing near that is happening here.
+  \item \textbf{Training and validation KL track each other} (e.g.\ 22.30
+    versus 22.27 at the last epoch of one CR run), so the latent code is
+    encoding structure that generalizes rather than memorizing the training
+    split.
+  \item \textbf{It is not a quality score, and bigger is not worse.} With
+    $\beta = 0.2$ fixed and no annealing, KL rises through training precisely
+    \emph{because} reconstruction keeps improving --- the usual rate--distortion
+    trade-off. A run that ends at a higher KL than another is not thereby a
+    worse run.
+\end{itemize}
+
+What the number does justify is the design decision: a gap of this size between
+$q(z)$ and a fixed $\mathcal{N}(0,I)$ is exactly the regime where the
+train/generate mismatch above bites, which is why the prior is learned rather
+than fixed. Note that once \code{prior="coupling"} is in use the reported KL is
+measured against that \emph{learned} prior, so it is no longer the
+"distance from $\mathcal{N}(0,I)$" quantity the argument started from, and
+should not be compared across runs that used different priors.
+\end{maginote}
 
 MAGI replaces the fixed prior with a learned conditional coupling flow
 $p(z \mid c)$, built from affine coupling layers~\cite{Dinh2017RealNVP} and
@@ -230,10 +289,17 @@ a centroid measured from the real spectrum
 
 \subsection{Optimization}
 
-Training uses Adam~\cite{Kingma2015Adam} with a task-adaptive loss-weight
-scheduler (\code{magi/training/adaptive\_callbacks.py}) that rebalances the
-per-variable loss terms during training, so that no single head dominates the
-objective purely because its natural scale is larger.
+Training uses Adam~\cite{Kingma2015Adam}. The per-variable loss terms are
+combined with fixed weights (\code{w\_energy}, \code{w\_ur}, \ldots,
+\code{w\_gate\_aux}) chosen so that no single head dominates the objective
+purely because its natural scale is larger.
+
+A task-adaptive loss-weight scheduler that rebalances those weights
+\emph{during} training exists in
+\code{magi/training/adaptive\_callbacks.py} and gives the
+\code{..\_TaskAdaptive} classes their name, but it is opt-in and was not used
+for any v0.8 result reported here --- see the warning in
+Section~\ref{sec:usage}.
 
 \subsection{Relation to other work}
 
@@ -250,8 +316,21 @@ physics~\cite{Hashemi2024Review}, with GAN-~\cite{Paganini2018CaloGAN} and
 flow-based~\cite{Krause2021CaloFlow} calorimeter shower models now in
 production use~\cite{ATLAS2024PhotonShower}. MAGI differs in target: rather
 than showers inside a calorimeter, it models the particle flux crossing a
-surface, for the cryogenic X-ray instrument background
-problem~\cite{Lotti2021XIFUBackground}.
+surface, so that a transport problem can be cut at that surface and resumed
+from a cheap sampler.
+
+That target is not tied to one instrument or one energy regime. The conditions
+MAGI is built for are structural: the events that matter are rare at the
+surface of interest --- because the cross-section is small, the spectrum is
+steep, the solid angle is small, or the volume is deeply shielded --- and the
+problem admits a multi-stage decomposition, so the expensive upstream physics
+can be paid for once and resampled many times. Any simulation with that shape
+is a candidate. The development and validation reported here were carried out
+on the cryogenic X-ray instrument background
+problem~\cite{Lotti2021XIFUBackground}, which supplies this manual's two
+reference sources, but the numbers in Section~\ref{sec:envelope} are properties
+of those sources rather than limits of the method --- measure on your own
+source with the acceptance harness rather than assuming they transfer.
 
 % =====================================================================
 \section{Structure of the code}
@@ -276,9 +355,10 @@ material that uses it.
 \code{tools/} & Command-line scripts \emph{around} a run rather than inside
   one: full training runs, the acceptance harness, audits, synthetic stress
   tests (Section~\ref{sec:tools}). \\
-\code{scripts/generate\_geant\_source.py} & Produces a Geant4-ready source
-  file from a trained run, outside a notebook. This is what the companion
-  Geant4 project's \code{/generator/mlScript} macro invokes. \\
+\code{scripts/}\allowbreak\code{generate\_geant\_}\allowbreak\code{source.py} &
+  Produces a Geant4-ready source file from a trained run, outside a notebook.
+  This is what the companion Geant4 project's \code{/generator/mlScript} macro
+  invokes (Section~\ref{sec:geant4}). \\
 \code{CandidateLines/} & Candidate spectral-line tables built from a GDML mass
   model, in the JSON form \code{magi.load\_candidate\_energy\_lines} reads. \\
 \code{TrainingData/} & Cleaned, whitespace-delimited crossing data. Gitignored
@@ -325,7 +405,7 @@ magi/
     model_inspection.py introspect a built model
     circuit_viz.py       interactive routing-circuit HTML (Section~\ref{sec:visualization})
     full_circuit.py      interactive per-event gradient-circuit HTML (Section~\ref{sec:visualization})
-tests/              135 tests; see Section~\ref{sec:tools}
+tests/              142 tests; see Section~\ref{sec:tools}
 docs/USAGE.md       short-form user guide
 \end{lstlisting}
 
@@ -343,11 +423,14 @@ is the next one's input; each stage has a matching \code{report\_*} or
     $(u_r, \phi_r, u_v, \phi_v)$ and measures the primary fraction.
   \item \textbf{Feature frame} --- \code{build\_feature\_dataframe} bins
     energy, detects spectral lines and fits the quantile geometry transforms.
-  \item \textbf{Dataset} --- \code{filter\_particle\_types\_continuous\_geometry}
-    $\rightarrow$ \code{split\_feature\_data} $\rightarrow$
-    \code{scale\_continuous\_features} $\rightarrow$
+  \item \textbf{Dataset} --- a five-step chain, each feeding the next:
+    \begin{flushleft}\small
+    \code{filter\_particle\_types\_continuous\_geometry} $\rightarrow$\\
+    \code{split\_feature\_data} $\rightarrow$
+    \code{scale\_continuous\_features} $\rightarrow$\\
     \code{build\_conditioning\_and\_weights} $\rightarrow$
     \code{build\_tf\_datasets}.
+    \end{flushleft}
   \item \textbf{Train} --- a class from \code{magi.core}, then
     \code{compile\_model} and \code{fit\_model}.
   \item \textbf{Checkpoint} --- \code{save\_final\_trained\_model} writes
@@ -379,7 +462,7 @@ own head, because each has a different pathology:
 \label{sec:modelvariants}
 
 The classes in \code{magi.core} form a lineage. A trained run records which one
-it is in \code{model\_config["model\_class"]}; check that before assuming
+it is in \code{model\_config\cbrk["model\_class"]}; check that before assuming
 behaviour.
 
 \begin{center}
@@ -402,30 +485,14 @@ behaviour.
 \end{tabular}
 \end{center}
 
-\paragraph{The v0.8 energy head.} A categorical head can never place a spectral
-line more precisely than one bin, and on a log grid spanning nine decades a bin
-is hundreds of eV wide --- far broader than a real line. v0.8 therefore stops
-asking the model to learn line positions at all. They become \emph{fixed
-physical inputs}, measured from the data, and the head becomes a mixture:
-
-\begin{equation}
-p(y \mid z, c) \;=\; g_0(z,c)\, p_{\text{cont}}(y \mid z, c)
-  \;+\; \sum_{\ell=1}^{L} g_\ell(z,c)\,
-        \mathcal{N}\!\left(y \,;\, y_\ell,\, \sigma_\ell^2\right),
-\end{equation}
-
-where $y = \log_{10}(E/\text{MeV})$, the gate $g$ is a softmax over
-$L+1$ components, the line positions $y_\ell$ are pinned at measured energies
-and the widths $\sigma_\ell$ are pinned to the instrument resolution. The
-continuum $p_{\text{cont}}$ is either a single Gaussian or a conditional
-rational-quadratic-spline normalizing flow (\code{continuum\_mode="flow"}).
-
-\paragraph{The learned prior.} With a standard $\mathcal{N}(0,I)$ prior the
-decoder must carry every correlation between energy and geometry on its own.
-Setting \code{prior="coupling"} replaces it with a learned conditional coupling
-flow $p(z \mid c)$, trained with a Monte-Carlo KL estimate. This is what makes
-the coupling residuals in Section~\ref{sec:envelope} pass, and it is v0.8's
-main scientific contribution.
+The two changes that define v0.8 are described in the theory section rather
+than repeated here: the \textbf{gated line--continuum mixture} that replaces the
+categorical energy head (\S\ref{sec:theory}, ``The gated line--continuum
+mixture''), and the \textbf{learned conditional prior} that replaces
+$\mathcal{N}(0,I)$ (\S\ref{sec:theory}, ``The learned conditional prior'').
+Both are selected through constructor arguments --- \code{continuum\_mode},
+\code{prior} --- documented with the rest of the training settings in
+Section~\ref{sec:usage}.
 
 Use \code{magi.print\_model\_structure(model)} to print a built model's
 generative structure, formulas, configured line table and parameter counts.
@@ -435,8 +502,30 @@ generative structure, formulas, configured line table and parameter counts.
 \label{sec:usage}
 
 Every exported function carries a full NumPy-style docstring, so hovering over
-a name in VSCode shows its parameters and return value. This section covers the
-contracts \emph{between} functions, which a per-function docstring cannot.
+a name in an editor shows its parameters and return value. This section covers
+the contracts \emph{between} functions, which a per-function docstring cannot.
+
+\begin{magiwarn}[If hover, autocomplete and go-to-definition do nothing in VSCode]
+This is an editor configuration problem, not a missing docstring.
+\code{pip install -e} installs \code{magi} through a PEP 660 editable hook:
+setuptools writes an import \emph{hook}
+(\code{site-packages/\_\_editable\_\_\_magi\_*\_finder.py}) rather than a path
+entry, and Pylance's static analysis cannot follow it. The code runs perfectly;
+the editor simply cannot find the source, so every \code{magi} symbol silently
+resolves to nothing.
+
+The repository now ships \code{.vscode/settings.json} pointing the analyzer at
+the source tree directly, which fixes it regardless of how the package was
+installed:
+
+\begin{lstlisting}[language=Python]
+{"python.analysis.extraPaths": ["MAGI_package"]}
+\end{lstlisting}
+
+If you work from a different editor or workspace root, set the equivalent
+option to \code{MAGI\_package/}. Reloading the window is required for the
+analyzer to pick it up.
+\end{magiwarn}
 
 \subsection{Installation}
 
@@ -446,7 +535,7 @@ pip install -r requirements.txt   # or install it as a dependency
 \end{lstlisting}
 
 Core dependencies: \code{tensorflow} (plus \code{tensorflow-metal} on Apple
-Silicon), \code{tensorflow-probability}, \code{scikit-learn}, \code{joblib},
+Silicon), \code{tensorflow\cbrk-probability}, \code{scikit-learn}, \code{joblib},
 \code{astropy}, \code{optuna}.
 
 \subsection{Environment setup}
@@ -483,20 +572,55 @@ magi.report_basic_table_checks(df)
 \end{lstlisting}
 
 Three column schemas are auto-detected from the field count on the first data
-line:
+line. Each is a strict prefix of the next, so the columns always appear in the
+same order and a wider file is readable by anything that understands a
+narrower one:
 
 \begin{center}
-\begin{tabular}{@{}clp{0.52\textwidth}@{}}
+\small
+\begin{tabular}{@{}clp{0.60\textwidth}@{}}
 \toprule
-\textbf{Cols} & \textbf{Schema} & \textbf{Adds} \\
+\textbf{Cols} & \textbf{Schema} & \textbf{Column order, left to right} \\
 \midrule
-9 & legacy & \code{EventId ParticleName Energy X Y Z Vx Vy Vz} \\
-10 & PrimBool-tagged & \code{PrimBool} (Geant4 \code{ParentID==0}) \\
-13 & lineage & \code{ParticleId}, \code{ParentParticleId},
-  \code{CreatorProcessName} --- required for radioactive sources \\
+9 & legacy &
+  \code{EventId} \code{ParticleName} \code{Energy} \code{X} \code{Y} \code{Z}
+  \code{Vx} \code{Vy} \code{Vz} \\[2pt]
+10 & PrimBool-tagged &
+  \emph{the 9 above}, then \code{PrimBool} \\[2pt]
+13 & lineage &
+  \emph{the 10 above}, then \code{ParticleId} \code{ParentParticleId}
+  \code{CreatorProcessName} \\
 \bottomrule
 \end{tabular}
 \end{center}
+
+\begin{center}
+\small
+\begin{tabular}{@{}lp{0.72\textwidth}@{}}
+\toprule
+\textbf{Column} & \textbf{Meaning and units} \\
+\midrule
+\code{EventId} & Geant4 event number the crossing belongs to. \\
+\code{ParticleName} & Geant4 particle name (\code{gamma}, \code{e-},
+  \code{mu-}, \ldots). Becomes the conditioning one-hot. \\
+\code{Energy} & Kinetic energy at the crossing, \textbf{MeV}. \\
+\code{X Y Z} & Crossing position, \textbf{mm}, in the mass model's frame. \\
+\code{Vx Vy Vz} & Direction, a normalized Cartesian unit vector. \\
+\code{PrimBool} & 1 if the particle is a Geant4 primary
+  (\code{ParentID == 0}). Used for the cosmic-ray primary fraction. \\
+\code{ParticleId} & Track ID of this particle. \\
+\code{ParentParticleId} & Track ID of its parent, 0 for a primary. \\
+\code{CreatorProcessName} & Process that created it
+  (\code{RadioactiveDecay}, \code{compt}, \ldots). This is the column that
+  makes the radioactive primary fraction computable. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Choose the widest schema your simulation can write. The 13-column lineage form
+is \textbf{required} for radioactive sources --- see the
+\code{source\_type} paragraph below for why \code{PrimBool} alone cannot answer
+the question there.
 
 \subsection{Preprocessing}
 
@@ -521,14 +645,63 @@ magi.report_feature_dataframe(feature_pack)
 \paragraph{\code{source\_type} decides flux normalization.} With
 \code{"cosmic\_ray"} a crossing counts as primary iff \code{PrimBool == 1}.
 With \code{"radioactive"} it counts as primary iff
-\code{CreatorProcessName == "RadioactiveDecay"}, because for a source embedded
+\code{CreatorProcessName\cbrk == "RadioactiveDecay"}, because for a source embedded
 in bulk material the literal Geant4 primary is the decaying nucleus, which
 never propagates --- \code{PrimBool} is always~0. Choosing wrongly does not
 error; it silently yields a wrong normalization factor.
 
+\begin{maginote}[Why energy is still binned when the model reads it continuously]
+A fair question, since \code{energy\_transform="log10"} means the value the
+network actually sees is $y = \log_{10}(E/\text{MeV})$, a \emph{continuous}
+scalar. Nothing rounds it to a bin. With the v0.8 mixture head the binning has
+stopped being part of the model input at all; what survives is an
+\textbf{analysis grid}, used by three things that genuinely need a histogram:
+
+\begin{itemize}[nosep]
+  \item \textbf{Line detection.} \code{detect\_energy\_lines} finds peaks by
+    prominence, which requires counts in bins. You cannot run a peak finder on
+    an unbinned list of floats.
+  \item \textbf{Gate targets.} \code{build\_gate\_targets} evaluates each
+    line's membership kernel on this grid, and its \code{"bins"} bandwidth mode
+    is expressed as a multiple of the local bin width.
+  \item \textbf{Validation.} \code{compute\_line\_integral\_recovery} counts
+    real and generated events in the same windows, and
+    \code{compare\_hist\_with\_residuals} plots on them.
+\end{itemize}
+
+So in v0.7.2, where the energy head was categorical, the bin width was a hard
+floor on line placement. In v0.8 it is not: line positions are pinned physical
+inputs and the continuum is a continuous density. The binning now limits which
+lines can be \emph{found}, never where a found line can be \emph{put}.
+\end{maginote}
+
+\begin{maginote}[Why \code{log\_fixed\_count} bins, when lines are measured at fixed eV]
+These are two different passes with two different jobs, and they use different
+grids on purpose.
+
+The \code{log\_fixed\_count} grid is for \textbf{detection}. A cosmic-ray
+crossing spectrum spans about nine decades, so no single fixed width works: a
+width fine enough to resolve a 1.5~keV line puts essentially zero counts per bin
+at 100~GeV, and a width coarse enough to be populated up there is hundreds of keV
+wide down low. \code{log\_fixed\_count} instead adapts the width to hold roughly
+constant counts per bin across the whole range, which is what lets one
+prominence threshold work at both ends.
+
+The fixed-resolution numbers are for \textbf{measurement}, in a second, local
+pass: \code{refine\_bin\_width\_mev} re-histograms a narrow neighbourhood of
+each candidate at the instrument's own scale (4~eV here), and
+\code{confirm\_unresolved\_candidate\_lines} does the same for candidates the
+coarse pass could not separate. \code{tools/line\_centroid\_audit.py} then
+verifies the outcome against the real spectrum.
+
+Coarse adaptive grid to find peaks; fine fixed grid to place them. Using the
+detection grid for placement is the v0.7.2 error the mixture head exists to
+remove.
+\end{maginote}
+
 \paragraph{\code{geometry\_transform} is a stringly-typed contract.} The value
 (\code{"arctanh\_uv\_discrete"}, \code{"quantile\_u\_r\_u\_v"},
-\code{"quantile\_u\_r\_u\_v\_phi\_r\_phi\_v"}) fixes the column ordering shared
+\code{"quantile\_u\_r\cbrk\_u\_v\cbrk\_phi\_r\cbrk\_phi\_v"}) fixes the column ordering shared
 by preprocessing, the model's input layout and reconstruction. It is persisted
 in the saved metadata and \textbf{must} match between the run that trained a
 model and the run that generates from it. A mismatch does not raise --- it
@@ -634,7 +807,7 @@ mistake the empty tuple prevents. The split is stratified on particle type;
 
 \begin{lstlisting}[language=Python]
 model = magi.CVAE_MixEnergy_ContPhi_TaskAdaptive(
-    n_cont=4, n_types=dataset_pack["n_types"], latent_dim=8,
+    n_types=dataset_pack["n_types"], latent_dim=8,
     line_positions_y=line_positions_y,
     line_logsigma_init=line_logsigma,
     continuum_mode="flow",
@@ -653,30 +826,71 @@ history = magi.fit_model(
     epochs=40, callbacks=magi.build_default_callbacks(), verbose=2)
 \end{lstlisting}
 
+The constructor takes \code{n\_types} and \code{line\_positions\_y}
+positionally; there is no \code{n\_cont} argument. The number of continuous
+targets is not configurable --- it is fixed by the geometry parametrization at
+four ($u_r$, $u_v$, $\phi_r$, $\phi_v$) plus energy plus the $L+1$ gate-target
+columns, and the model derives it from \code{line\_positions\_y}.
+
 \begin{center}
-\begin{tabular}{@{}p{0.30\textwidth}p{0.14\textwidth}p{0.48\textwidth}@{}}
+\begin{tabular}{@{}p{0.28\textwidth}p{0.16\textwidth}p{0.48\textwidth}@{}}
 \toprule
 \textbf{Setting} & \textbf{Default} & \textbf{Effect} \\
 \midrule
 \code{latent\_dim} & 8 & Latent width. Larger widens the
   posterior/prior gap that the coupling prior exists to close. \\
-\code{continuum\_mode} & \code{"gaussian"} & Use \code{"flow"}: a single
-  Gaussian cannot represent a multi-decade continuum. \\
-\code{continuum\_flow\_warp} & \code{"affine"} & Use \code{"cdf"}: pre-warps
-  the flow's input by the empirical CDF, which is what recovers the Compton
-  edge and the low-energy tail. \\
-\code{energy\_flow\_condition} & --- & \code{"z\_cond"} conditions the
-  continuum flow on both latent and conditioning. \\
-\code{prior} & \code{"gaussian"} & Use \code{"coupling"} for the learned
-  conditional prior. This is what makes coupling residuals pass. \\
+\code{continuum\_mode} & \code{"flow"} & A single Gaussian cannot represent a
+  multi-decade continuum. \code{"gaussian"} is kept for regression only. \\
+\code{continuum\_flow\_warp} & \code{"affine"} &
+  \textbf{Set this to \code{"cdf"} yourself.} It pre-warps the flow's input by
+  the empirical CDF, which is what recovers the Compton edge and the
+  low-energy tail. It is the one recommended value that cannot be a default:
+  it requires \code{continuum\_flow\_warp\_y\_knots}/\code{\_z\_knots}, which
+  are fit from your training energies with \code{magi.fit\_cdf\_warp\_knots},
+  and the constructor never sees the data. Passing \code{"cdf"} without knots
+  raises. \\
+\code{energy\_flow\_condition} & \code{"z\_cond"} & Conditions the continuum
+  flow on both latent and conditioning. \\
+\code{prior} & \code{"coupling"} & The learned conditional prior
+  (\S\ref{sec:theory}). This is what makes coupling residuals pass. \\
 \code{prior\_zone\_conditioning} & \code{False} & Condition the prior on
   \code{[type, zone]} rather than type alone. Requires \code{zone\_probs}. \\
-\code{gate\_focal\_gamma} & 0 & Focal weighting on the gate loss.
-  Use~1; $\gamma \geq 2$ digs the continuum out from between the lines. \\
-\code{w\_gate\_aux} & --- & Weight of the auxiliary gate-routing loss. \\
+\code{gate\_focal\_gamma} & 1.0 & Focal weighting on the gate loss.
+  Keep at~1; $\gamma \geq 2$ digs the continuum out from between the lines. \\
+\code{w\_gate\_aux} & 0.3 & Weight of the auxiliary gate-routing loss. The
+  reference runs use 2.0. \\
 \bottomrule
 \end{tabular}
 \end{center}
+
+\begin{maginote}[Defaults changed in v0.8.2, and what that means for old checkpoints]
+\code{continuum\_mode}, \code{prior} and \code{gate\_focal\_gamma} previously
+defaulted to \code{"gaussian"}, \code{"gaussian"} and \code{0.0} --- the v0.7.2-era
+behaviour. They now default to the validated v0.8 configuration, so a bare
+constructor call builds the recommended model rather than the legacy one.
+
+Checkpoints are unaffected. The loader requires every architecture key
+explicitly (Section~\ref{sec:usage}, checkpointing) and a saved config always
+records the values the run actually used, so a pre-flip checkpoint still
+reconstructs its original architecture --- there is a regression test asserting
+exactly that. What \emph{does} change is any script that constructed the model
+without naming these arguments and relied on the old defaults; every such call
+site in this repository has been pinned to its previous explicit value.
+\end{maginote}
+
+\begin{magiwarn}[\code{build\_default\_callbacks} is not the task-adaptive scheduler]
+Despite the class name \code{..\_TaskAdaptive}, \code{build\_default\_callbacks}
+returns only \code{EarlyStopping} (restoring best weights) and
+\code{ReduceLROnPlateau}. It deliberately does \textbf{not} include
+\code{TaskAdaptiveLossScheduler} from
+\code{magi/training/adaptive\_callbacks.py}, and neither
+\code{tools/run\_v0\_8\_real.py} nor any v0.8 result in this manual used it ---
+the per-task loss weights stayed at the fixed values passed to the constructor
+(\code{w\_energy}, \code{w\_ur}, \ldots, \code{w\_gate\_aux}). The scheduler was
+used in the v0.7/v0.7.2 line and remains available; add it to the callback list
+yourself if you want it. Do not assume it is running because the class name
+says ``TaskAdaptive''.
+\end{magiwarn}
 
 \subsection{Checkpointing}
 
@@ -787,17 +1001,40 @@ model, so it runs in under a second. Requires
 1} checkpoint (or any run with zone-conditioning off) has no \code{zone\_probs}
 to plot and raises \code{KeyError}.
 
-\paragraph{\code{save\_full\_circuit}} A deeper, per-event trace: for one real
-held-out event per type, gradient$\times$activation attribution through
-\emph{every} stage --- encoder, latent $z$, decoder stem, deep trunk, and all
-three heads (energy, position, direction) --- ending in the real marginal
-energy spectrum, with the selected type's own contribution shaded on top of
-the combined one. The attribution target is the model's own per-event
-reconstruction loss, not just the gate logit, so branches with no gradient
-path to the gate at all --- the energy branch reads the decoder stem directly,
-bypassing the deep trunk that feeds position and direction --- still get
-genuine, nonzero attribution. An adjustable ``highlight top $N$\,\%'' slider
-and a light/dark toggle are built into the page.
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.86\textwidth]{figures/routing_circuit.png}
+\caption{\code{save\_routing\_circuit} on the reference CR run. Selecting a
+particle type highlights its one-hot wire and fills in that type's routing
+percentage on every zone leaf. Here \code{gamma} sends 95.7\,\% of its events
+to the continuum and the rest to the five pinned lines; \code{mu-} routes
+essentially everything to the continuum, which is the physically correct
+answer and a useful sanity check that the gate has not learned to sprinkle
+lines across types that cannot produce them.}
+\label{fig:routing}
+\end{figure}
+
+\paragraph{\code{save\_full\_circuit}} How heavily every unit in the network is
+actually \emph{used}, per particle type, aggregated over many real held-out
+events (Figure~\ref{fig:fullcircuit}).
+
+The metric is \textbf{Expected Conductance}. Integrated
+Gradients~\cite{Sundararajan2017IG} attributes a prediction to \emph{input
+features}; conductance~\cite{Dhamdhere2019Conductance} is its generalization to
+\emph{internal units}, formally path-integrated gradients evaluated at a hidden
+layer, at comparable cost. Rather than a single arbitrary baseline, each event
+is attributed against a pool of other real held-out events of the same type and
+averaged, following expected gradients~\cite{Erion2021ExpectedGradients}. A
+zero baseline would be meaningless here: inputs are quantile-transformed, so
+$0$ is a real, specific quantile rather than the absence of a signal.
+
+Two details make the quantity well defined. Only the continuous feature block
+is interpolated along the attribution path --- the one-hot type conditioning is
+held fixed, since linearly interpolating a categorical is not meaningful --- and
+the attribution target is the model's own per-event reconstruction loss, not
+just the gate logit, so branches with no gradient path to the gate (the energy
+branch reads the decoder stem directly, bypassing the deep trunk that feeds
+position and direction) still get genuine, nonzero attribution.
 
 \begin{lstlisting}[language=Python]
 magi.save_full_circuit(
@@ -805,25 +1042,129 @@ magi.save_full_circuit(
     training_data_filepath="TrainingData/alloutputDSCryoSphereCR.dat",
     candidate_lines_file="CandidateLines/CANDIDATE_ENERGY_LINES_"
                           "SRON_CCNwithXFDM_NoShield_FlowerCryoAC_fixed_EADL.json",
-    center=(0.0, 0.0, -507.66), radius=100.0)
+    center=(0.0, 0.0, -507.66), radius=100.0,
+    n_events_per_type=128, n_baselines=16, n_steps=32)
 \end{lstlisting}
 
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{figures/full_circuit.png}
+\caption{\code{save\_full\_circuit} on the reference CR run, with
+\code{gamma} selected (the view the file opens on). Each column is one layer,
+each dot one unit colored by usage; wires join the ten most-used units of each
+stage to the next and take the color of their weaker end. The encoder, latent
+$z$ and decoder stem run bright, and the energy path fans up into the gate,
+whose six zones are labelled at the right against the real CR spectrum.
+Switching to ``All types'' pools every type's events into one view ---
+that is the grouping Table~\ref{tab:absusage} reports.}
+\label{fig:fullcircuit}
+\end{figure}
+
+\subsubsection*{Reading it: what the colors do and do not say}
+
+\begin{magiwarn}[The node colors are percentile ranks, not magnitudes]
+Usage is heavy-tailed --- most units contribute almost nothing and a few
+dominate --- so a linear or even log color scale leaves roughly three quarters
+of every layer in the colormap's near-black lower third and the whole diagram
+reads as uniformly dark. The colors are therefore \emph{percentile ranks},
+pooled over all types so the buttons stay comparable with each other.
+
+The consequence matters: \textbf{by construction some units always look dark},
+whatever the true distribution is. A dark unit is low-ranked, not unused. Do
+not read the colors as evidence of spare capacity.
+\end{magiwarn}
+
+For that question, open the \textbf{per-layer absolute usage} panel below the
+diagram (Table~\ref{tab:absusage}), which reports the unnormalized magnitudes.
+The column to read is \code{load}: a layer's share of the network's total
+conductance divided by its share of the network's units. $1.0\times$ means the
+layer pulls exactly its weight; $0.2\times$ means it holds five times more units
+than its contribution justifies.
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{@{}lrrrrr@{}}
+\toprule
+\textbf{Layer} & \textbf{units} & \textbf{share} & \textbf{load} &
+\textbf{top-20\,\%} & \textbf{faint} \\
+\midrule
+\code{enc1--enc3} & 128/128/64 & 10.3--10.5\,\% & 1.17--2.39$\times$ & 39--46\,\% & 0--3\,\% \\
+\code{z}          & 8   & 7.8\,\%  & 14.14$\times$ & 53\,\% & 0\,\% \\
+\code{stem}       & 64  & 11.4\,\% & 2.59$\times$  & 56\,\% & 2\,\% \\
+\code{trunk1--3}  & 128/128/64 & 6.7--9.2\,\% & 0.93--1.53$\times$ & 51--57\,\% & 7--14\,\% \\
+\rowcolor{black!6}
+\code{eb2}        & 48  & 1.4\,\% & \textbf{0.42}$\times$ & 70\,\% & 23\,\% \\
+\rowcolor{black!6}
+\code{pos1}       & 128 & 2.1\,\% & \textbf{0.24}$\times$ & 60\,\% & 16\,\% \\
+\rowcolor{black!6}
+\code{pos2}       & 128 & 1.9\,\% & \textbf{0.22}$\times$ & 63\,\% & 20\,\% \\
+\rowcolor{black!6}
+\code{pos3}       & 64  & 1.6\,\% & \textbf{0.37}$\times$ & 57\,\% & 17\,\% \\
+\code{dir1--3}    & 128/128/64 & 5.1--5.9\,\% & 0.64--1.15$\times$ & 52--58\,\% & 14--22\,\% \\
+\bottomrule
+\end{tabular}
+\caption{Per-layer absolute usage, CR reference run, all types pooled. Shaded
+rows are the ones the tool flags: \code{load} below $0.5\times$ \emph{and} a
+real population of faint units. \code{position\_branch} holds 320 units ---
+22\,\% of the network's width --- and does 5.6\,\% of its work, while
+\code{direction\_branch} at identical width does 16.6\,\%. \code{z} at
+$14.14\times$ confirms the latent bottleneck is the hardest-working part of the
+model.}
+\label{tab:absusage}
+\end{table}
+
+\begin{magiwarn}[A flag is where to run an experiment, not a verdict]
+Attribution says the loss gradient does not flow much through a unit at the
+current optimum. It does \textbf{not} say the network computes the same
+function without it, and it is blind to redundancy in both directions: two
+duplicated units each look moderately used, while a unit that is dormant on
+average may be the one carrying rare line events. Concentration alone is not
+evidence either --- a layer can be peaky and still carry its weight, which is
+why \code{load} rather than \code{top-20\,\%} drives the flag.
+
+The only thing that settles a width question is an ablation: shrink the layer,
+retrain one seed, and re-score with \code{tools/acceptance\_v0\_8.py}.
+\end{magiwarn}
+
 \begin{magiwarn}[This one re-derives your preprocessing --- budget the time]
-Unlike the routing circuit, \code{save\_full\_circuit} needs a real held-out
-sample to trace, which a checkpoint alone does not carry. It re-runs line
+Unlike the routing circuit, \code{save\_full\_circuit} needs real held-out
+events to measure, which a checkpoint alone does not carry. It re-runs line
 matching, gate-target construction, and the quantile/log10 transforms against
-the raw detector table you point it at, then rebuilds the same train/test
-split (\code{random\_state=42} by default, matching
-\code{tools/run\_v0\_8\_real.py}) before loading the model. Expect roughly one
-preprocessing pass over your source: a couple of minutes for the 3.4\,M-event
-CR file, longer for a bigger one (Torio's 8.8\,M events takes several minutes
-on CPU).
+the raw detector table you point it at, rebuilds the same train/test split
+(\code{random\_state=42} by default, matching
+\code{tools/run\_v0\_8\_real.py}), loads the model, and only then runs the
+attribution itself. Budget several minutes per source --- 4 to 8 for the
+3.4\,M-event CR file on CPU, longer for a bigger one.
+
+A practical note if you call this from a notebook: Python caches imported
+modules, so a kernel that imported \code{magi} before the package was last
+changed will keep regenerating the \emph{old} widget, silently overwriting a
+newer file. Restart the kernel if the output does not match what you expect.
 \end{magiwarn}
 
 The stage layout (how many encoder/trunk/branch columns are drawn, and where
 they connect) is derived from the loaded checkpoint's own architecture, not
 hardcoded to any one source --- it renders correctly whether the checkpoint
 has two particle types and four gate zones (Small/K-40) or six and six (CR).
+
+\subsubsection*{Using these to check how the network works}
+
+\begin{itemize}[nosep]
+  \item \textbf{Is the gate physically sane?} Figure~\ref{fig:routing}: a type
+    that cannot produce a given line should route essentially nothing to it.
+    Lines appearing under \code{mu-} or a neutrino are a red flag.
+  \item \textbf{Is the latent bottleneck saturated?} A high \code{load} on
+    \code{z} says every latent dimension is working; combined with the KL
+    discussion in Section~\ref{sec:theory}, that is the case for
+    \emph{not} shrinking \code{latent\_dim}.
+  \item \textbf{Does one type use the network differently?} Switch buttons and
+    watch which branch brightens. A type whose events are geometrically
+    distinctive should light the position/direction branches more than one that
+    is spectrally distinctive.
+  \item \textbf{Is a branch carrying its weight?} Table~\ref{tab:absusage}, the
+    \code{load} column --- then an ablation, never the table alone.
+\end{itemize}
 
 % =====================================================================
 \section{The tools}
@@ -846,7 +1187,7 @@ python tools/run_v0_8_real.py --sources CR Small --run-tag v0_8_2 \
 
 Flags: \code{--sources}, \code{--run-tag}, \code{--epochs}, \code{--seed},
 \code{--n-gen}, \code{--gen-chunk}, \code{--prior-zone-conditioning},
-\code{--gate-target-bandwidth-mode} (default \code{exact}),
+\code{--gate-target-bandwidth-mode} (default \code{resolution}),
 \code{--continuum-flow-bins}, \code{--warp-boost-cr}.
 
 \paragraph{\code{acceptance\_v0\_8.py}} The pass/fail harness. It grades a
@@ -892,9 +1233,59 @@ carries them) and transition \emph{energies} from the EADL table, because EADL
 is what the simulation actually emitted. Getting this backwards puts every
 instrumental line tens of eV off --- up to 10~FWHM.
 
-\paragraph{\code{gate\_posterior\_prior\_audit.py}} Compares the gate's
-component fractions under $z \sim q(z|x)$ against $z \sim p(z|\text{cond})$.
-A large divergence localizes a line failure to the prior rather than the gate.
+\paragraph{\code{gate\_posterior\_prior\_audit.py}} Localizes a per-line
+intensity failure to \emph{where in the pipeline} it happens: the gate itself,
+or the latent distribution the gate is fed at generation time.
+
+The gate is conditioned on $z$ (\code{energy\_flow\_condition="z\_cond"}). At
+training and reconstruction time it sees encoder codes,
+$z \sim q(z \mid x_{\text{real}})$; at generation time there is no real event,
+so it sees prior samples, $z \sim p(z \mid c)$. Section~\ref{sec:theory} argues
+those two differ substantially. This script measures whether that difference
+actually moves the gate's output, which is the step between ``the latents
+differ'' and ``the line intensities are wrong''.
+
+It is training-free: it loads a checkpoint and runs two forward passes over the
+real dataset, one with encoder codes and one with prior samples. For every
+particle type $\times$ gate slot (continuum components plus each pinned line) it
+prints the mean gate probability under each, and their \textbf{prior/posterior
+ratio}:
+
+\begin{lstlisting}[language=shell]
+python tools/gate_posterior_prior_audit.py --sources CR Small \
+    --max-events-per-type 200000
+\end{lstlisting}
+
+\begin{lstlisting}[language=shell]
+type      slot                    post       prior   prior/post
+gamma     continuum_0       9.3753e-01  9.4490e-01        1.008
+gamma     Al K-alpha1       5.7883e-03  1.7573e-03        0.304
+mu-       Cu K-alpha1       1.5495e-11  1.1889e-08      767.271
+\end{lstlisting}
+
+Read the ratio column, not the absolute fractions:
+
+\begin{itemize}[nosep]
+  \item $\approx 1$ --- the gate behaves the same whether it is fed encoder
+    codes or prior samples. Any line error for that slot is the gate's own
+    calibration, and gate-side fixes are the right place to look.
+  \item $\ll 1$ --- the line is routed \emph{less} often at generation time
+    than during training. The gamma rows above show this: Al~K$\alpha_1$ at
+    0.304 means generation reaches that component roughly a third as often as
+    reconstruction does, and no amount of gate reweighting during training will
+    show up, because the training-time gate was already correct.
+  \item $\gg 1$ --- over-routing at generation time. The extreme values in the
+    \code{mu-} rows are an artifact of dividing two numbers around
+    $10^{-11}$--$10^{-8}$: for a type that physically never produces that line,
+    both fractions are numerically zero and the ratio is meaningless. Check the
+    absolute columns before believing a large ratio.
+\end{itemize}
+
+A widespread departure from~1 is evidence that the \emph{prior} is the thing to
+change --- which is what motivated \code{prior\_zone\_conditioning}
+(\S\ref{sec:theory}) --- rather than another round of gate reweighting, an
+experiment already run and recorded as a negative result in
+Section~\ref{sec:envelope}.
 
 \subsection{Synthetic stress tests}
 
@@ -910,7 +1301,7 @@ run on it; they finish in minutes.
 python -m pytest MAGI_package/tests/ -q
 \end{lstlisting}
 
-135 tests covering flow round-trip identity, checkpoint save/load config
+142 tests covering flow round-trip identity, checkpoint save/load config
 matching, gate-target construction (including the exact/resolution A/B), prior
 zone-conditioning, the two visualization tools (\S\ref{sec:visualization}), and
 public API docstring coverage. They catch mechanical regressions; they do not
@@ -1015,7 +1406,7 @@ for t in range(dataset_pack["n_types"]):
 
 # --- 7. model and training -------------------------------------------
 model = magi.CVAE_MixEnergy_ContPhi_TaskAdaptive(
-    n_cont=4, n_types=dataset_pack["n_types"], latent_dim=8,
+    n_types=dataset_pack["n_types"], latent_dim=8,
     line_positions_y=line_positions_y, line_logsigma_init=line_logsigma,
     continuum_mode="flow", continuum_flow_warp="cdf",
     energy_flow_condition="z_cond",
@@ -1038,6 +1429,7 @@ magi.save_final_trained_model(
 \end{lstlisting}
 
 \subsection{Producing the Geant4 source file}
+\label{sec:geant4}
 
 \begin{lstlisting}[language=shell]
 python scripts/generate_geant_source.py \
@@ -1048,8 +1440,108 @@ python scripts/generate_geant_source.py \
     --n-events 10000000
 \end{lstlisting}
 
-The companion Geant4 project consumes this directly through its
-\code{/generator/mlScript} macro command.
+\paragraph{The file format.} One particle per line, whitespace-separated:
+
+\begin{lstlisting}[language=shell]
+ParticleName Energy X Y Z Vx Vy Vz
+
+gamma 0.131632939 -35.3167992 -93.4576950 -503.372406 \
+      0.676084936 0.689519465 -0.259753942
+e-    0.542123100  12.3456000  45.1234000 -510.332100 \
+     -0.200000000 0.300000000 -0.932000000
+\end{lstlisting}
+
+Energy in MeV, position in mm, direction a normalized Cartesian unit vector.
+\code{ParticleName} must match a Geant4 particle definition exactly
+(\code{gamma}, \code{e-}, \code{proton}, \code{alpha}, \code{mu-},
+\code{mu+}, \ldots) --- an unrecognized name is the usual cause of
+``Unknown particle name'' at load. The binary format
+(\code{--format binary}) carries the same fields.
+
+\paragraph{What the Geant4 side must provide.} Consuming this needs two
+classes in the application: a \code{PrimaryGeneratorAction} that can read the
+file and emit one primary per event instead of using
+\code{G4GeneralParticleSource}, and a \code{PrimaryGeneratorMessenger} exposing
+that as macro commands. In the companion project
+(\code{S1GDMLSRON\_CryoSphereEmission}) the messenger declares thirteen
+commands in the \code{/generator/} directory:
+
+\begin{center}
+\small
+\begin{tabular}{@{}p{0.40\textwidth}p{0.52\textwidth}@{}}
+\toprule
+\textbf{Command} & \textbf{Purpose} \\
+\midrule
+\multicolumn{2}{@{}l}{\emph{Static file mode --- read a pre-generated source}}\\
+\code{/generator/generatedFile} & Path to the source file. Loading it also
+  \emph{activates} file mode, so the next command is usually unnecessary. \\
+\code{/generator/useGeneratedFile} & Enable/disable file mode explicitly. \\
+\code{/generator/generatedFormat} & \code{text} or \code{binary}. \\
+\code{/generator/binaryBufferSize} & Particles held in memory per read. \\
+\midrule
+\multicolumn{2}{@{}l}{\emph{Auto mode --- Geant4 invokes MAGI itself}}\\
+\code{/generator/autoGenerateMLInput} & Run the generator before loading. \\
+\code{/generator/mlPython} & Python interpreter with \code{magi} installed. \\
+\code{/generator/mlScript} & Path to
+  \code{scripts/generate\_geant\_source.py}. \\
+\code{/generator/mlModelDir} & Trained-run directory. \\
+\code{/generator/mlModelName} & Checkpoint filename stem. \\
+\code{/generator/mlMetadataFile} & The run's \code{*\_metadata.json}. \\
+\code{/generator/mlNumParticles} & Particles to generate. \\
+\code{/generator/mlSeed} & Seed passed through to MAGI. \\
+\code{/generator/mlChunkSize} & Generation chunk size. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+In auto mode the generator shells out to exactly the command shown at the top
+of this subsection, assembled from those values:
+
+\begin{lstlisting}[language=shell]
+"$mlPython" "$mlScript" --save-dir "$mlModelDir" \
+    --model-name "$mlModelName" --metadata-file "$mlMetadataFile" \
+    --output-file "$generatedFile" --n-events $mlNumParticles \
+    --seed $mlSeed --chunk-size $mlChunkSize --format {text|binary}
+\end{lstlisting}
+
+so the C++ side needs no knowledge of MAGI beyond this argument list, and the
+same script is testable standalone from a shell.
+
+\paragraph{A complete macro.} This is the production configuration from the
+companion project's \code{try.mac}, trimmed to the generator part:
+
+\begin{lstlisting}[language=shell]
+/run/initialize
+/random/setSeeds 175 2024
+
+/generator/autoGenerateMLInput true
+/generator/generatedFormat     binary
+/generator/binaryBufferSize    100000
+
+/generator/mlPython   /path/to/envs/tf-metal/bin/python
+/generator/mlScript   /path/to/MAGI/scripts/generate_geant_source.py
+/generator/mlModelDir /path/to/MAGI/trained_models/my_run
+/generator/mlModelName   mix_CR
+/generator/mlMetadataFile /path/to/MAGI/trained_models/my_run/mix_CR_metadata.json
+
+/generator/mlNumParticles 100000000
+/generator/mlSeed         1752024
+/generator/mlChunkSize    100000
+
+/generator/generatedFile /path/to/tmp/geant_input_seed_1752024_CR.gntbin
+
+/runAction/setTotalEvents 100000000
+/run/beamOn               100000000
+\end{lstlisting}
+
+\begin{maginote}[Running these in parallel]
+Give every job its own Geant4 seed (\code{/random/setSeeds}), its own MAGI seed
+(\code{/generator/mlSeed}) \emph{and} its own \code{/generator/generatedFile}
+path. Sharing any of the three across concurrent jobs either duplicates the
+particle stream or has two processes writing one file. Prefer \code{binary}
+and auto-generation for large campaigns: particles are held in memory, so
+$10^8$ in text form is heavy.
+\end{maginote}
 
 % =====================================================================
 \section{Example: a validation}
@@ -1192,12 +1684,23 @@ $4.9\times$, and unstable across seeds.
 CR Al K$\alpha_1$      & $0.959 \pm 0.025$ & in band \\
 CR Cu K$\beta$         & $1.034 \pm 0.050$ & in band \\
 CR $e^+e^-$ 511 keV    & $1.825 \pm 0.324$ & over-generated, unstable \\
-CR Cu K$\alpha_1$      & $2.052 \pm 0.034$ & over-generated \\
+CR Cu K$\alpha_1$      & $2.052 \pm 0.034$\textsuperscript{$\dagger$} & over-generated \\
 Small Al K$\alpha_2$   & $3.412 \pm 0.376$ & far over \\
-Small Cu K$\alpha_1$   & $4.903 \pm 0.356$ & far over \\
+Small Cu K$\alpha_1$   & $4.903 \pm 0.356$\textsuperscript{$\dagger$} & far over \\
 \bottomrule
 \end{tabular}
 \end{center}
+
+\textsuperscript{$\dagger$}\,\textbf{These two are routing fractions, not
+window recoveries.} Cu~K$\alpha_1$ and Cu~K$\alpha_2$ are 21~eV apart, so each
+sits inside the other's continuum side-bands and the harness reports the
+window-based \code{recovery\_ratio} as \code{n/a}
+(\code{sideband\_contaminated}). The number quoted is the harness's
+\code{comp\_rec}: the fraction of generated events the \emph{gate} routed to
+that component, against the real fraction. It measures the same failure and is
+the only figure available for this line, but it is not the same quantity as the
+other rows and should not be compared against the $[0.8, 1.2]$ window bar
+directly.
 
 Practical consequences:
 
@@ -1244,13 +1747,19 @@ Recorded so they are not re-attempted without new information:
 \section{Limitations and traps}
 \label{sec:limits}
 
-\begin{magiwarn}[Geometry is hard-limited to a sphere]
+\begin{magiwarn}[The crossing surface is hard-limited to a sphere]
 \code{build\_physical\_features}'s \code{center}/\code{radius} and the
-transforms in \code{core/geometry.py} all assume the crossing surface is a
-sphere. Adapting MAGI to a planar, cylindrical or box surface is \textbf{not} a
-matter of different parameters: it requires reworking the geometry-transform
-layer in both \code{preprocessing.py} and \code{generation/reconstruction.py},
-which must stay in sync.
+transforms in \code{core/geometry.py} all assume the surface events are scored
+on is a sphere. Adapting MAGI to a planar, cylindrical or box surface is
+\textbf{not} a matter of different parameters: it requires reworking the
+geometry-transform layer in both \code{preprocessing.py} and
+\code{generation/reconstruction.py}, which must stay in sync.
+
+This constrains the \emph{scoring} surface, not the geometry you are
+simulating. The surface is an intermediate bookkeeping step in a multi-stage
+run, so the practical workaround for an awkward geometry is usually to place a
+dummy spherical tracking volume around the region of interest purely to give
+MAGI a surface to learn on, and leave the mass model itself alone.
 \end{magiwarn}
 
 \begin{description}[style=unboxed,leftmargin=0pt,itemsep=4pt]
@@ -1284,7 +1793,7 @@ which must stay in sync.
   13-column lineage schema.
 
 \item[Unit tests cover machinery, not physics.]
-  118 passing tests do not tell you a trained model reproduced your source.
+  142 passing tests do not tell you a trained model reproduced your source.
   That is what Section~\ref{sec:validation} is for.
 
 \item[CPU-only by default.]

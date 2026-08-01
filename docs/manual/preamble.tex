@@ -8,7 +8,9 @@
 \usepackage{booktabs}
 \usepackage{longtable}
 \usepackage{array}
-\usepackage{xcolor}
+% [table] pulls in colortbl, needed for the \rowcolor highlighting in the
+% per-layer usage table (Visualization section).
+\usepackage[table]{xcolor}
 \usepackage{listings}
 \usepackage{enumitem}
 \usepackage{microtype}
@@ -76,6 +78,11 @@
 }
 \newcommand{\py}[1]{\lstinline[language=Python]|#1|}
 \newcommand{\code}[1]{\texttt{\small #1}}
+% Long snake_case identifiers inside \code give TeX no break points, which is
+% what runs a line into the margin. \cbrk marks a legal break inside one
+% (no hyphen inserted); a little \emergencystretch absorbs the rest.
+\newcommand{\cbrk}{\discretionary{}{}{}}
+\setlength{\emergencystretch}{1.2em}
 
 % ---------------------------------------------------------------- callouts
 \newtcolorbox{magiwarn}[1][]{

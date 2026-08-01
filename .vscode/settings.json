@@ -1,0 +1,11 @@
+{
+  // Pylance cannot resolve `import magi` through the setuptools PEP 660
+  // editable install: `pip install -e` writes a runtime import *hook*
+  // (site-packages/__editable___magi_*_finder.py) rather than a path entry,
+  // and static analysis cannot follow it. Without this, hover, autocomplete
+  // and go-to-definition all silently do nothing on every magi symbol, even
+  // though the code runs fine. Pointing Pylance at the source tree directly
+  // fixes it regardless of how (or whether) the package is installed.
+  "python.analysis.extraPaths": ["MAGI_package"],
+  "python.autoComplete.extraPaths": ["MAGI_package"]
+}

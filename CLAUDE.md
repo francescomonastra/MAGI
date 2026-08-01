@@ -121,11 +121,21 @@ See also `MAGI_package/docs/USAGE.md` for the user-facing version of this workfl
   layer/parameter structure of a built model), `circuit_viz.py`
   (`save_routing_circuit`: interactive HTML of the v0.8 gate's per-type routing,
   from a checkpoint's own `zone_probs`) and `full_circuit.py`
-  (`save_full_circuit`: interactive HTML gradient-attribution trace of one real
-  held-out event per type through every stage — encoder, z, decoder stem, trunk,
-  and all three heads — ending in the real energy spectrum; re-derives the
-  held-out split from the raw detector table, so unlike the other two it needs
-  real data, not just the checkpoint).
+  (`save_full_circuit`: interactive HTML showing how heavily every unit in the
+  network is used, per particle type plus a pooled "All types" view, measured
+  with Expected Conductance — Integrated Gradients generalized to internal
+  units, with baselines drawn from real held-out events rather than a zero
+  vector, since inputs are quantile-transformed and "0" is a real quantile.
+  Only the continuous feature block is interpolated along the attribution path;
+  the one-hot type conditioning is held fixed. Covers every stage — encoder, z,
+  decoder stem, trunk, and all three heads — over the real energy spectrum;
+  re-derives the held-out split from the raw detector table, so unlike the other
+  two it needs real data, not just the checkpoint, and takes minutes rather than
+  seconds. **Node colors are percentile ranks, not magnitudes** — by
+  construction some units always look dark, so the colors cannot answer "is this
+  layer oversized"; the per-layer absolute-usage panel underneath carries the
+  raw magnitudes (`share`, `load` = share-of-work over share-of-width,
+  concentration, faint-unit fraction) for that question).
 - `magi/magi.py` is a simplified high-level API (`setup`, `build_model`, `train_model`,
   `plot_training`) layered on top of the modules above for quick notebook use;
   `__init__.py` re-exports the full public surface (this is the canonical list of what's

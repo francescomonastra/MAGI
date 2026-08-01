@@ -87,7 +87,7 @@ MAGI_package/
         ├── plotting.py
         ├── model_inspection.py
         ├── circuit_viz.py     #   save_routing_circuit: gate routing per type
-        └── full_circuit.py    #   save_full_circuit: per-event gradient-attribution trace
+        └── full_circuit.py    #   save_full_circuit: per-unit network-usage attribution
 ```
 
 `magi.print_model_structure(model)` and `magi.print_model_tree_with_params(model)` print
@@ -95,8 +95,12 @@ a description of a built model — its generative structure and the formulas beh
 configured mixture/prior/flow settings, and the parameter counts per block.
 
 `magi.save_routing_circuit(...)` and `magi.save_full_circuit(...)` write a self-contained,
-interactive HTML file for inspecting a trained run in a browser — see
-[Inspecting a trained model](docs/USAGE.md#inspecting-a-trained-model) in the usage guide.
+interactive HTML file for inspecting a trained run in a browser: the gate's per-type
+routing, and how heavily every unit in the network is used per particle type (Expected
+Conductance), with a per-layer absolute-magnitude panel for asking whether a layer is
+wider than it needs to be. See
+[Inspecting a trained model](docs/USAGE.md#inspecting-a-trained-model) in the usage guide,
+which also covers what the usage metric does and does not license you to conclude.
 
 ## Author
 
