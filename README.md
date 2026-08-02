@@ -25,6 +25,9 @@ Built on `keras`/`tensorflow`. Author: Francesco Monastra (INAF).
 - **`scripts/generate_geant_source.py`** — generates a Geant4-ready particle source file
   from a trained model outside a notebook; this is what the companion Geant4 project's
   macros invoke directly (`/generator/mlScript ...`) for on-demand generation.
+- **[`MAGI_Colab_GPU_Benchmark.ipynb`](MAGI_Colab_GPU_Benchmark.ipynb)** — runs the
+  v0.8.2 pipeline on a Google Colab GPU runtime and times it against the CPU baseline;
+  see [GPU training](#gpu-training-optional) below.
 - **[`tools/`](tools/)** — scripts around a run rather than inside it: full CR/Small
   training runs with live logging (`run_v0_8_real.py`), the pass/fail acceptance harness
   (`acceptance_v0_8.py`), the spectral-line centroid audit (`line_centroid_audit.py`),
@@ -52,6 +55,17 @@ pip install -e MAGI_package/
 import magi
 magi.initialize_environment(seed=42)
 ```
+
+## GPU training (optional)
+
+Training defaults to CPU (`cpu_only=True`) — on Apple Silicon, Metal/GPU was measured
+*slower* than CPU for this op mix (see `MAGI_v0_8_2.ipynb`). On CUDA hardware it's a
+different story: [`MAGI_Colab_GPU_Benchmark.ipynb`](MAGI_Colab_GPU_Benchmark.ipynb) runs
+the same v0.8.2 pipeline (`magi.initialize_environment(cpu_only=False)`) on a free
+Google Colab T4 GPU and measured **~2.2x faster** training on CryoSphere-CR — 22 min vs.
+the ~48 min CPU reference, same 40-epoch config — with generated-sample accuracy
+unchanged (Wasserstein log₁₀E 0.028, within the ≤0.05 bar below). Single run, one seed,
+one GPU type — treat "~2x" as a ballpark, not a guarantee across sources or hardware.
 
 ## Status: v0.8.2 beta
 
