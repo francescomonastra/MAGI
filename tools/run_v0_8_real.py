@@ -11,7 +11,7 @@ import os
 # tensorflow_probability and would otherwise initialize the Metal device, after
 # which set_visible_devices no longer takes effect.
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
-import argparse, time, numpy as np, joblib
+import argparse, gc, time, numpy as np, joblib
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -373,11 +373,11 @@ for name in args.sources:
     # Spectrum plot
     fig, ax = plt.subplots(figsize=(10, 4.5))
     bins = np.asarray(feature_pack["energy_bins"])
-    rc, _ = np.histogram(E_real, bins=bins); gc, _ = np.histogram(E_gen, bins=bins)
-    gc = gc * (E_real.size / max(E_gen.size, 1))  # scale up capped generation to real N
+    rc, _ = np.histogram(E_real, bins=bins); gen_counts, _ = np.histogram(E_gen, bins=bins)
+    gen_counts = gen_counts * (E_real.size / max(E_gen.size, 1))  # scale up capped generation to real N
     ctr = 0.5*(bins[:-1]+bins[1:])
     ax.step(ctr, rc, where="mid", color="#2b6cb0", label="real")
-    ax.step(ctr, gc, where="mid", color="#dd6b20", alpha=0.8, label=f"generated x{E_real.size/max(E_gen.size,1):.1f} (flow+coupling)")
+    ax.step(ctr, gen_counts, where="mid", color="#dd6b20", alpha=0.8, label=f"generated x{E_real.size/max(E_gen.size,1):.1f} (flow+coupling)")
     for m in matched:
         ax.axvline(m["candidate_energy_mev"], color="#38a169", lw=0.7, ls="--")
     ax.set_xscale("log"); ax.set_yscale("log")
@@ -387,5 +387,15 @@ for name in args.sources:
     out = f"Plots/{args.run_tag}_real_{name}{suffix}_spectrum.png"
     fig.savefig(out, dpi=140, bbox_inches="tight"); plt.close(fig)
     log(f"spectrum saved -> {out}")
+
+    # Multi-source loop safety: name rebinding alone does not free this
+    # source's model - Keras/TF's internal tracing cache and the model's own
+    # reference cycles (layers <-> model) keep it alive, so a --sources CR
+    # Small run otherwise accumulates memory for the whole process. Also
+    # re-seed, since clear_session() resets TF's global random-op state.
+    del model, h
+    tf.keras.backend.clear_session()
+    gc.collect()
+    magi.initialize_environment(seed=args.seed, cpu_only=True, quiet=True)
 
 log("ALL DONE")
