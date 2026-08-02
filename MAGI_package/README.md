@@ -22,7 +22,7 @@ user manual, [`../docs/manual/magi_manual.pdf`](../docs/manual/magi_manual.pdf).
 ## Installation
 
 ```bash
-git clone https://github.com/Fchewie/MAGI.git
+git clone https://github.com/francescomonastra/MAGI.git
 cd MAGI
 pip install -e MAGI_package/
 ```

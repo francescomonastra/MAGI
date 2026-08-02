@@ -20,7 +20,7 @@ setup(
     description="MAGI: a CVAE-based generative toolkit for Geant4 particle-source modeling",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/Fchewie/MAGI",
+    url="https://github.com/francescomonastra/MAGI",
     packages=find_packages(),
     python_requires=">=3.9",
     install_requires=[
