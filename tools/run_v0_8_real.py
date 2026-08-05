@@ -171,6 +171,7 @@ for name in args.sources:
 
     df = magi.load_detector_table(filepath=path, sep=r"\s+")
     prep = magi.build_physical_features(df, center=center, radius=R)
+    del df  # the raw loaded table is never used again once prep exists
     E = prep["features"]["Energy"].to_numpy()
     log(f"loaded {E.size:,} events")
 
@@ -198,6 +199,7 @@ for name in args.sources:
         prep, energy_binning_mode="log_fixed_count", n_bins=512,
         geometry_transform="quantile_u_r_u_v_phi_r_phi_v", n_quantiles=10000,
         random_state=42, energy_transform="log10")
+    del prep  # superseded by feature_pack["filtered_prep"] from here on
 
     line_positions_y = np.log10([m["candidate_energy_mev"] for m in matched]).astype(np.float32)
     # v0.8.1 remainder item 2: [continuum, line_1..line_L] in the same order as
