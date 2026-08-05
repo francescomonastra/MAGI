@@ -74,9 +74,9 @@ Measured over three seeds (42/7/13) on two reference sources with
 
 | Quantity | CryoSphere-CR | CryoSphere-Small | Bar |
 |---|---|---|---|
-| Coupling, max\|Δcorr\| | 0.0285 ± 0.0101 | 0.0357 ± 0.0102 | ≤0.05 ✅ |
-| Wasserstein, log₁₀E | 0.0241 ± 0.0046 | 0.0065 ± 0.0006 | ≤0.05 ✅ |
-| Per-line intensity | 0.7×–4.9×, unstable | 0.7×–4.9×, unstable | ❌ |
+| Coupling, max\|Δcorr\| | 0.0285 ± 0.0101 | 0.039 ± 0.011 | ≤0.05 ✅ |
+| Wasserstein, log₁₀E | 0.0241 ± 0.0046 | 0.0065 ± 0.0017 | ≤0.05 ✅ |
+| Per-line intensity | 0.96×–2.05×, unstable | 1.11×–3.25×, unstable | ❌ |
 
 The joint distribution and the energy continuum are validated with error bars.
 Spectral-line **intensities** are not — do not use generated output to estimate a

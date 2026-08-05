@@ -26,3 +26,5 @@ docs/manual/*.out
 docs/manual/*.toc
 docs/manual/*.blg
 docs/manual/*.bbl
+docs/manual/*.fls
+docs/manual/*.fdb_latexmk

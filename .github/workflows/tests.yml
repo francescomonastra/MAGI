@@ -1,0 +1,71 @@
+name: tests
+
+on:
+  push:
+    branches: [main, master, energy-mixture]
+  pull_request:
+  workflow_dispatch:
+
+# A second push to the same branch cancels the previous run rather than
+# queueing behind it - TensorFlow wheels are ~600 MB, so idle runners are
+# not free.
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        # Brackets the supported range: setup.py declares >=3.9, and
+        # TensorFlow 2.16 supports up to 3.12. Testing both ends catches the
+        # version-specific breakage a single job would miss.
+        python-version: ["3.10", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      # Deliberately a clean install from setup.py rather than a pinned
+      # requirements file: the point is to verify that what we declare is
+      # actually sufficient to run. This job is what would have caught
+      # tensorflow_probability being declared without its [tf] extra, which
+      # left tf-keras uninstalled and TFP importable but broken at runtime.
+      - name: Install package
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e "MAGI_package/[dev]"
+
+      - name: Report resolved environment
+        run: |
+          python -c "
+          import importlib.metadata as md
+          for p in ['tensorflow', 'tensorflow-probability', 'tf-keras',
+                    'numpy', 'scipy', 'scikit-learn', 'astropy']:
+              try:
+                  print(f'{p:26s} {md.version(p)}')
+              except md.PackageNotFoundError:
+                  print(f'{p:26s} MISSING')
+          "
+
+      - name: Import check
+        # Fails loudly if the public surface cannot be imported at all, which
+        # is a clearer signal than 140 collection errors.
+        env:
+          CUDA_VISIBLE_DEVICES: "-1"
+        run: python -c "import magi; print('magi', magi.__version__)"
+
+      - name: Run tests
+        env:
+          # The suite is CPU-only by design; see the manual's note on
+          # tensorflow-metal being slower than the CPU on this workload.
+          CUDA_VISIBLE_DEVICES: "-1"
+          TF_CPP_MIN_LOG_LEVEL: "2"
+        run: pytest MAGI_package/tests/ -q --durations=10

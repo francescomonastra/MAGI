@@ -17,10 +17,11 @@
 \begin{magiwarn}[This release is a beta]
 MAGI \magiversion{} reproduces the \emph{joint} phase-space distribution
 (energy--position--direction correlations) and the energy continuum to within
-its stated acceptance bars, on three seeds and two reference sources. It does
-\textbf{not} yet reproduce spectral-line \emph{intensities}: measured per-line
-recovery runs from $0.7\times$ to $4.9\times$ the true value and is unstable
-across seeds. Line \emph{positions} are reliable to $\leq 0.5$~eV.
+its stated acceptance bars, on two reference sources, each measured over
+three seeds (42/7/13). It does \textbf{not} yet reproduce spectral-line
+\emph{intensities}: measured per-line recovery ranges from $0.96\times$ to
+$3.4\times$ the true value and is unstable across seeds. Line \emph{positions}
+are reliable to $\leq 0.5$~eV.
 
 Read Section~\ref{sec:envelope} before quoting any number derived from a
 MAGI-generated source. Do not use this release to estimate a fluorescence or
@@ -1650,18 +1651,30 @@ magi.compare_hist_with_residuals(real["E"], gen["E"], "Energy [MeV]",
 \section{Accuracy: what has actually been measured}
 \label{sec:envelope}
 
-All numbers are mean $\pm$ std over three seeds (42/7/13) on the two reference
-sources, produced by \code{tools/acceptance\_v0\_8.py}.
+All numbers are produced by \code{tools/acceptance\_v0\_8.py}.
+
+\begin{magiwarn}[Small's 511~keV line is only marginally stable across seeds]
+\textbf{Both sources are now measured over three seeds (42/7/13).} Small's
+per-line recovery is noisier than CR's: $e^+e^-$ 511~keV lands at
+$1.056$, $0.904$ and $1.364$ --- two of three seeds inside $[0.8, 1.2]$, one
+outside, giving a mean that looks acceptable ($1.108 \pm 0.191$) but hides a
+real per-seed failure. Al~K$\alpha_2$ is the opposite pattern: consistently
+over-generated on every seed ($2.765$--$3.696$), so that failure is a property
+of the model, not of sampling noise. The continuum immediately beside the
+511~keV line is also over-filled on every seed
+($2.000 \pm 0.148\times$ real) --- the gate is over-populating the whole
+511~keV region, not only the line itself.
+\end{magiwarn}
 
 \subsection{Validated}
 
 \begin{center}
 \begin{tabular}{@{}lccc@{}}
 \toprule
-\textbf{Quantity} & \textbf{CryoSphere-CR} & \textbf{CryoSphere-Small} & \textbf{Bar} \\
+\textbf{Quantity} & \textbf{CR} (3 seeds) & \textbf{Small} (3 seeds) & \textbf{Bar} \\
 \midrule
-Coupling, $\max|\Delta\mathrm{corr}|$ & $0.0285 \pm 0.0101$ & $0.0357 \pm 0.0102$ & $\leq 0.05$ \\
-Wasserstein on $\log_{10}E$           & $0.0241 \pm 0.0046$ & $0.0065 \pm 0.0006$ & $\leq 0.05$ \\
+Coupling, $\max|\Delta\mathrm{corr}|$ & $0.0285 \pm 0.0101$ & $0.039 \pm 0.011$  & $\leq 0.05$ \\
+Wasserstein on $\log_{10}E$           & $0.0241 \pm 0.0046$ & $0.0065 \pm 0.0017$ & $\leq 0.05$ \\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -1673,8 +1686,9 @@ coupling residual is 0.226, eight times worse.
 
 \subsection{Not validated}
 
-Per-line \emph{intensities} are wrong by factors of roughly $0.7\times$ to
-$4.9\times$, and unstable across seeds.
+Per-line \emph{intensities} range from in-band to a factor of $3.4\times$ too
+high, and the worst offender is unstable across seeds. Every figure below is
+traceable to \code{docs/\_data/} output of the acceptance harness.
 
 \begin{center}
 \begin{tabular}{@{}llc@{}}
@@ -1683,17 +1697,26 @@ $4.9\times$, and unstable across seeds.
 \midrule
 CR Al K$\alpha_1$      & $0.959 \pm 0.025$ & in band \\
 CR Cu K$\beta$         & $1.034 \pm 0.050$ & in band \\
+Small $e^+e^-$ 511 keV & $1.108 \pm 0.191$\textsuperscript{$*$} & marginal --- 2/3 seeds in band \\
 CR $e^+e^-$ 511 keV    & $1.825 \pm 0.324$ & over-generated, unstable \\
 CR Cu K$\alpha_1$      & $2.052 \pm 0.034$\textsuperscript{$\dagger$} & over-generated \\
-Small Al K$\alpha_2$   & $3.412 \pm 0.376$ & far over \\
-Small Cu K$\alpha_1$   & $4.903 \pm 0.356$\textsuperscript{$\dagger$} & far over \\
+Small Al K$\alpha_2$   & $3.252 \pm 0.381$ & far over, stable across seeds \\
+Small Cu K$\alpha_1$   & ---\textsuperscript{$\ddagger$} & below detection floor \\
 \bottomrule
 \end{tabular}
 \end{center}
 
-\textsuperscript{$\dagger$}\,\textbf{These two are routing fractions, not
-window recoveries.} Cu~K$\alpha_1$ and Cu~K$\alpha_2$ are 21~eV apart, so each
-sits inside the other's continuum side-bands and the harness reports the
+\textsuperscript{$*$}\,\textbf{The mean hides a per-seed failure.} The three
+seeds are $1.056$, $0.904$ and $1.364$ --- only two of three land inside
+$[0.8, 1.2]$. Do not read $1.108 \pm 0.191$ as "in band"; read it as "close to
+in band on average, but not reliably so on any given training run." The
+continuum immediately beside this line is also over-filled on all three seeds
+($2.000 \pm 0.148\times$ real), so the gate is over-populating the region
+around 511~keV, not cleanly mis-sizing the line alone.
+
+\textsuperscript{$\dagger$}\,\textbf{A routing fraction, not a window
+recovery.} Cu~K$\alpha_1$ and Cu~K$\alpha_2$ are 21~eV apart, so each sits
+inside the other's continuum side-bands and the harness reports the
 window-based \code{recovery\_ratio} as \code{n/a}
 (\code{sideband\_contaminated}). The number quoted is the harness's
 \code{comp\_rec}: the fraction of generated events the \emph{gate} routed to
@@ -1701,6 +1724,18 @@ that component, against the real fraction. It measures the same failure and is
 the only figure available for this line, but it is not the same quantity as the
 other rows and should not be compared against the $[0.8, 1.2]$ window bar
 directly.
+
+\textsuperscript{$\ddagger$}\,\textbf{Small's Cu~K$\alpha_1$ is not a
+failure --- it is below the detection floor.} It reaches only
+$4.5\sigma$ against the $\geq 5\sigma$ bar on all three seeds, on the same 62
+real events every time (the real sample does not change with the training
+seed). By the bar's own rule a below-floor line is \emph{not modelled} and its
+absence is a correct result, so quoting a recovery ratio for it would be
+reporting noise. The gate-routing fraction (\code{comp\_rec}, not a window
+recovery --- same caveat as CR Cu~K$\alpha_1$ above) is at least stable:
+$5.484 \pm 0.251$ across the three seeds. Earlier drafts of this table listed
+this line as a $4.9\times$ over-generation; that figure could not be
+reproduced from any surviving artifact and has been withdrawn.
 
 Practical consequences:
 

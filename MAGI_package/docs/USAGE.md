@@ -213,8 +213,8 @@ python tools/acceptance_v0_8.py --sources CR Small --seeds 42 7 13
 
 | Quantity | CryoSphere-CR | CryoSphere-Small | Bar |
 |---|---|---|---|
-| Coupling, max\|Δcorr\| over (logE, u_r, u_v, φ_r, φ_v) | 0.0285 ± 0.0101 | 0.0357 ± 0.0102 | ≤ 0.05 |
-| Energy marginal, Wasserstein on log₁₀E | 0.0241 ± 0.0046 | 0.0065 ± 0.0006 | ≤ 0.05 |
+| Coupling, max\|Δcorr\| over (logE, u_r, u_v, φ_r, φ_v) | 0.0285 ± 0.0101 | 0.039 ± 0.011 | ≤ 0.05 |
+| Energy marginal, Wasserstein on log₁₀E | 0.0241 ± 0.0046 | 0.0065 ± 0.0017 | ≤ 0.05 |
 
 The **joint** distribution is what v0.8 exists for and it holds up with error bars: every
 real cross-correlation between energy and the four geometry variables is reproduced
@@ -225,17 +225,19 @@ it is one the v0.7.2 categorical head does not deliver (its coupling residual is
 
 ### Not validated — known limitations
 
-Per-line **intensities** are wrong by factors of roughly 0.7× to 4.9×, and unstable
-across seeds:
+Per-line **intensities** are wrong by factors of roughly 0.9× to 3.3× (or 5.5× on the
+routing-fraction proxy where the window metric can't be used), and unstable across
+seeds:
 
 | Line | Recovery (mean ± std) | Status |
 |---|---|---|
 | CR Al Kα1 | 0.959 ± 0.025 | in band |
 | CR Cu Kβ | 1.034 ± 0.050 | in band |
+| Small e⁺e⁻ 511 keV | 1.108 ± 0.191 | **marginal — 2/3 seeds in band, mean hides a per-seed failure** |
 | CR e⁺e⁻ 511 keV | 1.825 ± 0.324 | **over-generated, unstable** |
 | CR Cu Kα1 | 2.052 ± 0.034 (routing) | **over-generated** |
-| Small Al Kα2 | 3.412 ± 0.376 | **far over** |
-| Small Cu Kα1 | 4.903 ± 0.356 (routing) | **far over** |
+| Small Al Kα2 | 3.252 ± 0.381 | **far over, stable across seeds** |
+| Small Cu Kα1 | 5.484 ± 0.251 (routing) | below detection floor — see note |
 
 Practical consequences:
 
@@ -244,7 +246,16 @@ Practical consequences:
   the number of events in each line that is not.
 - Do **not** use generated output to estimate a fluorescence or annihilation line flux,
   or any quantity dominated by one.
-- The continuum between lines, and the total energy marginal, are within the bar.
+- Small Cu Kα1 sits at only 4.5σ against the ≥5σ significance bar on all three seeds
+  (62 real events) — below that floor, an unmodelled line is the *correct* result, not
+  a failure, so no recovery ratio is quoted for it. The 5.484 ± 0.251 figure above is the
+  gate's routing fraction (`comp_rec`), the same kind of proxy used for CR Cu Kα1, not a
+  window-based recovery ratio.
+- Small's 511 keV line and the continuum immediately beside it are both over-filled: the
+  near-line continuum ratio is 2.000 ± 0.148× real on all three seeds, so the gate is
+  over-populating the whole 511 keV region, not mis-sizing the line in isolation.
+- The continuum between lines elsewhere, and the total energy marginal, are within the
+  bar.
 - Rare lines are worse than strong ones, and the failure is source-dependent — measure
   on *your* source with the acceptance harness rather than assuming these numbers carry
   over.
