@@ -137,6 +137,7 @@ from .generation import (
     generate_detector_input_file,
 )
 from .validation import (
+    energy_vs_impact_parameter,
     compute_wasserstein_scores,
     report_generated_constraints,
     compute_line_integral_recovery,

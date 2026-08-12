@@ -3042,6 +3042,17 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
 
         continuum_mode="flow",
         energy_flow_condition="z_cond",
+        # v0.8.3: factorize the joint as p(geometry|z) * p(energy|geometry,z)
+        # rather than making the latent carry the coupling alone. In v0.8.2 the
+        # energy head and the geometry heads both read the same stem, so they
+        # shared only what z encoded - and that fitted BOTH marginals correctly
+        # while inventing an anti-correlation in the joint: CR median energy for
+        # rays aimed at Detector 1 fell to 0.47x truth at b<10mm and 0.23x at
+        # b<1mm, where truth is flat in b (MAGI_validation_note.md section 4b).
+        # True -> concatenate the four geometry targets onto the energy branch
+        # input: the true ones at train time (teacher forcing), the sampled ones
+        # at generation.
+        energy_condition_geometry=False,
         continuum_flow_bins=8,
         continuum_flow_transforms=2,
         continuum_flow_interval=5.0,
@@ -3098,6 +3109,9 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
                 f"{energy_flow_condition!r}."
             )
         self.energy_flow_condition = str(energy_flow_condition)
+        self.energy_condition_geometry = bool(energy_condition_geometry)
+        # u_r_q, u_v_q, phi_r_q, phi_v_q
+        self.n_geom_cond = 4 if self.energy_condition_geometry else 0
 
         # The flow is a single continuum slot in the gate (indices 0..n_lines
         # stay {continuum, line_1..line_L}); the n_continuum_components knob
@@ -3325,7 +3339,10 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
         # Energy branch
         # =====================================================
 
-        energy_in = layers.Input(shape=(stem_width,))
+        # v0.8.3: +n_geom_cond columns when conditioning on geometry. The
+        # gate, energy_cont_head and flow all read energy_feat, so widening
+        # here conditions every one of them.
+        energy_in = layers.Input(shape=(stem_width + self.n_geom_cond,))
 
         x = energy_in
 
@@ -3685,14 +3702,41 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
     # ==========================================================
     # Decoder
     # ==========================================================
-    def _decode_params(self, z, cond, training=False):
+    def _decode_params(self, z, cond, training=False, geom_obs=None):
+        """Decode to per-head parameters.
+
+        `geom_obs` (v0.8.3) is the (batch, 4) block of geometry targets
+        [u_r_q, u_v_q, phi_r_q, phi_v_q] that the energy head is conditioned on
+        when `energy_condition_geometry=True`: the TRUE targets during training
+        (teacher forcing) and the SAMPLED ones during generation, which is what
+        keeps p(geometry|z) * p(energy|geometry,z) consistent between the two.
+        Ignored when the flag is off.
+
+        The geometry heads never see `geom_obs`, so passing it cannot leak the
+        answer into their own reconstruction term.
+        """
 
         base = tf.concat([z, cond], axis=1)
 
         stem = self.decoder_stem(base, training=training)
         deep = self.decoder_deep_trunk(stem, training=training)
 
-        energy_feat = self.energy_branch(stem, training=training)
+        if self.energy_condition_geometry:
+            if geom_obs is None:
+                # Generation pass 1: geometry is not sampled yet. Only the
+                # geometry heads are read from this pass - generate() re-decodes
+                # with the sampled geometry before touching gate or flow, so
+                # these zeros never reach a used energy output.
+                geom_obs = tf.zeros(
+                    (tf.shape(stem)[0], self.n_geom_cond), dtype=stem.dtype
+                )
+            energy_branch_in = tf.concat(
+                [stem, tf.cast(geom_obs, stem.dtype)], axis=1
+            )
+        else:
+            energy_branch_in = stem
+
+        energy_feat = self.energy_branch(energy_branch_in, training=training)
 
         pos_feat = self.position_branch(deep, training=training)
         dir_feat = self.direction_branch(deep, training=training)
@@ -3900,6 +3944,7 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
             "lambda_sigma": float(self.lambda_sigma),
             "continuum_mode": self.continuum_mode,
             "energy_flow_condition": self.energy_flow_condition,
+            "energy_condition_geometry": self.energy_condition_geometry,
             "gate_focal_gamma": float(self.gate_focal_gamma),
             "gate_class_weights": (
                 None if self.gate_class_weights is None
@@ -4120,7 +4165,15 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
             z_mean, z_logvar = self.encoder(x_in, training=True)
             z = self.sample_z(z_mean, z_logvar)
 
-            params = self._decode_params(z, cond, training=True)
+            # v0.8.3 teacher forcing: energy head sees the TRUE geometry
+            # targets (first 4 columns of y_cont). None when the flag is off.
+            geom_obs = (
+                y_cont[:, : self.n_geom_cond]
+                if self.energy_condition_geometry else None
+            )
+            params = self._decode_params(
+                z, cond, training=True, geom_obs=geom_obs
+            )
 
             rec_per, pieces = self._reconstruction_terms(
                 y_cont,
@@ -4199,7 +4252,13 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
         z_mean, z_logvar = self.encoder(x_in, training=False)
         z = self.sample_z(z_mean, z_logvar)
 
-        params = self._decode_params(z, cond, training=False)
+        geom_obs = (
+            y_cont[:, : self.n_geom_cond]
+            if self.energy_condition_geometry else None
+        )
+        params = self._decode_params(
+            z, cond, training=False, geom_obs=geom_obs
+        )
 
         rec_per, pieces = self._reconstruction_terms(
             y_cont,
@@ -4295,6 +4354,43 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
             z = tf.random.normal((n_samples, self.latent_dim))
         params = self.decode(z, cond)
 
+        # --- geometry first (v0.8.3) ---------------------------------
+        # With energy_condition_geometry the joint is factorized as
+        # p(geometry|z) * p(energy|geometry,z), so geometry must be sampled
+        # before the energy head can be evaluated. Pass 1 above used a zero
+        # geom_obs, and only its geometry parameters are read here.
+        ur_eps = tf.random.normal(tf.shape(params["ur_mu"]))
+        ur_q = params["ur_mu"] + tf.exp(params["ur_logsigma"]) * ur_eps
+
+        uv_eps = tf.random.normal(tf.shape(params["uv_mu"]))
+        uv_q = params["uv_mu"] + tf.exp(params["uv_logsigma"]) * uv_eps
+
+        phi_r_eps = tf.random.normal(tf.shape(params["phi_r_mu"]))
+        phi_r_q = params["phi_r_mu"] + tf.exp(params["phi_r_logsigma"]) * phi_r_eps
+
+        phi_v_eps = tf.random.normal(tf.shape(params["phi_v_mu"]))
+        phi_v_q = params["phi_v_mu"] + tf.exp(params["phi_v_logsigma"]) * phi_v_eps
+
+        y_cont = tf.concat(
+            [
+                ur_q,
+                uv_q,
+                phi_r_q,
+                phi_v_q,
+            ],
+            axis=1,
+        )
+
+        if self.energy_condition_geometry:
+            # Re-decode with the geometry just sampled, so generation applies
+            # exactly the conditional that teacher-forced training fitted.
+            # The decoder is deterministic given (z, cond), so the geometry
+            # parameters are unchanged and the samples above stay valid -
+            # only the gate logits and the flow conditioning move.
+            params = self._decode_params(
+                z, cond, training=False, geom_obs=y_cont
+            )
+
         gate_logits = params["energy_gate_logits"] / self.energy_sampling_temperature
         comp_idx = tf.random.categorical(gate_logits, num_samples=1)
         comp_idx = tf.cast(tf.squeeze(comp_idx, axis=1), tf.int32)
@@ -4327,28 +4423,6 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
 
             energy_eps = tf.random.normal((batch,))
             energy_y = chosen_mu + tf.exp(chosen_logsigma) * energy_eps
-
-        ur_eps = tf.random.normal(tf.shape(params["ur_mu"]))
-        ur_q = params["ur_mu"] + tf.exp(params["ur_logsigma"]) * ur_eps
-
-        uv_eps = tf.random.normal(tf.shape(params["uv_mu"]))
-        uv_q = params["uv_mu"] + tf.exp(params["uv_logsigma"]) * uv_eps
-
-        phi_r_eps = tf.random.normal(tf.shape(params["phi_r_mu"]))
-        phi_r_q = params["phi_r_mu"] + tf.exp(params["phi_r_logsigma"]) * phi_r_eps
-
-        phi_v_eps = tf.random.normal(tf.shape(params["phi_v_mu"]))
-        phi_v_q = params["phi_v_mu"] + tf.exp(params["phi_v_logsigma"]) * phi_v_eps
-
-        y_cont = tf.concat(
-            [
-                ur_q,
-                uv_q,
-                phi_r_q,
-                phi_v_q,
-            ],
-            axis=1,
-        )
 
         return {
             "energy_y": energy_y,

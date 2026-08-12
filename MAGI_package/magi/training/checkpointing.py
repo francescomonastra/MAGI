@@ -990,6 +990,14 @@ def load_task_adaptive_model_for_generation(
 
             continuum_mode=model_config.get("continuum_mode", "gaussian"),
             energy_flow_condition=model_config.get("energy_flow_condition", "z_cond"),
+            # v0.8.3. Like prior_zone_conditioning this is deliberately
+            # NOT in _V08_MIXTURE_REQUIRED_KEYS: False rebuilds exactly the
+            # pre-v0.8.3 architecture, so every existing checkpoint still
+            # loads, and a wrong default here cannot silently produce a
+            # different network.
+            energy_condition_geometry=model_config.get(
+                "energy_condition_geometry", False
+            ),
             gate_focal_gamma=model_config.get("gate_focal_gamma", 0.0),
             gate_class_weights=model_config.get("gate_class_weights"),
             continuum_flow_bins=model_config.get("continuum_flow_bins", 8),

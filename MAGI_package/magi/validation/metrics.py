@@ -446,3 +446,87 @@ def report_generated_constraints(gen_pack, radius=100.0):
           "fraction |u_v| > 1:",
           np.mean(np.abs(gen_pack["u_v_gen"]) > 1.0)
     )
+
+# ---------------------------------------------------------------------------
+# v0.8.3: energy-vs-aiming coupling
+# ---------------------------------------------------------------------------
+
+def energy_vs_impact_parameter(
+    P_real, U_real, E_real,
+    P_gen, U_gen, E_gen,
+    detector_centre,
+    cuts=(np.inf, 50.0, 20.0, 10.0, 5.0, 2.0, 1.0),
+    verbose=True,
+):
+    """Median energy as a function of how nearly a crossing points at the detector.
+
+    This is the metric that would have caught the v0.8.2 CR deficit. Every
+    marginal was right - energy decades within 3%, muon fraction 1.000, the
+    fraction of rays intersecting the detector 1.027 - while the JOINT was
+    wrong: real median energy is flat in the impact parameter `b`, but the
+    generated median fell to 0.47x truth at b < 10 mm and 0.23x at b < 1 mm.
+    A marginal-only validation suite cannot see that.
+
+    `b` is the closest approach of the straight ray (position, direction) to
+    `detector_centre`, computed only for rays travelling toward it. Positions
+    and the centre must share units and frame; energies just have to be
+    mutually consistent.
+
+    Returns one row per cut with the real and generated counts, the aimed
+    fraction ratio (geometry alone) and the median-energy ratio (the joint).
+    A healthy model has BOTH columns near 1 at every cut; v0.8.2 had the first
+    near 1 and the second falling.
+    """
+    P_real = np.asarray(P_real, float); U_real = np.asarray(U_real, float)
+    P_gen = np.asarray(P_gen, float); U_gen = np.asarray(U_gen, float)
+    E_real = np.asarray(E_real, float); E_gen = np.asarray(E_gen, float)
+    D = np.asarray(detector_centre, float)
+
+    def _b(P, U):
+        w = D - P
+        t = np.einsum("ij,ij->i", w, U)
+        b = np.linalg.norm(w - t[:, None] * U, axis=1)
+        return b, t > 0
+
+    b_r, in_r = _b(P_real, U_real)
+    b_g, in_g = _b(P_gen, U_gen)
+
+    rows = []
+    base_r = base_g = None
+    for c in cuts:
+        m_r = in_r & (b_r < c)
+        m_g = in_g & (b_g < c)
+        if m_r.sum() < 10 or m_g.sum() < 10:
+            continue
+        f_r, f_g = m_r.mean(), m_g.mean()
+        if base_r is None:
+            base_r, base_g = f_r, f_g
+        med_r = float(np.median(E_real[m_r]))
+        med_g = float(np.median(E_gen[m_g]))
+        rows.append({
+            "cut_mm": c,
+            "n_real": int(m_r.sum()),
+            "n_gen": int(m_g.sum()),
+            "aimed_frac_ratio": (f_g / base_g) / (f_r / base_r) if base_r else np.nan,
+            "median_E_real": med_r,
+            "median_E_gen": med_g,
+            "median_E_ratio": med_g / med_r if med_r else np.nan,
+        })
+
+    if verbose:
+        print("energy vs impact parameter to the detector")
+        print("  a healthy model keeps median_E_ratio ~1 at EVERY cut;")
+        print("  a falling trend is the energy<->geometry coupling error (v0.8.2)")
+        print(f"  {'cut':>10s} {'n_real':>9s} {'n_gen':>9s} "
+              f"{'medE_real':>10s} {'medE_gen':>10s} {'ratio':>7s}")
+        for r in rows:
+            lab = "all" if not np.isfinite(r["cut_mm"]) else f"b<{r['cut_mm']:g}mm"
+            print(f"  {lab:>10s} {r['n_real']:9,} {r['n_gen']:9,} "
+                  f"{r['median_E_real']:10.4g} {r['median_E_gen']:10.4g} "
+                  f"{r['median_E_ratio']:7.3f}")
+        if rows:
+            worst = min(rows, key=lambda r: r["median_E_ratio"])
+            lab = "all" if not np.isfinite(worst["cut_mm"]) else f"b<{worst['cut_mm']:g}mm"
+            print(f"  worst median_E_ratio = {worst['median_E_ratio']:.3f} at {lab}"
+                  f"   (v0.8.2 CR reference: 0.225 at b<1mm)")
+    return rows
