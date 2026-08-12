@@ -125,19 +125,48 @@ def main():
     if "s_r_std" in preprocessing:
         s_r_std = float(preprocessing["s_r_std"])
 
-    radius = float(
-        model_config.get(
-            "sphere_R",
-            preprocessing.get("radius", 100.0),
-        )
-    )
+    # The sphere is what maps generated (u_r, phi_r) back to physical (x, y, z).
+    # Getting it wrong does not fail - it silently emits particles on the wrong
+    # surface, which Geant4 then transports from the wrong place. That cost a
+    # full DM1.2 run: its sphere is centre (0,0,5) R=105, but the metadata used
+    # the key names `sphere_center`/`sphere_radius`, so these lookups missed and
+    # fell back to the SRON default, putting every particle 512 mm away on a
+    # 100 mm sphere. Warn loudly whenever the fallback is used rather than
+    # raising, because 30 of the existing SRON checkpoints omit these keys too
+    # and are only correct by coincidence.
+    DEFAULT_RADIUS = 100.0
+    DEFAULT_CENTER = (0.0, 0.0, -507.66)
 
-    center = tuple(
-        preprocessing.get(
-            "center",
-            (0.0, 0.0, -507.66),
-        )
-    )
+    radius_src = "model_config['sphere_R']"
+    radius = model_config.get("sphere_R")
+    if radius is None:
+        radius = preprocessing.get("radius")
+        radius_src = "preprocessing['radius']"
+    if radius is None:
+        radius = preprocessing.get("sphere_radius")
+        radius_src = "preprocessing['sphere_radius']"
+    if radius is None:
+        radius, radius_src = DEFAULT_RADIUS, "DEFAULT"
+    radius = float(radius)
+
+    center_src = "preprocessing['center']"
+    center = preprocessing.get("center")
+    if center is None:
+        center = preprocessing.get("sphere_center")
+        center_src = "preprocessing['sphere_center']"
+    if center is None:
+        center, center_src = DEFAULT_CENTER, "DEFAULT"
+    center = tuple(center)
+
+    print(f"[MAGI] CryoSphere for reconstruction: centre {center} radius {radius} "
+          f"(centre from {center_src}, radius from {radius_src})")
+    if center_src == "DEFAULT" or radius_src == "DEFAULT":
+        print("[MAGI] *** WARNING: falling back to the SRON CryoSphere "
+              "(0, 0, -507.66) R=100. If this model was trained on any other "
+              "geometry - e.g. DM1.2, which is (0, 0, 5) R=105 - every particle "
+              "will be emitted on the WRONG surface and the run is invalid. Set "
+              "preprocessing_metadata['center'] and ['radius'] at training time.",
+              flush=True)
 
     magi.generate_detector_input_file(
         save_dir=args.save_dir,
