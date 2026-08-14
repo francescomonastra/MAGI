@@ -35,6 +35,8 @@ _ALL = {
     "v082-seed13":  ("trained_models/v0_8_2_priorzone_CR_seed13", "mix_CR"),
     "v082-exact":   ("trained_models/v0_8_2_exactzone_CR", "mix_CR"),
     "v0.8.3":       ("trained_models/v0_8_3_geomcond_CR", "mix_CR"),
+    "v083-seed7":   ("trained_models/v0_8_3_geomcond_CR_seed7", "mix_CR"),
+    "v083-seed13":  ("trained_models/v0_8_3_geomcond_CR_seed13", "mix_CR"),
 }
 _pick = sys.argv[1:] or ["v0.8.2", "v0.8.3"]
 MODELS = {k: _ALL[k] for k in _pick}

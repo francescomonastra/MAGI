@@ -1,0 +1,60 @@
+WARNING:tensorflow:5 out of the last 11 calls to <function CVAE_MixEnergy_ContPhi_TaskAdaptive.decode at 0x360096b00> triggered tf.function retracing. Tracing is expensive and the excessive number of tracings could be due to (1) creating @tf.function repeatedly in a loop, (2) passing tensors with different shapes, (3) passing Python objects instead of tensors. For (1), please define your @tf.function outside of the loop. For (2), @tf.function has reduce_retracing=True option that can avoid unnecessary retracing. For (3), please refer to https://www.tensorflow.org/guide/function#controlling_retracing and https://www.tensorflow.org/api_docs/python/tf/function for  more details.
+WARNING:tensorflow:5 out of the last 11 calls to <function CVAE_MixEnergy_ContPhi_TaskAdaptive.decode at 0x360096b00> triggered tf.function retracing. Tracing is expensive and the excessive number of tracings could be due to (1) creating @tf.function repeatedly in a loop, (2) passing tensors with different shapes, (3) passing Python objects instead of tensors. For (1), please define your @tf.function outside of the loop. For (2), @tf.function has reduce_retracing=True option that can avoid unnecessary retracing. For (3), please refer to https://www.tensorflow.org/guide/function#controlling_retracing and https://www.tensorflow.org/api_docs/python/tf/function for  more details.
+real crossings: 3,285,347
+generating 2,000,000 from v0.8.2
+  trained_models/v0_8_2_priorzone_CR: latent_dim=8 energy_condition_geometry=False
+    dropped 91,937 neutrinos (4.60%), 1,908,063 kept
+generating 2,000,000 from v0.8.3
+  trained_models/v0_8_3_geomcond_CR: latent_dim=12 energy_condition_geometry=True
+    dropped 91,404 neutrinos (4.57%), 1,908,596 kept
+
+============================================================================================
+median energy vs impact parameter to Detector 1, 2,000,000 generated per model
+============================================================================================
+       cut    n_real |       v0.8.2       n |       v0.8.3       n |
+       all 2,800,277 | 1,359,474   1.280 [1.254,1.308] | 1,408,804   1.022 [1.006,1.041] |
+    b<50mm   763,337 | 371,138   2.114 [2.048,2.201] | 395,407   1.181 [1.145,1.224] |
+    b<20mm   122,013 |  59,248   1.649 [1.518,1.805] |  66,500   1.069 [0.998,1.157] |
+    b<10mm    30,551 |  14,664   1.841 [1.588,2.142] |  16,784   0.821 [0.735,0.959] |
+     b<5mm     7,604 |   3,643   1.789 [1.275,2.765] |   4,325   0.804 [0.661,1.098] |
+     b<2mm     1,127 |     576   0.795 [0.408,1.452] |     702   0.988 [0.515,1.858] |
+     b<1mm       280 |     147   1.972 [0.557,8.461] |     185   0.453 [0.230,1.606] |
+
+energy decades (marginal - must not regress)
+        decade [MeV]      real   ratios
+    0.001 - 0.01       0.8455%  v0.8.2=0.865  v0.8.3=0.674
+     0.01 - 0.1        1.4823%  v0.8.2=1.694  v0.8.3=2.199
+      0.1 - 1         34.9849%  v0.8.2=0.995  v0.8.3=0.971
+        1 - 10        15.9744%  v0.8.2=0.960  v0.8.3=1.013
+       10 - 100        6.3530%  v0.8.2=1.015  v0.8.3=0.991
+      100 - 1e+03     20.8779%  v0.8.2=1.004  v0.8.3=1.017
+    1e+03 - 1e+04     17.3792%  v0.8.2=0.980  v0.8.3=0.944
+    1e+04 - 1e+06      2.1028%  v0.8.2=1.036  v0.8.3=0.991
+  trained_models/v0_8_2_priorzone_CR: latent_dim=8 energy_condition_geometry=False
+    dropped 32,336 neutrinos (4.62%), 667,664 kept
+  trained_models/v0_8_2_priorzone_CR_seed7: latent_dim=8 energy_condition_geometry=False
+    dropped 32,068 neutrinos (4.58%), 667,932 kept
+  trained_models/v0_8_2_priorzone_CR_seed13: latent_dim=8 energy_condition_geometry=False
+    dropped 32,376 neutrinos (4.63%), 667,624 kept
+  trained_models/v0_8_3_geomcond_CR: latent_dim=12 energy_condition_geometry=True
+    dropped 32,156 neutrinos (4.59%), 667,844 kept
+  trained_models/v0_8_3_geomcond_CR_seed7: latent_dim=12 energy_condition_geometry=True
+    dropped 32,202 neutrinos (4.60%), 667,798 kept
+  trained_models/v0_8_3_geomcond_CR_seed13: latent_dim=12 energy_condition_geometry=True
+    dropped 32,374 neutrinos (4.62%), 667,626 kept
+
+==============================================================================
+SEED-ENSEMBLE pooling, 700,000 x 3 per family
+==============================================================================
+       cut    n_real |              v0.8.2 x3 |              v0.8.3 x3
+       all 2,800,277 |   1.078 [1.061,1.094] |   0.933 [0.921,0.946] |
+    b<50mm   763,337 |   1.273 [1.234,1.312] |   1.003 [0.973,1.034] |
+    b<20mm   122,013 |   1.107 [1.022,1.196] |   0.831 [0.773,0.879] |
+    b<10mm    30,551 |   0.898 [0.765,1.068] |   0.580 [0.528,0.677] |
+     b<5mm     7,604 |   1.404 [1.045,2.362] |   0.620 [0.504,0.827] |
+     b<2mm     1,127 |   5.206 [2.468,6.277] |   1.856 [0.612,3.584] |
+     b<1mm       280 |  11.619 [4.270,15.760] |   0.584 [0.312,6.824] |
+
+single-seed spread at b<10mm, for reference:
+  v0.8.2  0.495 / 1.057 / 1.222
+  v0.8.3  0.455 / 0.962 / 1.082

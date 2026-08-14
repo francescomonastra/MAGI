@@ -1,0 +1,589 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[margin=2.2cm]{geometry}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{amsmath}
+\usepackage{siunitx}
+\usepackage{xcolor}
+\usepackage[colorlinks=true,linkcolor=blue!50!black,urlcolor=blue!50!black]{hyperref}
+\usepackage{fancyhdr}
+\usepackage{enumitem}
+
+% group-digits=integer: without it siunitx also groups the fractional part and
+% renders 4.9968e-3 as "4.996,8 x 10^-3".
+\sisetup{group-separator={,},group-minimum-digits=4,group-digits=integer}
+
+\definecolor{warn}{RGB}{170,40,20}
+\definecolor{ok}{RGB}{20,110,60}
+\definecolor{prov}{RGB}{90,90,90}
+
+% provenance tag: every number in this document carries one
+\newcommand{\ev}[1]{{\footnotesize\textcolor{prov}{[#1]}}}
+
+% Lightweight callout box. Deliberately built from fcolorbox + minipage rather
+% than tcolorbox: tcolorbox loads pgf, whose XeTeX driver is absent from the
+% tectonic bundle on this machine.
+\newsavebox{\calloutbox}
+\newenvironment{callout}[3]% #1 frame colour, #2 background colour, #3 title
+{\par\medskip\noindent
+ \def\calloutframe{#1}\def\calloutback{#2}%
+ \setlength{\fboxrule}{0.9pt}\setlength{\fboxsep}{8pt}%
+ \begin{lrbox}{\calloutbox}%
+ \begin{minipage}{\dimexpr\textwidth-2\fboxsep-2\fboxrule\relax}%
+ \setlength{\parskip}{4pt}%
+ \textcolor{#1}{\textbf{#3}}\par\nobreak\smallskip}
+{\end{minipage}\end{lrbox}%
+ \fcolorbox{\calloutframe}{\calloutback}{\usebox{\calloutbox}}%
+ \par\medskip}
+
+\pagestyle{fancy}
+\fancyhf{}
+\lhead{\footnotesize MAGI --- state of validation}
+\rhead{\footnotesize\textcolor{warn}{INTERNAL DRAFT --- NOT FOR SUBMISSION}}
+\cfoot{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+\title{\textbf{MAGI: state of validation}\\[2mm]
+\large An internal reference for paper writing}
+\author{F.\ Monastra (INAF)}
+\date{Compiled 14 August 2026}
+
+\begin{document}
+\maketitle
+\thispagestyle{fancy}
+
+\begin{callout}{warn}{red!4}{Status of this document}
+\textbf{This is an internal working reference, not a manuscript and not
+submission-ready.} It exists so that numbers entering the proceeding and the
+flash talk can be traced to the run that produced them.
+
+Every numeric claim carries a provenance tag \ev{Ex} resolving to
+Table~\ref{tab:prov}. Tags point at files and runs on the local machine; they
+are \emph{not} literature citations. This document contains no external
+references, because none have been verified for it.
+
+Superseded and withdrawn results are retained and marked, not deleted.
+Work in progress is marked as such and carries no result.
+\end{callout}
+
+\section{Scope}
+
+MAGI is a conditional variational autoencoder that replaces Geant4 transport
+from a spacecraft or laboratory mass model down to a closed surface (the
+``CryoSphere'') surrounding a cryogenic detector. Instead of tracking primaries
+through the full assembly, MAGI generates particle crossings directly on that
+surface; those crossings are then injected into the same mass model and
+transported the short remaining distance.
+
+The validation question is therefore narrow and well posed: \emph{does a MAGI
+crossing produce detector events at the same rate and with the same spectrum as
+a real recorded crossing, in the same geometry?}
+
+Three independent sources have been tested: cosmic rays on the SRON X-IFU model
+(CR), cosmic rays on the DM1.2 laboratory cryostat, and $^{40}$K
+radioactivity on the SRON model.
+
+\subsection{Model version under validation}
+
+All results below are \textbf{v0.8.2}, class
+\texttt{CVAE\_MixEnergy\_ContPhi\_TaskAdaptive}: conditional rational-quadratic
+spline normalizing-flow continuum with CDF pre-warp, pinned 4\,eV emission
+lines, focal-gated line/continuum supervision, and a learnable conditional
+coupling prior with zone conditioning. \texttt{latent\_dim}\,=\,8.
+
+v0.8.3 (\texttt{energy\_condition\_geometry=True}, \texttt{latent\_dim}\,=\,12)
+was implemented and trained at three seeds and is \textbf{not adopted}
+(\S\ref{sec:v083}).
+
+\section{The normalization-free comparison}
+
+The central method, used for every headline number here:
+
+\begin{equation}
+R \;=\;
+\frac{N^{\mathrm{MAGI}}_{\mathrm{events}} / N^{\mathrm{MAGI}}_{\mathrm{crossings}}}
+     {N^{\mathrm{real}}_{\mathrm{events}} / N^{\mathrm{real}}_{\mathrm{crossings}}}
+\end{equation}
+
+Both sides are counted \emph{per injected crossing}, through the identical mass
+model, binary, physics list and scoring code. $R$ requires no exposure, no
+detector area, no flux normalization, and---critically---no crossing efficiency
+$\chi$. It is insensitive to every quantity that has historically caused
+discordance between MAGI-side and Geant4-side bookkeeping.
+
+The \emph{efficiency factor} quoted in some tables is a different normalization,
+retained for continuity with earlier analysis:
+\begin{equation}
+\varepsilon \;=\;
+\frac{N^{\mathrm{MAGI}}_{\mathrm{counts}} / N^{\mathrm{MAGI}}_{\mathrm{shot}}}
+     {N^{\mathrm{ref}}_{\mathrm{counts}} / N^{\mathrm{ref}}_{\mathrm{shot}}},
+\qquad
+R = \varepsilon \times \chi ,
+\end{equation}
+where MAGI's shot particles are CryoSphere crossings and the reference's are
+thrown primaries. A perfect surrogate returns $\varepsilon = 1/\chi$, not 1.
+
+\section{Result 1 --- Cosmic rays, DM1.2 laboratory cryostat}
+\label{sec:dm12}
+
+The cleanest measurement available, and the only one with a multi-seed ensemble
+at detector level.
+
+\paragraph{Configuration.}
+Reference: $2\times10^{8}$ muons thrown isotropically
+(\texttt{/gps/ang/type iso}, \texttt{mintheta 0}, \texttt{maxtheta 90}) through
+the DM1.2 mass model, yielding \num{999358} CryoSphere crossings and
+\num{1733} detector events \ev{E1}. MAGI: \num{1200000} crossings generated
+from a 3-seed ensemble (seeds 42, 7, 13; two files per seed) and injected into
+the same model, yielding \num{2019} detector events \ev{E2}.
+Sphere: centre $(0,0,5)$\,mm, $R=95$\,mm, verified from model metadata at
+generation time \ev{E3}.
+
+\begin{table}[h]
+\centering
+\caption{DM1.2: counts per injected crossing, MAGI vs full simulation.}
+\begin{tabular}{lrrr}
+\toprule
+Band & Reference & MAGI & $R$ \\
+\midrule
+all deposits            & \num{1733} & \num{2019} & $0.970 \pm 0.032$ \\
+\textbf{100--300\,keV (MIP)} & \num{1325} & \num{1589} & $\mathbf{0.999 \pm 0.037}$ \\
+300--1000\,keV          & 310  & 323  & $0.868 \pm 0.069$ \\
+30--100\,keV            & 42   & 46   & $0.912 \pm 0.195$ \\
+0.1--30\,keV (X-IFU)    & 41   & 43   & $0.873 \pm 0.191$ \\
+$>$1000\,keV            & 13   & 17   & $1.089 \pm 0.401$ \\
+\bottomrule
+\end{tabular}
+\ev{E2}
+\end{table}
+
+\paragraph{Efficiency factor.}
+$\chi_{\mathrm{DM1.2}} = \num{999358}/\num{200000000} = \num{4.9968e-3}$, so a
+perfect surrogate returns $1/\chi = 200.13$ \ev{E2}.
+
+\begin{table}[h]
+\centering
+\caption{DM1.2 efficiency factor. The 0.1--30\,keV row is the one directly
+comparable with the SRON CR value in \S\ref{sec:cr}.}
+\begin{tabular}{lrrr}
+\toprule
+Band & $\varepsilon$ & ideal $1/\chi$ & $R = \varepsilon\chi$ \\
+\midrule
+0.1--30\,keV (X-IFU)  & $174.8 \pm 38.2$ & 200.13 & 0.873 \\
+1--20\,keV            & $217.9 \pm 56.8$ & 200.13 & 1.089 \\
+100--300\,keV (MIP)   & $199.9 \pm 7.4$  & 200.13 & 0.999 \\
+all deposits          & $194.2 \pm 6.4$  & 200.13 & 0.970 \\
+\bottomrule
+\end{tabular}
+\ev{E2}
+\end{table}
+
+\paragraph{What can and cannot be claimed.}
+The MIP band is the spectral test: \num{1325} reference events, $\pm2.7\,\%$,
+and $\varepsilon$ within $0.4\,\%$ of its ideal value. The X-IFU band is an
+\emph{integrated rate only} --- 41 reference events, $\pm15.6\,\%$ before MAGI
+contributes any error --- and must not be presented as a spectral comparison.
+More MAGI generation cannot improve it; the reference is the cap.
+
+DM1.2 has a \textbf{single} sensitive detector, so there is no across-detector
+spread to quote as a systematic; the $\pm38.2$ is pure Poisson.
+
+\paragraph{Structural checks (all pass).}
+Crossing coverage \num{1733}/\num{1733} $= 100.0\,\%$ \ev{E2}; global species
+fractions correct to $0.3\,\%$ ($\gamma$ 1.003, $e^{-}$ 1.002, $e^{+}$ 1.039,
+$\mu^{-}$ 0.997) \ev{E2}; impact-parameter distribution 0.912--1.010 over
+$b<1$ to $b<50$\,mm \ev{E2}.
+
+\paragraph{Known defect: a coherent 4\,\% deposit shift.}
+A two-sample Kolmogorov--Smirnov test on all deposits gives $D = 0.0558$,
+$p = 0.0057$ \ev{E2}. This is \emph{not} a shape distortion but a uniform
+downward shift: deposit quantiles 25--95\,\% run 0.984, 0.960, 0.959, 0.940,
+0.962, and the maximum CDF separation falls on the MIP peak at 186\,keV. It
+localises to the MIP band ($D=0.0594$, $p=0.012$); the 300--1000\,keV band and
+everything below 100\,keV are indistinguishable ($p = 0.81$ and $0.99$).
+
+The cause is path length. Among detector-aimed crossings MAGI's tracks are too
+close to normal incidence: median $\sec\theta$ is 0.955 of the reference value,
+against a measured deposit-median ratio of 0.960 \ev{E4}. Underlying it is a
+\emph{direction-conditional species-mix error}: at $b<10$\,mm MAGI runs
+$+8.8\,\%$ muons, $-13.6\,\%$ $e^{-}$, $-7.7\,\%$ $\gamma$, while global
+fractions are correct to $0.3\,\%$ \ev{E4}. Per-species energies are correct
+(muons 0.99--1.03 at every cut).
+
+\paragraph{Prerequisite finding: a geometry overlap that destroyed 39\,\% of crossings.}
+At $R=105$\,mm the CryoSphere intersected \texttt{PlateCu1} (a 150\,mm-radius,
+5\,mm-thick copper disc at $z=106.5$, spanning $z\in[104,109]$) by at least
+1.29\,mm --- 13$\times$ the shell thickness --- and was placed with overlap
+checking disabled. Geant4 navigation inside an overlap is undefined, and
+$39.4\,\%$ of detector events had \emph{no recorded crossing}, uniformly
+58--63\,\% across five independent runs, $93.5\,\%$ of them primary-muon
+deposits \ev{E5}. Moving the sphere to $R=95$\,mm restores $100.0\,\%$
+coverage. The SRON sphere was checked and is clean.
+
+Separately, the DM1.2 muon macro had used \texttt{/gps/ang/type focused} ten
+times, aiming every muon at the origin (median $\cos$ 0.994 to the origin,
+$56.8\,\%$ inside $\cos>0.99$); absolute rates from that configuration were
+never physical \ev{E5}. All DM1.2 results here are from the \texttt{iso}
+rerun.
+
+\section{Result 2 --- Cosmic rays, SRON X-IFU model}
+\label{sec:cr}
+
+\paragraph{Normalization-free.}
+$R = \mathbf{0.848 \pm 0.125}$ \ev{E6}, from 51 counts in \num{1600000}
+injected real crossings against 500 counts in \num{18500000} injected MAGI
+crossings, same geometry and binary. (The uncertainty combines both arms; an
+earlier statement of $\pm0.14$ used the reference arm alone.)
+
+\paragraph{Per-detector flux ratio} against the RUN CRYOAC reference, 1--20\,keV:
+0.76, 0.90, 0.85, 0.57, 0.81, 0.87 over detectors 1--6, mean \textbf{0.79}
+\ev{E7}. Spectral shape is \textbf{indistinguishable} from the reference:
+KS $D = 0.048$, $p = 0.20$ \ev{E7}. For contrast, v0.6.2 gave $p = 0.0014$.
+
+\paragraph{Efficiency factor.} Counts in 0.1--30\,keV \ev{E7}:
+
+\begin{table}[h]
+\centering
+\caption{SRON CR efficiency factor per detector, v0.8.2. Ideal value
+$1/\chi_{\mathrm{CR}} = 164.4$.}
+\begin{tabular}{lrr}
+\toprule
+Detector & Reference counts & $\varepsilon$ (v0.8.2) \\
+\midrule
+1 --- TES array     & \num{28402} & $124.8 \pm 5.6$ \\
+2 --- Back CryoAC   & \num{11187} & $142.6 \pm 9.6$ \\
+3 --- Lateral       & \num{2922}  & $121.3 \pm 17.3$ \\
+4 --- Lateral       & \num{3036}  & $98.1 \pm 15.2$ \\
+5 --- Lateral       & \num{2829}  & $122.8 \pm 17.7$ \\
+6 --- Lateral       & \num{3039}  & $135.3 \pm 17.9$ \\
+\midrule
+mean                &             & \textbf{124.1} \\
+std across detectors&             & 15.2 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Normalized, $R = \varepsilon\chi = \mathbf{0.76}$, consistent with the 0.79 of
+the flux ratio and the 0.848 of the normalization-free arm, by three
+independent code paths.
+
+\paragraph{The SRON--DM1.2 contrast.} This is the most important open physics
+question in the validation:
+
+\begin{center}
+\begin{tabular}{lrrr}
+\toprule
+ & $\varepsilon$ (0.1--30\,keV) & ideal $1/\chi$ & $R$ \\
+\midrule
+SRON CR, 6 detectors  & $124.1 \pm 15.2$ & 164.4  & \textbf{0.76} \\
+DM1.2, single detector& $174.8 \pm 38.2$ & 200.13 & $0.873 \pm 0.191$ \\
+DM1.2, MIP band       & $199.9 \pm 7.4$  & 200.13 & $0.999 \pm 0.037$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+DM1.2 sits at its ideal value where statistics are good; SRON shows a
+$\sim$24\,\% deficit that DM1.2 does not reproduce. The DM1.2 overlap bug was
+excluded as the cause --- the SRON sphere does not overlap.
+
+\paragraph{Identified contribution to the SRON deficit.}
+An \textbf{inconsistent ingoing-particle cut} \ev{E8}. \texttt{EventAction.cc}
+skips outgoing crossings at registration, but the SRON training sets predate
+that code: the CR training set contains $10.37\,\%$ outgoing crossings and the
+$^{40}$K set $22.53\,\%$, while the DM1.2 set contains $0.00\,\%$. MAGI applies
+no ingoing/outgoing selection either, and generates $13.59\,\%$ outgoing against
+the training set's $10.37\,\%$ --- accounting for $3.6\,\%$ of the rate deficit.
+This also means \textbf{SRON and DM1.2 models are on different conventions.}
+
+\section{Result 3 --- $^{40}$K, SRON BuildingModel}
+
+\paragraph{$R = \mathbf{1.118 \pm 0.373}$, KS $D = 0.2384$, $p = 0.60$}
+\ev{E9}: $2\times10^{8}$ injected on both sides into
+\texttt{SRON\_CCNCoolerwithXFDM\_noShields\_BuildingModel.gdml}, giving 19 MAGI
+counts (\num{9.50e-8} per crossing) against 17 from real recorded crossings
+(\num{8.50e-8}). Matched $N$ by construction. \textbf{$^{40}$K passes at
+detector level.}
+
+The real-crossing arm recycles \num{1873609} recorded crossings $\sim$107$\times$,
+which is sound because Geant4 re-randomizes the interaction on each replay;
+continuity was verified from the crossing counts ($\sim$40.15\,M re-registered
+per job, 0.80 per injected event, uniform across four jobs) rather than assumed
+\ev{E9}.
+
+\paragraph{The 22$\times$ gap is Geant4 bookkeeping, not MAGI.}
+Against the 44-days reference the same run reads $0.049 \pm 0.012$. The
+reference and the MAGI training set \emph{do not share a $^{40}$K source}: the
+reference samples a $2000\times2000\times400$\,mm volume centred at
+$z=-1600$\,mm, the training set $750\times750\times50$\,mm at $z=-1250$\,mm ---
+a \textbf{57$\times$} smaller sampling volume \ev{E10}. The crossing yield
+depends on source geometry and not on a scalar, so the two cannot be chained,
+and the existing training set cannot be renormalized into the reference.
+MAGI sits with the population it was trained on.
+
+\paragraph{Bookkeeping correction.}
+\texttt{NgenPotassiumForMAGI\_v082} was declared \num{580000000}; measured from
+the run's own output it is \textbf{\num{538205667}} \ev{E11}. The output file
+concatenates two jobs, with exactly one backward \texttt{EventId} jump at row
+\num{398400}; estimating each job separately by $N = \max\cdot(n+1)/n$ gives
+\num{438145967} and \num{100059700}. The declared value is $7.8\,\%$ high and
+outside the $95\,\%$ region of both jobs' order statistics.
+
+The same estimator was run as a control on two other declared counts and
+\emph{confirms} them ($^{40}$K v0.7.2 ratio 1.0001; CR v0.8.2 ratio 0.9998),
+so it is not systematically low. Every v0.8.2 $^{40}$K \emph{Flower} flux and
+efficiency rises by 1.0777; the Detector-1 efficiency goes $3472 \to 3741$.
+The detector-level result above is unaffected --- it never uses the constant.
+
+\section{Correction: the ``seed systematic'' is withdrawn}
+\label{sec:seed}
+
+\begin{callout}{warn}{red!4}{Withdrawn claim}
+Earlier versions of the internal documents reported that MAGI's
+detector-relevant energy ratio spans $0.455$--$1.222$ across training seeds, and
+recommended quoting a $\pm40\,\%$ single-seed / $\pm15\,\%$ ensembled
+systematic. \textbf{That spread is an artefact of the metric and is
+withdrawn.} It was never measured on a physical quantity.
+\end{callout}
+
+The metric \texttt{energy\_vs\_impact\_parameter} compares median generated to
+median real energy among detector-aimed crossings. On the CR source that
+statistic estimates the \emph{species mix}, not the energy conditional.
+
+At $b<10$\,mm the real population is \ev{E12}: $\mu^{-}$ $48.008\,\%$ at median
+\SI{828.373}{\mega\electronvolt}; $\gamma$ $49.789\,\%$ at median
+\SI{0.511}{\mega\electronvolt}; $e^{-}$ $2.092\,\%$ at median
+\SI{3.170}{\mega\electronvolt}; aggregate median
+\SI{13.288}{\mega\electronvolt}. The two dominant populations are three orders
+of magnitude apart, split almost exactly 50/50, and \emph{disjoint} ($\gamma$
+99th percentile \SI{30.488}{\mega\electronvolt}, $\mu^{-}$ 1st percentile
+\SI{24.072}{\mega\electronvolt}). The 50th percentile of the combined sample
+therefore falls in the empty gap between them, and the aggregate median is
+close to a step function of the muon fraction.
+
+\paragraph{Demonstration using the real data only.} Reweighting the species mix
+of the real $b<10$\,mm crossings, with every energy value left untouched, so
+that the energy error is zero by construction \ev{E12}:
+
+\begin{center}
+\begin{tabular}{rrrr}
+\toprule
+$\mu^{-}$ reweight & $\mu^{-}$ fraction & aggregate median & ratio to truth \\
+\midrule
+0.955 & $46.834\,\%$ & \SI{9.287}{\mega\electronvolt}  & \textbf{0.699} \\
+0.980 & $47.686\,\%$ & \SI{11.754}{\mega\electronvolt} & 0.885 \\
+1.000 & $47.953\,\%$ & \SI{13.172}{\mega\electronvolt} & 0.991 \\
+1.012 & $48.325\,\%$ & \SI{14.982}{\mega\electronvolt} & \textbf{1.128} \\
+1.050 & $49.268\,\%$ & \SI{21.316}{\mega\electronvolt} & 1.604 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+A $\pm5\,\%$ mix shift swings the metric over 0.70--1.60. The measured per-seed
+muon reweights at $b<10$\,mm are $1.012 / 1.012 / 0.955$ --- precisely this
+range, and precisely the seeds that produced the reported spread.
+
+\paragraph{The energy conditional, resolved per species} \ev{E12}:
+
+\begin{center}
+\begin{tabular}{llll}
+\toprule
+Species & seed 42 & seed 7 & seed 13 \\
+\midrule
+$\gamma$   & 1.000--1.001 & 1.000--1.001 & 1.000--1.039 \\
+$\mu^{-}$  & 0.956--1.003 & 1.043--1.064 & 0.947--0.976 \\
+$e^{-}$    & 0.680--1.303 & 0.805--1.005 & 0.555--0.615 \\
+\bottomrule
+\end{tabular}
+\end{center}
+(ranges over the cuts all-ingoing, $b<50$, $b<20$, $b<10$\,mm)
+
+Gammas are reproduced \emph{exactly} at every cut and every seed; muons within
+$\pm6\,\%$. $e^{-}$ scatters but is 1.9--2.1\,\% of the population with 639 real
+events at $b<10$\,mm --- statistics-limited, not a demonstrated defect.
+
+\paragraph{What is real.} A $\pm5\,\%$ seed variation in the species mix
+\emph{conditional on direction} ($\mu^{-}$ reweight $1.012/1.012/0.955$ at
+$b<10$\,mm, against global fractions correct to $0.3\,\%$) \ev{E12}. This is
+genuinely a joint-distribution failure that marginal validation cannot see ---
+an order of magnitude smaller than claimed, and in a different channel. The
+same signature appears independently on DM1.2 (\S\ref{sec:dm12}).
+
+\paragraph{Consequence for \S\ref{sec:cr}.} The \S4b diagnostic in the
+validation note --- ``the model has invented an anti-correlation between energy
+and aiming'' --- rests on the same aggregate statistic and is \textbf{not
+currently supported}. Its marginals table, aimed-fraction column and counts are
+unaffected. The detector-level $R = 0.848 \pm 0.125$ never used the metric and
+stands.
+
+\section{v0.8.3: implemented, tested, not adopted}
+\label{sec:v083}
+
+\texttt{energy\_condition\_geometry=True} plus \texttt{latent\_dim} $8\to12$,
+trained at three seeds \ev{E13}. It did not improve the target metric and
+\textbf{regressed the two lowest energy decades consistently across all three
+seeds}: 0.001--0.01\,MeV from $0.880/0.921/0.995$ to $0.677/0.715/0.738$;
+0.01--0.1\,MeV from $1.686/1.296/1.767$ to $2.216/1.714/1.979$. That regression
+is measured on \emph{marginals} and therefore survives the correction in
+\S\ref{sec:seed}; it remains a sufficient reason not to adopt v0.8.3.
+
+Since \S\ref{sec:seed} shows the energy conditional was not the broken term,
+\texttt{energy\_condition\_geometry} was aimed at a quantity that is not at
+fault, which explains why it did not help. The flag remains in
+\texttt{core/model.py} defaulting to \texttt{False}, so v0.8.2 is bit-identical
+and the experiment is resumable.
+
+\paragraph{Revised priority for the next version.}
+\begin{enumerate}[nosep]
+  \item Make \texttt{energy\_vs\_impact\_parameter} species-resolved by default
+        and refuse an aggregate on multi-species input.
+  \item Target the aimed species mix: condition the \emph{type} draw on sampled
+        geometry, rather than sampling from a global \texttt{type\_probs}.
+  \item Measure the detector-level seed spread directly (in progress,
+        \S\ref{sec:inprogress}).
+  \item More generated events at small $b$ to settle whether the $e^{-}$
+        scatter is real.
+\end{enumerate}
+
+\section{Work in progress --- no result yet}
+\label{sec:inprogress}
+
+\begin{callout}{blue!40!black}{blue!4}{Running as of 14 August 2026, 08:00 CEST}
+\textbf{Three-seed detector-level CR comparison on SRON.} Six jobs, two per
+checkpoint (seeds 42, 7, 13), \num{1200000} crossings each --- verified exactly
+\num{1200000} records per file with no neutrinos --- injected into
+\texttt{SRON\_CCNwithXFDM\_NoShield\_FlowerCryoAC\_fixed.gdml}, the same
+geometry as the arm-A reference \ev{E14}.
+
+This is the measurement that has never been taken: every seed claim to date,
+withdrawn or not, is crossing-level. Expected sensitivity is $\sim$62 Detector-1
+counts per seed ($\pm13\,\%$) and $\sim$112 over all six detectors
+($\pm9\,\%$) --- enough to exclude a factor-2 spread decisively, marginal at
+$\pm20\,\%$, and \textbf{insufficient} to resolve the $\pm5\,\%$ aimed-mix
+effect. ETA $\sim$17\,h.
+
+\textbf{No number from this run may be quoted until it completes.}
+\end{callout}
+
+\section{What may and may not be quoted}
+
+\begin{callout}{ok}{green!4}{Quotable}
+\begin{itemize}[nosep]
+  \item CR, SRON, normalization-free: $R = 0.848 \pm 0.125$.
+  \item CR, SRON, spectral shape: KS $p = 0.20$, indistinguishable from RUN CRYOAC.
+  \item CR, SRON, efficiency: $124.1 \pm 15.2$ over 6 detectors ($R = 0.76$).
+  \item DM1.2, 3-seed ensemble: $R = 0.970 \pm 0.032$ overall,
+        $0.999 \pm 0.037$ in the MIP band, $100\,\%$ crossing coverage.
+  \item DM1.2 efficiency: $174.8 \pm 38.2$ (X-IFU band), $199.9 \pm 7.4$ (MIP),
+        against ideal 200.13.
+  \item $^{40}$K, BuildingModel: $R = 1.118 \pm 0.373$, KS $p = 0.60$.
+  \item Species fractions reproduced to $0.3\,\%$; impact-parameter
+        distribution to within $2$--$9\,\%$.
+\end{itemize}
+\end{callout}
+
+\begin{callout}{warn}{red!4}{Not quotable}
+\begin{itemize}[nosep]
+  \item \textbf{Any seed systematic}, in either direction. Not established.
+  \item Any aggregate median-E-vs-$b$ number (\S\ref{sec:seed}).
+  \item The $^{40}$K 44-days comparison ($0.049$) as a MAGI result --- the
+        source geometries differ by 57$\times$ (\S4 above).
+  \item DM1.2 X-IFU band as a \emph{spectral} comparison --- 41 reference
+        events; it is an integrated rate.
+  \item Impact-parameter bins below $b \approx 5$\,mm at present sample sizes.
+  \item Absolute rates from any DM1.2 \texttt{focused}-source run.
+\end{itemize}
+\end{callout}
+
+\section{Open items}
+
+\begin{enumerate}[nosep]
+  \item \textbf{The SRON 24\,\% deficit is not fully explained.} $3.6\,\%$ is
+        attributed to the ingoing-cut mismatch (\S\ref{sec:cr}); the remainder
+        is uncharacterized now that the energy$\times$geometry diagnosis is
+        withdrawn.
+  \item \textbf{Ingoing-only filter} on both SRON training sets, with $\chi$
+        recomputed, then retrain --- makes SRON consistent with DM1.2.
+  \item \textbf{Detector-level seed spread} on CR (\S\ref{sec:inprogress}).
+  \item \textbf{$e^{-}$ behaviour at small $b$} --- needs generation, not seeds.
+  \item \textbf{Speed-up figure} (MAGI generation vs full Geant4) for the talk.
+        Measured input: on DM1.2, \texttt{iso} throughput is
+        \num{2062} muons/s/core.
+  \item \texttt{GeneratedParticlesRecycled} did not fire during $\sim$107$\times$
+        recycling --- the warning path in \texttt{PrimaryGeneratorAction.cc} is
+        unreachable. Silent recycling is exactly what it exists to catch.
+  \item \textbf{DM1.2 fluorescence lines} --- the training set supports
+        continuum and geometry but is $\sim$9$\times$ short for lines.
+\end{enumerate}
+
+\section{Provenance}
+
+\begin{longtable}{p{1.1cm}>{\raggedright\arraybackslash}p{14.5cm}}
+\caption{Evidence tags. All paths are local to the analysis machine.}
+\label{tab:prov}\\
+\toprule
+Tag & Artifact \\
+\midrule
+\endfirsthead
+\toprule
+Tag & Artifact \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+E1 & \texttt{S1GDML\_DM1.2/allOutputGDML\_DM1\_2\_iso.dat},
+     \texttt{allDSCryoSphere\_DM1\_2\_iso.dat} --- the $2\times10^{8}$-muon iso
+     reference run. \\
+E2 & \texttt{S1GDML\_DM1.2/Analysis/MAGI\_DM1\_2\_iso\_comparison.ipynb},
+     executed 13/08/2026 22:57; jobs in
+     \texttt{S1GDML\_DM1.2/magi\_iso\_run/job0..5}. Figures:
+     \texttt{MAGI\_DM1\_2\_iso\_\{spectrum,crossings,aiming\}.png}. \\
+E3 & \texttt{magi\_iso\_run/gen\_s0..5.log} --- the
+     ``CryoSphere for reconstruction'' line emitted by
+     \texttt{MAGI/scripts/generate\_geant\_source.py}. \\
+E4 & Incidence-angle and aimed-species analysis over
+     \texttt{/Volumes/X10Pro/tmp/magi\_dm12iso\_s0..5.gntbin} against
+     \texttt{allDSCryoSphere\_DM1\_2\_iso.dat}, 13/08/2026. \\
+E5 & \texttt{S1GDML\_DM1.2/CRYOSPHERE\_OVERLAP\_FIX.md};
+     \texttt{src/GDMLDetectorConstruction.cc} (R 105$\to$95, overlap check on);
+     \texttt{gpsMu\_iso.mac}. \\
+E6 & \texttt{S1GDMLSRON\_CryoSphereEmission/ab\_run/} arm A vs the v0.8.2
+     $1.85\times10^{7}$ run. \\
+E7 & \texttt{S1GDMLSRON\_CryoSphereEmission/Analysis/DataAnalysis\_pkg.ipynb},
+     sections \emph{RUN CRYOAC vs MAGI} and \emph{Efficiency factor per
+     detector}; \texttt{docs/MAGI\_validation\_note.md} \S2--\S3. \\
+E8 & \texttt{docs/MAGI\_validation\_note.md} \S5;
+     \texttt{src/EventAction.cc} ingoing test applied to the training files. \\
+E9 & \texttt{k40\_run/run\_now.sh}, \texttt{k40\_run/run\_real\_bm.sh},
+     \texttt{k40\_run/compare\_real\_vs\_magi.txt}. \\
+E10& \texttt{Old-Simulations/Sim/S1GDMLSRON/gpsPotassium40.mac} vs
+     \texttt{S1GDMLSRONBuilding/gpsPotassium40.mac}. \\
+E11& \texttt{athena-build/outputGDML\_K40\_v082.dat} EventId analysis;
+     \texttt{DataAnalysis\_pkg.ipynb} cell 4;
+     \texttt{MAGI\_validation\_note.md} \S7.6. \\
+E12& \texttt{MAGI/tools/species\_resolved\_evsb.py},
+     \texttt{MAGI/logs/species\_evsb.log}, 13/08/2026; real reference
+     \texttt{MAGI/TrainingData/alloutputDSCryoSphereCR.dat}
+     (\num{3285347} crossings, neutrino-free). \\
+E13& \texttt{MAGI/tools/train\_v083\_cr\_seed.py},
+     \texttt{MAGI/tools/compare\_v082\_v083.py},
+     \texttt{MAGI/docs/v0.8.3\_seed\_variance.md}. \\
+E14& \texttt{S1GDMLSRON\_CryoSphereEmission/cr\_seed\_run/run\_cr\_seeds.sh},
+     launched 14/08/2026 07:54. \textbf{In progress.} \\
+\end{longtable}
+
+\vspace{4mm}
+\noindent\textbf{Companion documents.}
+\begin{itemize}[nosep,leftmargin=*]
+  \item \texttt{S1GDMLSRON\_CryoSphereEmission/docs/MAGI\_validation\_note.md}
+        --- the authoritative running record, including superseded sections.
+  \item \texttt{MAGI/docs/v0.8.3\_seed\_variance.md} --- the withdrawn seed
+        systematic and the revised plan.
+  \item \texttt{S1GDML\_DM1.2/CRYOSPHERE\_OVERLAP\_FIX.md} --- the overlap
+        investigation.
+\end{itemize}
+
+\end{document}

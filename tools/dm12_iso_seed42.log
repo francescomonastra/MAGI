@@ -1,0 +1,410 @@
+magi 0.8.2 from /Volumes/X10Pro/MAGI/MAGI_package/magi/__init__.py
+N rows: 999358
+  ParticleName      Energy  PrimBool  ...        Vx        Vy        Vz
+0          mu-  948.555000         1  ... -0.016240  0.102306 -0.994620
+1           e-    0.171573         0  ...  0.931720  0.334831  0.140665
+2        gamma    0.258371         0  ... -0.382491 -0.000208 -0.923959
+3          mu-   87.318900         1  ...  0.223893 -0.178527 -0.958123
+4        gamma    1.468430         0  ... -0.004491  0.008129 -0.999957
+
+[5 rows x 12 columns]
+
+NaN per column:
+ ParticleName          0
+Energy                0
+PrimBool              0
+ParticleId            0
+ParentParticleId      0
+CreatorProcessName    0
+X                     0
+Y                     0
+Z                     0
+Vx                    0
+Vy                    0
+Vz                    0
+dtype: int64
+
+PrimBool present: n_primaries=495767 n_generated=999358 primary_fraction=0.49608548688257864
+
+CreatorProcessName counts:
+ CreatorProcessName
+Primary       495767
+eBrem         307077
+eIoni         141393
+muIoni         30489
+annihil        11305
+Decay           8269
+phot            2386
+compt           1313
+conv            1296
+muBrems           39
+muPairProd        24
+Name: count, dtype: int64
+
+--- RAW sphere check ---
+r: mean = 94.89999994287903 std = 2.8829958489030947e-05 min = 94.89991607119576 max = 94.90008329611729
+Mean absolute deviation from R: 0.10000005712097747
+
+--- RAW direction norm check ---
+||v||: mean = 0.9999999994629513 std = 2.8831011037692553e-07 min = 0.9999991599781473 max = 1.0000008456661424
+Mean absolute deviation from 1: 2.424782838200013e-07
+
+--- PROJECTED sphere check ---
+r_proj: mean = 94.99999999999882 std = 1.8481870439352824e-13 min = 94.99999999999898 max = 94.99999999999905
+Mean absolute deviation from R: 9.949337120278184e-13
+
+--- RENORMALIZED direction check ---
+||vhat||: mean = 0.9999999999990017 std = 1.7443617224991047e-15 min = 0.9999999999989996 max = 0.9999999999990002
+Mean absolute deviation from 1: 1.0000543244691918e-12
+
+--- Energy check ---
+E: min = 0.00100093 max = 392374.0 #E<=0 = 0
+
+--- u_r check ---
+u_r: min = -0.9999693678074798 max = 0.999999 mean = 0.5174788997197904 std = 0.4400092251195899
+
+--- u_v check ---
+u_v: min = -0.999999 max = 0.9999979332967058 mean = -0.6710214859259657 std = 0.45093486327232074
+fraction u_v > 0 = 0.09828009582151741
+
+DM1_2_iso: 999,358 rows, 999,358 valid energies
+Loaded 132 candidate lines for CriostatoDM1_2_Richiesta11_06_2026-worldVOL.gdml
+
+--- Energy line detection ---
+events: 999358  bins: 1024  mode: log_fixed_count
+candidate lines: 132  detected peaks: 4  matched: 3
+
+Matched lines:
+  e+e- annihilation    (instrumental          ) expected=0.510999 MeV detected=0.510999 MeV delta=+0.000000 MeV  count=7490
+  Cu K-alpha1          (instrumental          ) expected=0.008006 MeV detected=0.008006 MeV delta=+0.000000 MeV  count=47752
+  Cu K-beta            (instrumental          ) expected=0.008865 MeV detected=0.008864 MeV delta=-0.000001 MeV  count=6172
+
+Expected-but-undetected candidates (likely Compton-smeared / below prominence):
+  Al K-alpha1          (instrumental          ) expected=0.001469 MeV
+  Al K-alpha2          (instrumental          ) expected=0.001469 MeV
+  Al K-beta            (instrumental          ) expected=0.001545 MeV
+  Si K-alpha1          (instrumental          ) expected=0.001721 MeV
+  Si K-alpha2          (instrumental          ) expected=0.001720 MeV
+  Si K-beta            (instrumental          ) expected=0.001822 MeV
+  Ni K-alpha1          (instrumental          ) expected=0.007436 MeV
+  Ni K-alpha2          (instrumental          ) expected=0.007418 MeV
+  Ni K-beta            (instrumental          ) expected=0.008225 MeV
+  Cu K-alpha2          (instrumental          ) expected=0.007985 MeV
+  Zn K-alpha1          (instrumental          ) expected=0.008596 MeV
+  Zn K-alpha2          (instrumental          ) expected=0.008572 MeV
+  Zn K-beta            (instrumental          ) expected=0.009532 MeV
+  Pb K-alpha1          (instrumental          ) expected=0.075250 MeV
+  Pb K-alpha2          (instrumental          ) expected=0.073039 MeV
+  Pb K-beta            (instrumental          ) expected=0.085235 MeV
+  Pb L-alpha           (instrumental          ) expected=0.010551 MeV
+  Pb L-beta            (instrumental          ) expected=0.012656 MeV
+  Ar-40                (source:K-40           ) expected=1.460851 MeV
+  Ar-40                (source:K-40           ) expected=3.918800 MeV
+  Ar-40                (source:K-40           ) expected=3.941700 MeV
+  Rn-222               (source:Ra-226 chain   ) expected=0.186211 MeV
+  Rn-222               (source:Ra-226 chain   ) expected=0.600660 MeV
+  Rn-222               (source:Ra-226 chain   ) expected=0.359600 MeV
+  Po-218               (source:Ra-226 chain   ) expected=0.509700 MeV
+  Po-218               (source:Ra-226 chain   ) expected=0.425500 MeV
+  Po-218               (source:Ra-226 chain   ) expected=0.385700 MeV
+  Pb-214               (source:Ra-226 chain   ) expected=0.053228 MeV
+  Pb-214               (source:Ra-226 chain   ) expected=0.258870 MeV
+  Pb-214               (source:Ra-226 chain   ) expected=0.295223 MeV
+  Bi-214               (source:Ra-226 chain   ) expected=0.609316 MeV
+  Bi-214               (source:Ra-226 chain   ) expected=1.661279 MeV
+  Bi-214               (source:Ra-226 chain   ) expected=1.764515 MeV
+  Po-218               (source:Rn-222 chain   ) expected=0.509700 MeV
+  Po-218               (source:Rn-222 chain   ) expected=0.425500 MeV
+  Po-218               (source:Rn-222 chain   ) expected=0.385700 MeV
+  Pb-214               (source:Rn-222 chain   ) expected=0.053228 MeV
+  Pb-214               (source:Rn-222 chain   ) expected=0.258870 MeV
+  Pb-214               (source:Rn-222 chain   ) expected=0.295223 MeV
+  Bi-214               (source:Rn-222 chain   ) expected=0.609316 MeV
+  Bi-214               (source:Rn-222 chain   ) expected=1.661279 MeV
+  Bi-214               (source:Rn-222 chain   ) expected=1.764515 MeV
+  Ra-228               (source:Th-232 chain   ) expected=0.006280 MeV
+  Ra-228               (source:Th-232 chain   ) expected=0.006670 MeV
+  Ra-228               (source:Th-232 chain   ) expected=0.013520 MeV
+  Ac-228               (source:Th-232 chain   ) expected=0.057773 MeV
+  Ac-228               (source:Th-232 chain   ) expected=0.944205 MeV
+  Ac-228               (source:Th-232 chain   ) expected=1.906650 MeV
+  Th-228               (source:Th-232 chain   ) expected=0.084373 MeV
+  Th-228               (source:Th-232 chain   ) expected=0.215985 MeV
+  Th-228               (source:Th-232 chain   ) expected=1.378350 MeV
+  Ra-224               (source:Th-232 chain   ) expected=0.240986 MeV
+  Ra-224               (source:Th-232 chain   ) expected=0.645440 MeV
+  Ra-224               (source:Th-232 chain   ) expected=0.292694 MeV
+  Rn-220               (source:Th-232 chain   ) expected=0.549760 MeV
+  Rn-220               (source:Th-232 chain   ) expected=0.419180 MeV
+  Rn-220               (source:Th-232 chain   ) expected=0.359460 MeV
+  Po-216               (source:Th-232 chain   ) expected=0.804900 MeV
+  Pb-212               (source:Th-232 chain   ) expected=0.115183 MeV
+  Pb-212               (source:Th-232 chain   ) expected=0.238632 MeV
+  Pb-212               (source:Th-232 chain   ) expected=0.417900 MeV
+  Tl-208               (source:Th-232 chain   ) expected=2.614522 MeV
+  Tl-208               (source:Th-232 chain   ) expected=4.085520 MeV
+  Tl-208               (source:Th-232 chain   ) expected=5.639550 MeV
+  Zn K-beta escape Cu K-alpha1 (escape:Zn K-beta-CuK-alpha1) expected=0.001526 MeV
+  Zn K-beta escape Cu K-alpha2 (escape:Zn K-beta-CuK-alpha2) expected=0.001547 MeV
+  Pb L-alpha escape Cu K-beta (escape:Pb L-alpha-CuK-beta) expected=0.001686 MeV
+  Pb L-alpha escape Cu K-alpha1 (escape:Pb L-alpha-CuK-alpha1) expected=0.002545 MeV
+  Pb L-alpha escape Cu K-alpha2 (escape:Pb L-alpha-CuK-alpha2) expected=0.002566 MeV
+  Pb L-beta escape Cu K-beta (escape:Pb L-beta-CuK-beta) expected=0.003791 MeV
+  Pb L-beta escape Cu K-alpha1 (escape:Pb L-beta-CuK-alpha1) expected=0.004651 MeV
+  Pb L-beta escape Cu K-alpha2 (escape:Pb L-beta-CuK-alpha2) expected=0.004672 MeV
+  Ni K-alpha2 escape Si K-beta (escape:Ni K-alpha2-SiK-beta) expected=0.005596 MeV
+  Ni K-alpha1 escape Si K-beta (escape:Ni K-alpha1-SiK-beta) expected=0.005614 MeV
+  Ni K-alpha2 escape Si K-alpha1 (escape:Ni K-alpha2-SiK-alpha1) expected=0.005697 MeV
+  Ni K-alpha2 escape Si K-alpha2 (escape:Ni K-alpha2-SiK-alpha2) expected=0.005698 MeV
+  Ni K-alpha1 escape Si K-alpha1 (escape:Ni K-alpha1-SiK-alpha1) expected=0.005715 MeV
+  Ni K-alpha1 escape Si K-alpha2 (escape:Ni K-alpha1-SiK-alpha2) expected=0.005716 MeV
+  Cu K-alpha2 escape Si K-beta (escape:Cu K-alpha2-SiK-beta) expected=0.006163 MeV
+  Cu K-alpha1 escape Si K-beta (escape:Cu K-alpha1-SiK-beta) expected=0.006184 MeV
+  Cu K-alpha2 escape Si K-alpha1 (escape:Cu K-alpha2-SiK-alpha1) expected=0.006264 MeV
+  Cu K-alpha2 escape Si K-alpha2 (escape:Cu K-alpha2-SiK-alpha2) expected=0.006265 MeV
+  Cu K-alpha1 escape Si K-alpha1 (escape:Cu K-alpha1-SiK-alpha1) expected=0.006285 MeV
+  Cu K-alpha1 escape Si K-alpha2 (escape:Cu K-alpha1-SiK-alpha2) expected=0.006286 MeV
+  Ni K-beta escape Si K-beta (escape:Ni K-beta-SiK-beta) expected=0.006403 MeV
+  Ni K-beta escape Si K-alpha1 (escape:Ni K-beta-SiK-alpha1) expected=0.006504 MeV
+  Ni K-beta escape Si K-alpha2 (escape:Ni K-beta-SiK-alpha2) expected=0.006505 MeV
+  Zn K-alpha2 escape Si K-beta (escape:Zn K-alpha2-SiK-beta) expected=0.006750 MeV
+  Zn K-alpha1 escape Si K-beta (escape:Zn K-alpha1-SiK-beta) expected=0.006774 MeV
+  Zn K-alpha2 escape Si K-alpha1 (escape:Zn K-alpha2-SiK-alpha1) expected=0.006851 MeV
+  Zn K-alpha2 escape Si K-alpha2 (escape:Zn K-alpha2-SiK-alpha2) expected=0.006852 MeV
+  Zn K-alpha1 escape Si K-alpha1 (escape:Zn K-alpha1-SiK-alpha1) expected=0.006876 MeV
+  Zn K-alpha1 escape Si K-alpha2 (escape:Zn K-alpha1-SiK-alpha2) expected=0.006877 MeV
+  Cu K-beta escape Si K-beta (escape:Cu K-beta-SiK-beta) expected=0.007043 MeV
+  Cu K-beta escape Si K-alpha1 (escape:Cu K-beta-SiK-alpha1) expected=0.007145 MeV
+  Cu K-beta escape Si K-alpha2 (escape:Cu K-beta-SiK-alpha2) expected=0.007146 MeV
+  Zn K-beta escape Si K-beta (escape:Zn K-beta-SiK-beta) expected=0.007710 MeV
+  Zn K-beta escape Si K-alpha1 (escape:Zn K-beta-SiK-alpha1) expected=0.007811 MeV
+  Zn K-beta escape Si K-alpha2 (escape:Zn K-beta-SiK-alpha2) expected=0.007812 MeV
+  Pb L-alpha escape Si K-beta (escape:Pb L-alpha-SiK-beta) expected=0.008729 MeV
+  Pb L-alpha escape Si K-alpha1 (escape:Pb L-alpha-SiK-alpha1) expected=0.008830 MeV
+  Pb L-alpha escape Si K-alpha2 (escape:Pb L-alpha-SiK-alpha2) expected=0.008831 MeV
+  Pb L-beta escape Si K-beta (escape:Pb L-beta-SiK-beta) expected=0.010834 MeV
+  Pb L-beta escape Si K-alpha1 (escape:Pb L-beta-SiK-alpha1) expected=0.010936 MeV
+  Pb L-beta escape Si K-alpha2 (escape:Pb L-beta-SiK-alpha2) expected=0.010936 MeV
+  Pb K-alpha2 escape Cu K-beta (escape:Pb K-alpha2-CuK-beta) expected=0.064174 MeV
+  Pb K-alpha2 escape Cu K-alpha1 (escape:Pb K-alpha2-CuK-alpha1) expected=0.065033 MeV
+  Pb K-alpha2 escape Cu K-alpha2 (escape:Pb K-alpha2-CuK-alpha2) expected=0.065054 MeV
+  Pb K-alpha1 escape Cu K-beta (escape:Pb K-alpha1-CuK-beta) expected=0.066385 MeV
+  Pb K-alpha1 escape Cu K-alpha1 (escape:Pb K-alpha1-CuK-alpha1) expected=0.067244 MeV
+  Pb K-alpha1 escape Cu K-alpha2 (escape:Pb K-alpha1-CuK-alpha2) expected=0.067265 MeV
+  Pb K-alpha2 escape Si K-beta (escape:Pb K-alpha2-SiK-beta) expected=0.071217 MeV
+  Pb K-alpha2 escape Si K-alpha1 (escape:Pb K-alpha2-SiK-alpha1) expected=0.071318 MeV
+  Pb K-alpha2 escape Si K-alpha2 (escape:Pb K-alpha2-SiK-alpha2) expected=0.071319 MeV
+  Pb K-alpha1 escape Si K-beta (escape:Pb K-alpha1-SiK-beta) expected=0.073428 MeV
+  Pb K-alpha1 escape Si K-alpha1 (escape:Pb K-alpha1-SiK-alpha1) expected=0.073529 MeV
+  Pb K-alpha1 escape Si K-alpha2 (escape:Pb K-alpha1-SiK-alpha2) expected=0.073530 MeV
+  Pb K-beta escape Cu K-beta (escape:Pb K-beta-CuK-beta) expected=0.076370 MeV
+  Pb K-beta escape Cu K-alpha1 (escape:Pb K-beta-CuK-alpha1) expected=0.077230 MeV
+  Pb K-beta escape Cu K-alpha2 (escape:Pb K-beta-CuK-alpha2) expected=0.077251 MeV
+  Pb K-beta escape Si K-beta (escape:Pb K-beta-SiK-beta) expected=0.083413 MeV
+  Pb K-beta escape Si K-alpha1 (escape:Pb K-beta-SiK-alpha1) expected=0.083515 MeV
+  Pb K-beta escape Si K-alpha2 (escape:Pb K-beta-SiK-alpha2) expected=0.083516 MeV
+  e+e- annihilation escape Cu K-beta (escape:e+e- annihilation-CuK-beta) expected=0.502134 MeV
+  e+e- annihilation escape Cu K-alpha1 (escape:e+e- annihilation-CuK-alpha1) expected=0.502993 MeV
+  e+e- annihilation escape Cu K-alpha2 (escape:e+e- annihilation-CuK-alpha2) expected=0.503014 MeV
+  e+e- annihilation escape Si K-beta (escape:e+e- annihilation-SiK-beta) expected=0.509177 MeV
+  e+e- annihilation escape Si K-alpha1 (escape:e+e- annihilation-SiK-alpha1) expected=0.509278 MeV
+  e+e- annihilation escape Si K-alpha2 (escape:e+e- annihilation-SiK-alpha2) expected=0.509279 MeV
+
+Unmatched detected peaks (possible unknown/uncatalogued lines):
+  bin=    2  E=0.001051 MeV  count=5
+
+3 matched lines; 3 feed the mixture head: ['e+e- annihilation', 'Cu K-alpha1', 'Cu K-beta']
+
+feat shape: (999358, 8)
+geometry_transform: quantile_u_r_u_v_phi_r_phi_v
+
+First rows:
+  ParticleName  E_idx     u_r_q  ...   phi_v_q  energy_y  PrimBool
+0          mu-    356 -0.472984  ...  0.764679  2.977062         1
+1           e-    133 -1.049767  ...  0.158844 -0.765551         0
+2        gamma    143  1.192751  ... -3.533616 -0.587756         0
+3          mu-    294  1.190686  ... -0.259005  1.941108         1
+4        gamma    188 -0.640859  ...  0.958716  0.166853         0
+
+[5 rows x 8 columns]
+
+--- Finite check ---
+Rows with NaN/Inf: 0
+
+--- Feature ranges ---
+     E_idx : 0  511
+     u_r_q : -5.199337482452393  5.199337482452393
+     u_v_q : -5.199337482452393  5.199337482452393
+   phi_r_q : -5.199337482452393  5.199337482452393
+   phi_v_q : -5.199337482452393  5.199337482452393
+  energy_y : -2.999596357345581  5.593700408935547
+  PrimBool : 0  1
+
+--- Quantile geometry checks ---
+u_r_q: mean = -0.006202, std = 1.004482, min = -5.199337, max = 5.199337
+u_v_q: mean = -0.015869, std = 1.008665, min = -5.199337, max = 5.199337
+phi_r_q: mean = -0.019122, std = 1.025521, min = -5.199337, max = 5.199337
+phi_v_q: mean = 0.009722, std = 1.001557, min = -5.199337, max = 5.199337
+
+--- Energy bin population ---
+Min counts per bin: 0
+Max counts per bin: 47978
+Mean counts per bin: 1951.869140625
+Empty bins: 30
+Dataset mode: continuous_geometry
+Continuous geometry version: custom_continuous_geometry
+Kept particle types: 4
+Types: ['mu-', 'gamma', 'e-', 'e+']
+
+Empirical probabilities:
+         mu-  p=4.960855e-01
+       gamma  p=3.722250e-01
+          e-  p=1.310391e-01
+          e+  p=6.504176e-04
+
+Shapes:
+X_cont_raw: (999358, 9)
+E_idx     : (999358,)
+y_type    : (999358,)
+
+--- Continuous feature ranges ---
+   u_r_q : -5.199337482452393  5.199337482452393
+   u_v_q : -5.199337482452393  5.199337482452393
+ phi_r_q : -5.199337482452393  5.199337482452393
+ phi_v_q : -5.199337482452393  5.199337482452393
+energy_y : -2.999596357345581  5.593700408935547
+gate_target_0 : 0.019607843831181526  1.0
+gate_target_1 : 0.0  0.9803921580314636
+gate_target_2 : 0.0  0.9803921580314636
+gate_target_3 : 0.0  0.9803921580314636
+
+--- Continuous means/std ---
+   u_r_q : mean=-0.006202  std= 1.004482
+   u_v_q : mean=-0.015869  std= 1.008664
+ phi_r_q : mean=-0.019122  std= 1.025520
+ phi_v_q : mean= 0.009722  std= 1.001557
+energy_y : mean= 0.954428  std= 1.751752
+gate_target_0 : mean= 0.957214  std= 0.199871
+gate_target_1 : mean= 0.005688  std= 0.074456
+gate_target_2 : mean= 0.031222  std= 0.171690
+gate_target_3 : mean= 0.005876  std= 0.075605
+
+First rows:
+  ParticleName  E_idx     u_r_q  ...  gate_target_1  gate_target_2  gate_target_3
+0          mu-    356 -0.472984  ...            0.0            0.0            0.0
+1           e-    133 -1.049767  ...            0.0            0.0            0.0
+2        gamma    143  1.192751  ...            0.0            0.0            0.0
+3          mu-    294  1.190686  ...            0.0            0.0            0.0
+4        gamma    188 -0.640859  ...            0.0            0.0            0.0
+
+[5 rows x 12 columns]
+Train: (699550, 9) Val: (149904, 9) Test: (149904, 9)
+
+Type distribution check:
+Train: [0.49608606 0.372225   0.13103852 0.00065042]
+Val  : [0.49608416 0.37222489 0.1310372  0.00065375]
+Test : [0.49608416 0.37222489 0.13104387 0.00064708]
+
+Datasets ready.
+Dataset mode: continuous_geometry
+Train batches: 171
+Val batches  : 37
+Test batches : 37
+
+Batch check:
+X_cont batch shape: (4096, 9)
+E_idx batch shape : (4096,)
+cond batch shape  : (4096, 4)
+
+zone_probs (['continuum', 'e+e- annihilation', 'Cu K-alpha1', 'Cu K-beta']):
+    mu-          [1. 0. 0. 0.]
+    gamma        [0.8851 0.0153 0.0839 0.0158]
+    e-           [1. 0. 0. 0.]
+    e+           [1. 0. 0. 0.]
+Epoch 1/40
+171/171 - 20s - 119ms/step - continuum_balance: 0.0000e+00 - continuum_repulsion: 0.0000e+00 - energy_mixture_nll: 0.9630 - flow_line_repulsion: 0.0000e+00 - gate_aux_loss: 0.2782 - kl: 2.3210 - loss: 2.6335 - nll: 2.1572 - phi_r_nll: 0.1526 - phi_v_nll: 0.4054 - rec: 2.1572 - sigma_reg: 0.0121 - ur_nll: 0.3117 - uv_nll: -2.3190e-01 - val_continuum_balance: 0.0000e+00 - val_continuum_repulsion: 0.0000e+00 - val_energy_mixture_nll: -6.8910e-02 - val_flow_line_repulsion: 0.0000e+00 - val_gate_aux_loss: 0.1097 - val_kl: 6.6053 - val_loss: -5.4732e-01 - val_nll: -1.8745e+00 - val_phi_r_nll: -9.4388e-01 - val_phi_v_nll: 0.2293 - val_rec: -1.8745e+00 - val_sigma_reg: 0.0061 - val_ur_nll: 0.0839 - val_uv_nll: -1.3943e+00 - learning_rate: 2.0000e-04
+Epoch 2/40
+171/171 - 10s - 60ms/step - continuum_balance: 0.0000e+00 - continuum_repulsion: 0.0000e+00 - energy_mixture_nll: -7.5356e-01 - flow_line_repulsion: 0.0000e+00 - gate_aux_loss: 0.0848 - kl: 9.1364 - loss: -1.4988e+00 - nll: -3.3315e+00 - phi_r_nll: -1.4539e+00 - phi_v_nll: 0.0691 - rec: -3.3315e+00 - sigma_reg: 0.0054 - ur_nll: 0.0293 - uv_nll: -1.3920e+00 - val_continuum_balance: 0.0000e+00 - val_continuum_repulsion: 0.0000e+00 - val_energy_mixture_nll: -1.1123e+00 - val_flow_line_repulsion: 0.0000e+00 - val_gate_aux_loss: 0.0748 - val_kl: 10.5715 - val_loss: -2.3999e+00 - val_nll: -4.5185e+00 - val_phi_r_nll: -1.9389e+00 - val_phi_v_nll: -1.6538e-01 - val_rec: -4.5185e+00 - val_sigma_reg: 0.0043 - val_ur_nll: -6.2186e-02 - val_uv_nll: -1.3894e+00 - learning_rate: 2.0000e-04
+Epoch 3/40
+171/171 - 10s - 60ms/step - continuum_balance: 0.0000e+00 - continuum_repulsion: 0.0000e+00 - energy_mixture_nll: -1.1649e+00 - flow_line_repulsion: 0.0000e+00 - gate_aux_loss: 0.0680 - kl: 12.5301 - loss: -3.7053e+00 - nll: -6.2132e+00 - phi_r_nll: -1.6658e+00 - phi_v_nll: -8.4807e-01 - rec: -6.2132e+00 - sigma_reg: 0.0019 - ur_nll: -5.6777e-01 - uv_nll: -2.1026e+00 - val_continuum_balance: 0.0000e+00 - val_continuum_repulsion: 0.0000e+00 - val_energy_mixture_nll: -1.6427e+00 - val_flow_line_repulsion: 0.0000e+00 - val_gate_aux_loss: 0.0648 - val_kl: 14.6290 - val_loss: -5.6127e+00 - val_nll: -8.5390e+00 - val_phi_r_nll: -2.0576e+00 - val_phi_v_nll: -1.3496e+00 - val_rec: -8.5390e+00 - val_sigma_reg: 4.4162e-04 - val_ur_nll: -1.1064e+00 - val_uv_nll: -2.5122e+00 - learning_rate: 2.0000e-04
+Epoch 4/40
+171/171 - 11s - 62ms/step - continuum_balance: 0.0000e+00 - continuum_repulsion: 0.0000e+00 - energy_mixture_nll: -1.5393e+00 - flow_line_repulsion: 0.0000e+00 - gate_aux_loss: 0.0616 - kl: 15.1528 - loss: -5.2639e+00 - nll: -8.2947e+00 - phi_r_nll: -2.1301e+00 - phi_v_nll: -1.3977e+00 - rec: -8.2947e+00 - sigma_reg: 3.2722e-04 - ur_nll: -1.2978e+00 - uv_nll: -2.0530e+00 - val_continuum_balance: 0.0000e+00 - val_continuum_repulsion: 0.0000e+00 - val_energy_mixture_nll: -1.8533e+00 - val_flow_line_repulsion: 0.0000e+00 - val_gate_aux_loss: 0.0608 - val_kl: 15.5277 - val_loss: -6.8322e+00 - val_nll: -9.9379e+00 - val_phi_r_nll: -2.4326e+00 - val_phi_v_nll: -1.6462e+00 - val_rec: -9.9379e+00 - val_sigma_reg: 8.4949e-05 - val_ur_nll: -1.5131e+00 - val_uv_nll: -2.6141e+00 - learning_rate: 2.0000e-04
+Epoch 5/40
+171/171 - 11s - 63ms/step - continuum_balance: 0.0000e+00 - continuum_repulsion: 0.0000e+00 - energy_mixture_nll: -1.8200e+00 - flow_line_repulsion: 0.0000e+00 - gate_aux_loss: 0.0567 - kl: 16.2894 - loss: -6.3098e+00 - nll: -9.5678e+00 - phi_r_nll: -2.2208e+00 - phi_v_nll: -1.8172e+00 - rec: -9.5678e+00 - sigma_reg: 1.2272e-04 - ur_nll: -1.4351e+00 - uv_nll: -2.3882e+00 - val_continuum_balance: 0.0000e+00 - val_continuum_repulsion: 0.0000e+00 - val_energy_mixture_nll: -1.9950e+00 - val_flow_line_repulsion: 0.0000e+00 - val_gate_aux_loss: 0.0548 - val_kl: 16.8272 - val_loss: -7.1152e+00 - val_nll: -1.0481e+01 - val_phi_r_nll: -2.3876e+00 - val_phi_v_nll: -1.9222e+00 - val_rec: -1.0481e+01 - val_sigma_reg: 1.3308e-05 - val_ur_nll: -1.7370e+00 - val_uv_nll: -2.5485e+00 - learning_rate: 2.0000e-04
+Epoch 6/40
+171/171 - 11s - 65ms/step - continuum_balance: 0.0000e+00 - continuum_repulsion: 0.0000e+00 - energy_mixture_nll: -1.7872e+00 - flow_line_repulsion: 0.0000e+00 - gate_aux_loss: 0.0528 - kl: 16.9924 - loss: -6.7746e+00 - nll: -1.0173e+01 - phi_r_nll: -2.4165e+00 - phi_v_nll: -1.5297e+00 - rec: -1.0173e+01 - sigma_reg: 1.8211e-04 - ur_nll: -1.8514e+00 - uv_nll: -2.6939e+00 - val_continuum_balance: 0.0000e+00 - val_continuum_repulsion: 0.0000e+00 - val_energy_mixture_nll: -2.0961e+00 - val_flow_line_repulsion: 0.0000e+00 - val_gate_aux_loss: 0.0529 - val_kl: 17.1481 - val_loss: -8.0433e+00 - val_nll: -1.1473e+01 - val_phi_r_nll: -2.6914e+00 - val_phi_v_nll: -2.0096e+00 - val_rec: -1.1473e+01 - val_sigma_reg: 7.4870e-06 - val_ur_nll: -1.9523e+00 - val_uv_nll: -2.8293e+00 - learning_rate: 2.0000e-04
+Epoch 7/40
+171/171 - 12s - 69ms/step - continuum_balance: 0.0000e+00 - continuum_repulsion: 0.0000e+00 - energy_mixture_nll: -2.0380e+00 - flow_line_repulsion: 0.0000e+00 - gate_aux_loss: 0.0498 - kl: 17.2365 - loss: -6.9548e+00 - nll: -1.0402e+01 - phi_r_nll: -2.5679e+00 - phi_v_nll: -1.7671e+00 - rec: -1.0402e+01 - sigma_reg: 9.5153e-05 - ur_nll: -1.6112e+00 - uv_nll: -2.5177e+00 - val_continuum_balance: 0.0000e+00 - val_continuum_repulsion: 0.0000e+00 - val_energy_mixture_nll: -1.9920e+00 - val_flow_line_repulsion: 0.0000e+00 - val_gate_aux_loss: 0.0494 - val_kl: 16.8275 - val_loss: -7.4453e+00 - val_nll: -1.0811e+01 - val_phi_r_nll: -2.4690e+00 - val_phi_v_nll: -2.0114e+00 - val_rec: -1.0811e+01 - val_sigma_reg: 7.9517e-06 - val_ur_nll: -1.8715e+00 - val_uv_nll: -2.5657e+00 - learning_rate: 2.0000e-04
+Epoch 8/40
+171/171 - 12s - 68ms/step - continuum_balance: 0.0000e+00 - continuum_repulsion: 0.0000e+00 - energy_mixture_nll: -2.1219e+00 - flow_line_repulsion: 0.0000e+00 - gate_aux_loss: 0.0473 - kl: 17.9230 - loss: -7.2777e+00 - nll: -1.0862e+01 - phi_r_nll: -2.6435e+00 - phi_v_nll: -2.0522e+00 - rec: -1.0862e+01 - sigma_reg: 8.2466e-05 - ur_nll: -1.9925e+00 - uv_nll: -2.1469e+00 - val_continuum_balance: 0.0000e+00 - val_continuum_repulsion: 0.0000e+00 - val_energy_mixture_nll: -2.2723e+00 - val_flow_line_repulsion: 0.0000e+00 - val_gate_aux_loss: 0.0475 - val_kl: 17.1010 - val_loss: -7.3366e+00 - val_nll: -1.0757e+01 - val_phi_r_nll: -2.7932e+00 - val_phi_v_nll: -1.9869e+00 - val_rec: -1.0757e+01 - val_sigma_reg: 1.1621e-04 - val_ur_nll: -2.0987e+00 - val_uv_nll: -1.7007e+00 - learning_rate: 2.0000e-04
+Epoch 9/40
+171/171 - 11s - 64ms/step - continuum_balance: 0.0000e+00 - continuum_repulsion: 0.0000e+00 - energy_mixture_nll: -2.1037e+00 - flow_line_repulsion: 0.0000e+00 - gate_aux_loss: 0.0458 - kl: 17.7415 - loss: -6.9840e+00 - nll: -1.0532e+01 - phi_r_nll: -2.0709e+00 - phi_v_nll: -2.0175e+00 - rec: -1.0532e+01 - sigma_reg: 6.4780e-05 - ur_nll: -2.0471e+00 - uv_nll: -2.3849e+00 - val_continuum_balance: 0.0000e+00 - val_continuum_repulsion: 0.0000e+00 - val_energy_mixture_nll: -2.0836e+00 - val_flow_line_repulsion: 0.0000e+00 - val_gate_aux_loss: 0.0460 - val_kl: 18.5105 - val_loss: -7.0780e+00 - val_nll: -1.0780e+01 - val_phi_r_nll: -2.5737e+00 - val_phi_v_nll: -1.1910e+00 - val_rec: -1.0780e+01 - val_sigma_reg: 8.0295e-07 - val_ur_nll: -2.1449e+00 - val_uv_nll: -2.8790e+00 - learning_rate: 2.0000e-04
+Epoch 10/40
+171/171 - 11s - 64ms/step - continuum_balance: 0.0000e+00 - continuum_repulsion: 0.0000e+00 - energy_mixture_nll: -2.2261e+00 - flow_line_repulsion: 0.0000e+00 - gate_aux_loss: 0.0439 - kl: 18.5036 - loss: -8.1667e+00 - nll: -1.1867e+01 - phi_r_nll: -2.7338e+00 - phi_v_nll: -2.1665e+00 - rec: -1.1867e+01 - sigma_reg: 2.6201e-05 - ur_nll: -1.8970e+00 - uv_nll: -2.9319e+00 - val_continuum_balance: 0.0000e+00 - val_continuum_repulsion: 0.0000e+00 - val_energy_mixture_nll: -2.2614e+00 - val_flow_line_repulsion: 0.0000e+00 - val_gate_aux_loss: 0.0438 - val_kl: 18.5510 - val_loss: -8.6499e+00 - val_nll: -1.2360e+01 - val_phi_r_nll: -2.5871e+00 - val_phi_v_nll: -2.3323e+00 - val_rec: -1.2360e+01 - val_sigma_reg: 3.1240e-07 - val_ur_nll: -2.1824e+00 - val_uv_nll: -3.0845e+00 - learning_rate: 2.0000e-04
+Epoch 11/40
+171/171 - 11s - 65ms/step - continuum_balance: 0.0000e+00 - continuum_repulsion: 0.0000e+00 - energy_mixture_nll: -2.2817e+00 - flow_line_repulsion: 0.0000e+00 - gate_aux_loss: 0.0425 - kl: 18.4049 - loss: -7.8088e+00 - nll: -1.1490e+01 - phi_r_nll: -2.6685e+00 - phi_v_nll: -1.7584e+00 - rec: -1.1490e+01 - sigma_reg: 7.1208e-05 - ur_nll: -2.1508e+00 - uv_nll: -2.7156e+00 - val_continuum_balance: 0.0000e+00 - val_continuum_repulsion: 0.0000e+00 - val_energy_mixture_nll: -2.4110e+00 - val_flow_line_repulsion: 0.0000e+00 - val_gate_aux_loss: 0.0431 - val_kl: 17.9178 - val_loss: -8.8408e+00 - val_nll: -1.2424e+01 - val_phi_r_nll: -2.6752e+00 - val_phi_v_nll: -2.1406e+00 - val_rec: -1.2424e+01 - val_sigma_reg: 1.9138e-06 - val_ur_nll: -2.2685e+00 - val_uv_nll: -3.0154e+00 - learning_rate: 2.0000e-04
+Epoch 12/40
+171/171 - 11s - 66ms/step - continuum_balance: 0.0000e+00 - continuum_repulsion: 0.0000e+00 - energy_mixture_nll: -2.3088e+00 - flow_line_repulsion: 0.0000e+00 - gate_aux_loss: 0.0416 - kl: 18.6610 - loss: -8.1688e+00 - nll: -1.1901e+01 - phi_r_nll: -2.8179e+00 - phi_v_nll: -2.2339e+00 - rec: -1.1901e+01 - sigma_reg: 9.3952e-06 - ur_nll: -2.0226e+00 - uv_nll: -2.6010e+00 - val_continuum_balance: 0.0000e+00 - val_continuum_repulsion: 0.0000e+00 - val_energy_mixture_nll: -2.4460e+00 - val_flow_line_repulsion: 0.0000e+00 - val_gate_aux_loss: 0.0413 - val_kl: 18.9643 - val_loss: -8.7519e+00 - val_nll: -1.2545e+01 - val_phi_r_nll: -2.7166e+00 - val_phi_v_nll: -2.1954e+00 - val_rec: -1.2545e+01 - val_sigma_reg: 4.4526e-07 - val_ur_nll: -2.2208e+00 - val_uv_nll: -3.0487e+00 - learning_rate: 2.0000e-04
+Epoch 13/40
+171/171 - 12s - 69ms/step - continuum_balance: 0.0000e+00 - continuum_repulsion: 0.0000e+00 - energy_mixture_nll: -2.3660e+00 - flow_line_repulsion: 0.0000e+00 - gate_aux_loss: 0.0403 - kl: 18.9060 - loss: -8.2124e+00 - nll: -1.1994e+01 - phi_r_nll: -2.7268e+00 - phi_v_nll: -2.1752e+00 - rec: -1.1994e+01 - sigma_reg: 3.4132e-05 - ur_nll: -1.9008e+00 - uv_nll: -2.9054e+00 - val_continuum_balance: 0.0000e+00 - val_continuum_repulsion: 0.0000e+00 - val_energy_mixture_nll: -2.4829e+00 - val_flow_line_repulsion: 0.0000e+00 - val_gate_aux_loss: 0.0401 - val_kl: 18.3348 - val_loss: -8.3828e+00 - val_nll: -1.2050e+01 - val_phi_r_nll: -2.3972e+00 - val_phi_v_nll: -2.0811e+00 - val_rec: -1.2050e+01 - val_sigma_reg: 4.1273e-06 - val_ur_nll: -2.0834e+00 - val_uv_nll: -3.0855e+00 - learning_rate: 2.0000e-04
+Epoch 14/40
+171/171 - 12s - 69ms/step - continuum_balance: 0.0000e+00 - continuum_repulsion: 0.0000e+00 - energy_mixture_nll: -2.3749e+00 - flow_line_repulsion: 0.0000e+00 - gate_aux_loss: 0.0396 - kl: 18.8742 - loss: -8.4331e+00 - nll: -1.2208e+01 - phi_r_nll: -2.7766e+00 - phi_v_nll: -2.1855e+00 - rec: -1.2208e+01 - sigma_reg: 9.7971e-07 - ur_nll: -2.2938e+00 - uv_nll: -2.6565e+00 - val_continuum_balance: 0.0000e+00 - val_continuum_repulsion: 0.0000e+00 - val_energy_mixture_nll: -2.5554e+00 - val_flow_line_repulsion: 0.0000e+00 - val_gate_aux_loss: 0.0389 - val_kl: 19.3010 - val_loss: -8.7369e+00 - val_nll: -1.2597e+01 - val_phi_r_nll: -2.9494e+00 - val_phi_v_nll: -1.8961e+00 - val_rec: -1.2597e+01 - val_sigma_reg: 7.4240e-06 - val_ur_nll: -2.3022e+00 - val_uv_nll: -2.9718e+00 - learning_rate: 2.0000e-04
+Epoch 15/40
+171/171 - 12s - 68ms/step - continuum_balance: 0.0000e+00 - continuum_repulsion: 0.0000e+00 - energy_mixture_nll: -2.3935e+00 - flow_line_repulsion: 0.0000e+00 - gate_aux_loss: 0.0385 - kl: 19.1695 - loss: -8.2984e+00 - nll: -1.2132e+01 - phi_r_nll: -2.7858e+00 - phi_v_nll: -2.3229e+00 - rec: -1.2132e+01 - sigma_reg: 1.0871e-05 - ur_nll: -2.1707e+00 - uv_nll: -2.5362e+00 - val_continuum_balance: 0.0000e+00 - val_continuum_repulsion: 0.0000e+00 - val_energy_mixture_nll: -2.4924e+00 - val_flow_line_repulsion: 0.0000e+00 - val_gate_aux_loss: 0.0381 - val_kl: 18.2236 - val_loss: -7.6162e+00 - val_nll: -1.1261e+01 - val_phi_r_nll: -2.9170e+00 - val_phi_v_nll: -1.9372e+00 - val_rec: -1.1261e+01 - val_sigma_reg: 9.0748e-05 - val_ur_nll: -2.2307e+00 - val_uv_nll: -1.7601e+00 - learning_rate: 2.0000e-04
+Epoch 16/40
+171/171 - 12s - 67ms/step - continuum_balance: 0.0000e+00 - continuum_repulsion: 0.0000e+00 - energy_mixture_nll: -2.4280e+00 - flow_line_repulsion: 0.0000e+00 - gate_aux_loss: 0.0383 - kl: 19.1700 - loss: -8.6387e+00 - nll: -1.2473e+01 - phi_r_nll: -2.8043e+00 - phi_v_nll: -2.3564e+00 - rec: -1.2473e+01 - sigma_reg: 8.5224e-06 - ur_nll: -2.4374e+00 - uv_nll: -2.5232e+00 - val_continuum_balance: 0.0000e+00 - val_continuum_repulsion: 0.0000e+00 - val_energy_mixture_nll: -2.3809e+00 - val_flow_line_repulsion: 0.0000e+00 - val_gate_aux_loss: 0.0380 - val_kl: 19.3549 - val_loss: -9.1679e+00 - val_nll: -1.3039e+01 - val_phi_r_nll: -2.8191e+00 - val_phi_v_nll: -2.4479e+00 - val_rec: -1.3039e+01 - val_sigma_reg: 6.9006e-08 - val_ur_nll: -2.4786e+00 - val_uv_nll: -2.9884e+00 - learning_rate: 2.0000e-04
+Epoch 17/40
+171/171 - 11s - 66ms/step - continuum_balance: 0.0000e+00 - continuum_repulsion: 0.0000e+00 - energy_mixture_nll: -2.4702e+00 - flow_line_repulsion: 0.0000e+00 - gate_aux_loss: 0.0372 - kl: 19.3414 - loss: -8.4889e+00 - nll: -1.2357e+01 - phi_r_nll: -2.7745e+00 - phi_v_nll: -2.3442e+00 - rec: -1.2357e+01 - sigma_reg: 2.4368e-06 - ur_nll: -2.1325e+00 - uv_nll: -2.7102e+00 - val_continuum_balance: 0.0000e+00 - val_continuum_repulsion: 0.0000e+00 - val_energy_mixture_nll: -2.4478e+00 - val_flow_line_repulsion: 0.0000e+00 - val_gate_aux_loss: 0.0363 - val_kl: 18.9020 - val_loss: -7.5273e+00 - val_nll: -1.1308e+01 - val_phi_r_nll: -2.7550e+00 - val_phi_v_nll: -2.0367e+00 - val_rec: -1.1308e+01 - val_sigma_reg: 1.4052e-05 - val_ur_nll: -2.2784e+00 - val_uv_nll: -1.8624e+00 - learning_rate: 2.0000e-04
+Epoch 18/40
+171/171 - 11s - 66ms/step - continuum_balance: 0.0000e+00 - continuum_repulsion: 0.0000e+00 - energy_mixture_nll: -2.4612e+00 - flow_line_repulsion: 0.0000e+00 - gate_aux_loss: 0.0369 - kl: 19.6200 - loss: -9.1759e+00 - nll: -1.3100e+01 - phi_r_nll: -3.0473e+00 - phi_v_nll: -2.4576e+00 - rec: -1.3100e+01 - sigma_reg: 2.5690e-06 - ur_nll: -2.5289e+00 - uv_nll: -2.6788e+00 - val_continuum_balance: 0.0000e+00 - val_continuum_repulsion: 0.0000e+00 - val_energy_mixture_nll: -2.5737e+00 - val_flow_line_repulsion: 0.0000e+00 - val_gate_aux_loss: 0.0369 - val_kl: 20.0593 - val_loss: -1.0111e+01 - val_nll: -1.4123e+01 - val_phi_r_nll: -3.1901e+00 - val_phi_v_nll: -2.6472e+00 - val_rec: -1.4123e+01 - val_sigma_reg: 1.0869e-08 - val_ur_nll: -2.6183e+00 - val_uv_nll: -3.1672e+00 - learning_rate: 2.0000e-04
+Epoch 19/40
+171/171 - 12s - 67ms/step - continuum_balance: 0.0000e+00 - continuum_repulsion: 0.0000e+00 - energy_mixture_nll: -2.5312e+00 - flow_line_repulsion: 0.0000e+00 - gate_aux_loss: 0.0360 - kl: 19.7107 - loss: -8.9726e+00 - nll: -1.2915e+01 - phi_r_nll: -2.7814e+00 - phi_v_nll: -2.4826e+00 - rec: -1.2915e+01 - sigma_reg: 5.8824e-07 - ur_nll: -2.1289e+00 - uv_nll: -3.0627e+00 - val_continuum_balance: 0.0000e+00 - val_continuum_repulsion: 0.0000e+00 - val_energy_mixture_nll: -2.7106e+00 - val_flow_line_repulsion: 0.0000e+00 - val_gate_aux_loss: 0.0366 - val_kl: 20.8793 - val_loss: -1.0321e+00 - val_nll: -5.2080e+00 - val_phi_r_nll: -3.0276e+00 - val_phi_v_nll: -2.6177e+00 - val_rec: -5.2080e+00 - val_sigma_reg: 1.2027e-08 - val_ur_nll: 6.2352 - val_uv_nll: -3.1605e+00 - learning_rate: 2.0000e-04
+Epoch 20/40
+171/171 - 12s - 72ms/step - continuum_balance: 0.0000e+00 - continuum_repulsion: 0.0000e+00 - energy_mixture_nll: -2.5251e+00 - flow_line_repulsion: 0.0000e+00 - gate_aux_loss: 0.0355 - kl: 19.5053 - loss: -8.6904e+00 - nll: -1.2592e+01 - phi_r_nll: -2.5170e+00 - phi_v_nll: -2.5850e+00 - rec: -1.2592e+01 - sigma_reg: 2.1770e-05 - ur_nll: -1.9538e+00 - uv_nll: -3.0815e+00 - val_continuum_balance: 0.0000e+00 - val_continuum_repulsion: 0.0000e+00 - val_energy_mixture_nll: -2.6353e+00 - val_flow_line_repulsion: 0.0000e+00 - val_gate_aux_loss: 0.0363 - val_kl: 19.4453 - val_loss: -1.0070e+01 - val_nll: -1.3959e+01 - val_phi_r_nll: -2.9889e+00 - val_phi_v_nll: -2.6906e+00 - val_rec: -1.3959e+01 - val_sigma_reg: 2.2396e-08 - val_ur_nll: -2.5652e+00 - val_uv_nll: -3.1519e+00 - learning_rate: 2.0000e-04
+Epoch 21/40
+171/171 - 12s - 72ms/step - continuum_balance: 0.0000e+00 - continuum_repulsion: 0.0000e+00 - energy_mixture_nll: -2.5350e+00 - flow_line_repulsion: 0.0000e+00 - gate_aux_loss: 0.0350 - kl: 20.2147 - loss: -9.5467e+00 - nll: -1.3590e+01 - phi_r_nll: -2.9637e+00 - phi_v_nll: -2.4267e+00 - rec: -1.3590e+01 - sigma_reg: 2.2209e-07 - ur_nll: -2.5307e+00 - uv_nll: -3.2035e+00 - val_continuum_balance: 0.0000e+00 - val_continuum_repulsion: 0.0000e+00 - val_energy_mixture_nll: -2.5318e+00 - val_flow_line_repulsion: 0.0000e+00 - val_gate_aux_loss: 0.0351 - val_kl: 20.1487 - val_loss: -9.9621e+00 - val_nll: -1.3992e+01 - val_phi_r_nll: -3.0278e+00 - val_phi_v_nll: -2.6118e+00 - val_rec: -1.3992e+01 - val_sigma_reg: 1.6391e-08 - val_ur_nll: -2.6283e+00 - val_uv_nll: -3.2622e+00 - learning_rate: 2.0000e-04
+Epoch 22/40
+171/171 - 12s - 70ms/step - continuum_balance: 0.0000e+00 - continuum_repulsion: 0.0000e+00 - energy_mixture_nll: -2.5753e+00 - flow_line_repulsion: 0.0000e+00 - gate_aux_loss: 0.0343 - kl: 19.9372 - loss: -9.1058e+00 - nll: -1.3093e+01 - phi_r_nll: -2.6112e+00 - phi_v_nll: -2.4762e+00 - rec: -1.3093e+01 - sigma_reg: 4.0071e-07 - ur_nll: -2.4092e+00 - uv_nll: -3.0898e+00 - val_continuum_balance: 0.0000e+00 - val_continuum_repulsion: 0.0000e+00 - val_energy_mixture_nll: -2.6242e+00 - val_flow_line_repulsion: 0.0000e+00 - val_gate_aux_loss: 0.0346 - val_kl: 19.9247 - val_loss: -9.6904e+00 - val_nll: -1.3675e+01 - val_phi_r_nll: -2.9023e+00 - val_phi_v_nll: -2.3180e+00 - val_rec: -1.3675e+01 - val_sigma_reg: 1.8523e-06 - val_ur_nll: -2.6404e+00 - val_uv_nll: -3.2596e+00 - learning_rate: 2.0000e-04
+Epoch 23/40
+171/171 - 12s - 73ms/step - continuum_balance: 0.0000e+00 - continuum_repulsion: 0.0000e+00 - energy_mixture_nll: -2.5807e+00 - flow_line_repulsion: 0.0000e+00 - gate_aux_loss: 0.0339 - kl: 19.8691 - loss: -9.2661e+00 - nll: -1.3240e+01 - phi_r_nll: -3.1205e+00 - phi_v_nll: -2.5023e+00 - rec: -1.3240e+01 - sigma_reg: 1.4087e-06 - ur_nll: -2.5280e+00 - uv_nll: -2.5762e+00 - val_continuum_balance: 0.0000e+00 - val_continuum_repulsion: 0.0000e+00 - val_energy_mixture_nll: -2.0564e+00 - val_flow_line_repulsion: 0.0000e+00 - val_gate_aux_loss: 0.0342 - val_kl: 20.8189 - val_loss: -9.8758e+00 - val_nll: -1.4040e+01 - val_phi_r_nll: -3.3031e+00 - val_phi_v_nll: -2.7993e+00 - val_rec: -1.4040e+01 - val_sigma_reg: 1.0943e-08 - val_ur_nll: -2.7488e+00 - val_uv_nll: -3.2006e+00 - learning_rate: 2.0000e-04
+Epoch 24/40
+
+Epoch 24: ReduceLROnPlateau reducing learning rate to 9.999999747378752e-05.
+171/171 - 12s - 72ms/step - continuum_balance: 0.0000e+00 - continuum_repulsion: 0.0000e+00 - energy_mixture_nll: -2.6093e+00 - flow_line_repulsion: 0.0000e+00 - gate_aux_loss: 0.0328 - kl: 20.0757 - loss: -8.3925e+00 - nll: -1.2408e+01 - phi_r_nll: -2.3776e+00 - phi_v_nll: -2.5367e+00 - rec: -1.2408e+01 - sigma_reg: 7.9795e-06 - ur_nll: -2.3724e+00 - uv_nll: -2.5772e+00 - val_continuum_balance: 0.0000e+00 - val_continuum_repulsion: 0.0000e+00 - val_energy_mixture_nll: -2.6347e+00 - val_flow_line_repulsion: 0.0000e+00 - val_gate_aux_loss: 0.0321 - val_kl: 18.7753 - val_loss: -7.0677e+00 - val_nll: -1.0823e+01 - val_phi_r_nll: -2.6551e+00 - val_phi_v_nll: -1.8452e+00 - val_rec: -1.0823e+01 - val_sigma_reg: 1.6947e-04 - val_ur_nll: -2.2165e+00 - val_uv_nll: -1.5355e+00 - learning_rate: 2.0000e-04
+Epoch 25/40
+171/171 - 12s - 72ms/step - continuum_balance: 0.0000e+00 - continuum_repulsion: 0.0000e+00 - energy_mixture_nll: -2.7928e+00 - flow_line_repulsion: 0.0000e+00 - gate_aux_loss: 0.0331 - kl: 19.0834 - loss: -8.9392e+00 - nll: -1.2756e+01 - phi_r_nll: -3.0292e+00 - phi_v_nll: -2.3640e+00 - rec: -1.2756e+01 - sigma_reg: 4.5163e-05 - ur_nll: -2.5685e+00 - uv_nll: -2.0677e+00 - val_continuum_balance: 0.0000e+00 - val_continuum_repulsion: 0.0000e+00 - val_energy_mixture_nll: -2.7969e+00 - val_flow_line_repulsion: 0.0000e+00 - val_gate_aux_loss: 0.0337 - val_kl: 20.3693 - val_loss: -9.9788e+00 - val_nll: -1.4053e+01 - val_phi_r_nll: -3.2370e+00 - val_phi_v_nll: -2.7726e+00 - val_rec: -1.4053e+01 - val_sigma_reg: 6.4245e-07 - val_ur_nll: -2.7758e+00 - val_uv_nll: -2.5378e+00 - learning_rate: 1.0000e-04
+Epoch 26/40
+171/171 - 12s - 72ms/step - continuum_balance: 0.0000e+00 - continuum_repulsion: 0.0000e+00 - energy_mixture_nll: -2.8514e+00 - flow_line_repulsion: 0.0000e+00 - gate_aux_loss: 0.0325 - kl: 21.1581 - loss: -1.0483e+01 - nll: -1.4715e+01 - phi_r_nll: -3.3250e+00 - phi_v_nll: -2.8777e+00 - rec: -1.4715e+01 - sigma_reg: 1.2036e-07 - ur_nll: -2.8399e+00 - uv_nll: -2.8858e+00 - val_continuum_balance: 0.0000e+00 - val_continuum_repulsion: 0.0000e+00 - val_energy_mixture_nll: -2.9294e+00 - val_flow_line_repulsion: 0.0000e+00 - val_gate_aux_loss: 0.0328 - val_kl: 21.6883 - val_loss: -1.0850e+01 - val_nll: -1.5188e+01 - val_phi_r_nll: -3.3568e+00 - val_phi_v_nll: -2.9344e+00 - val_rec: -1.5188e+01 - val_sigma_reg: 8.3562e-09 - val_ur_nll: -2.8544e+00 - val_uv_nll: -3.1787e+00 - learning_rate: 1.0000e-04
+Epoch 27/40
+171/171 - 12s - 72ms/step - continuum_balance: 0.0000e+00 - continuum_repulsion: 0.0000e+00 - energy_mixture_nll: -2.8778e+00 - flow_line_repulsion: 0.0000e+00 - gate_aux_loss: 0.0318 - kl: 21.9347 - loss: -1.1013e+01 - nll: -1.5400e+01 - phi_r_nll: -3.3907e+00 - phi_v_nll: -2.9569e+00 - rec: -1.5400e+01 - sigma_reg: 1.6876e-09 - ur_nll: -2.8875e+00 - uv_nll: -3.3508e+00 - val_continuum_balance: 0.0000e+00 - val_continuum_repulsion: 0.0000e+00 - val_energy_mixture_nll: -2.7655e+00 - val_flow_line_repulsion: 0.0000e+00 - val_gate_aux_loss: 0.0322 - val_kl: 22.1058 - val_loss: -1.1018e+01 - val_nll: -1.5439e+01 - val_phi_r_nll: -3.4047e+00 - val_phi_v_nll: -2.9706e+00 - val_rec: -1.5439e+01 - val_sigma_reg: 1.7883e-09 - val_ur_nll: -2.9104e+00 - val_uv_nll: -3.4524e+00 - learning_rate: 1.0000e-04
+Epoch 28/40
+171/171 - 12s - 70ms/step - continuum_balance: 0.0000e+00 - continuum_repulsion: 0.0000e+00 - energy_mixture_nll: -2.9044e+00 - flow_line_repulsion: 0.0000e+00 - gate_aux_loss: 0.0313 - kl: 22.2349 - loss: -1.1196e+01 - nll: -1.5643e+01 - phi_r_nll: -3.4204e+00 - phi_v_nll: -2.9828e+00 - rec: -1.5643e+01 - sigma_reg: 2.8550e-09 - ur_nll: -2.9001e+00 - uv_nll: -3.4980e+00 - val_continuum_balance: 0.0000e+00 - val_continuum_repulsion: 0.0000e+00 - val_energy_mixture_nll: -2.8508e+00 - val_flow_line_repulsion: 0.0000e+00 - val_gate_aux_loss: 0.0316 - val_kl: 22.3273 - val_loss: -1.1042e+01 - val_nll: -1.5507e+01 - val_phi_r_nll: -3.3389e+00 - val_phi_v_nll: -3.0126e+00 - val_rec: -1.5507e+01 - val_sigma_reg: 4.5099e-09 - val_ur_nll: -2.9024e+00 - val_uv_nll: -3.4655e+00 - learning_rate: 1.0000e-04
+Epoch 29/40
+171/171 - 12s - 70ms/step - continuum_balance: 0.0000e+00 - continuum_repulsion: 0.0000e+00 - energy_mixture_nll: -2.9028e+00 - flow_line_repulsion: 0.0000e+00 - gate_aux_loss: 0.0309 - kl: 22.2850 - loss: -1.1167e+01 - nll: -1.5624e+01 - phi_r_nll: -3.4065e+00 - phi_v_nll: -2.9776e+00 - rec: -1.5624e+01 - sigma_reg: 6.8179e-09 - ur_nll: -2.8832e+00 - uv_nll: -3.5161e+00 - val_continuum_balance: 0.0000e+00 - val_continuum_repulsion: 0.0000e+00 - val_energy_mixture_nll: -2.9601e+00 - val_flow_line_repulsion: 0.0000e+00 - val_gate_aux_loss: 0.0315 - val_kl: 22.2997 - val_loss: -1.1333e+01 - val_nll: -1.5793e+01 - val_phi_r_nll: -3.4696e+00 - val_phi_v_nll: -3.0169e+00 - val_rec: -1.5793e+01 - val_sigma_reg: 9.6556e-09 - val_ur_nll: -2.9357e+00 - val_uv_nll: -3.4731e+00 - learning_rate: 1.0000e-04
+Epoch 30/40
+171/171 - 12s - 70ms/step - continuum_balance: 0.0000e+00 - continuum_repulsion: 0.0000e+00 - energy_mixture_nll: -2.9150e+00 - flow_line_repulsion: 0.0000e+00 - gate_aux_loss: 0.0306 - kl: 22.3664 - loss: -1.1219e+01 - nll: -1.5692e+01 - phi_r_nll: -3.4258e+00 - phi_v_nll: -2.9775e+00 - rec: -1.5692e+01 - sigma_reg: 1.0875e-08 - ur_nll: -2.8969e+00 - uv_nll: -3.5381e+00 - val_continuum_balance: 0.0000e+00 - val_continuum_repulsion: 0.0000e+00 - val_energy_mixture_nll: -2.8103e+00 - val_flow_line_repulsion: 0.0000e+00 - val_gate_aux_loss: 0.0312 - val_kl: 22.3647 - val_loss: -1.1162e+01 - val_nll: -1.5635e+01 - val_phi_r_nll: -3.4208e+00 - val_phi_v_nll: -2.9931e+00 - val_rec: -1.5635e+01 - val_sigma_reg: 1.4126e-08 - val_ur_nll: -2.9427e+00 - val_uv_nll: -3.5302e+00 - learning_rate: 1.0000e-04
+Epoch 31/40
+171/171 - 12s - 70ms/step - continuum_balance: 0.0000e+00 - continuum_repulsion: 0.0000e+00 - energy_mixture_nll: -2.9563e+00 - flow_line_repulsion: 0.0000e+00 - gate_aux_loss: 0.0302 - kl: 22.3860 - loss: -1.1256e+01 - nll: -1.5733e+01 - phi_r_nll: -3.4090e+00 - phi_v_nll: -2.9718e+00 - rec: -1.5733e+01 - sigma_reg: 1.6581e-08 - ur_nll: -2.9319e+00 - uv_nll: -3.5248e+00 - val_continuum_balance: 0.0000e+00 - val_continuum_repulsion: 0.0000e+00 - val_energy_mixture_nll: -2.8539e+00 - val_flow_line_repulsion: 0.0000e+00 - val_gate_aux_loss: 0.0303 - val_kl: 22.4780 - val_loss: -1.1137e+01 - val_nll: -1.5633e+01 - val_phi_r_nll: -3.4029e+00 - val_phi_v_nll: -2.9721e+00 - val_rec: -1.5633e+01 - val_sigma_reg: 2.9745e-08 - val_ur_nll: -2.9757e+00 - val_uv_nll: -3.4889e+00 - learning_rate: 1.0000e-04
+Epoch 32/40
+171/171 - 13s - 75ms/step - continuum_balance: 0.0000e+00 - continuum_repulsion: 0.0000e+00 - energy_mixture_nll: -2.9604e+00 - flow_line_repulsion: 0.0000e+00 - gate_aux_loss: 0.0297 - kl: 22.4453 - loss: -1.1323e+01 - nll: -1.5812e+01 - phi_r_nll: -3.4633e+00 - phi_v_nll: -3.0069e+00 - rec: -1.5812e+01 - sigma_reg: 2.0318e-08 - ur_nll: -2.8941e+00 - uv_nll: -3.5468e+00 - val_continuum_balance: 0.0000e+00 - val_continuum_repulsion: 0.0000e+00 - val_energy_mixture_nll: -3.0463e+00 - val_flow_line_repulsion: 0.0000e+00 - val_gate_aux_loss: 0.0301 - val_kl: 22.5049 - val_loss: -1.1306e+01 - val_nll: -1.5807e+01 - val_phi_r_nll: -3.1708e+00 - val_phi_v_nll: -3.0494e+00 - val_rec: -1.5807e+01 - val_sigma_reg: 2.3117e-08 - val_ur_nll: -2.9878e+00 - val_uv_nll: -3.6128e+00 - learning_rate: 1.0000e-04
+Epoch 33/40
+171/171 - 13s - 75ms/step - continuum_balance: 0.0000e+00 - continuum_repulsion: 0.0000e+00 - energy_mixture_nll: -2.9690e+00 - flow_line_repulsion: 0.0000e+00 - gate_aux_loss: 0.0294 - kl: 22.5568 - loss: -1.1410e+01 - nll: -1.5921e+01 - phi_r_nll: -3.4670e+00 - phi_v_nll: -3.0300e+00 - rec: -1.5921e+01 - sigma_reg: 2.2826e-08 - ur_nll: -2.9500e+00 - uv_nll: -3.5640e+00 - val_continuum_balance: 0.0000e+00 - val_continuum_repulsion: 0.0000e+00 - val_energy_mixture_nll: -3.0748e+00 - val_flow_line_repulsion: 0.0000e+00 - val_gate_aux_loss: 0.0300 - val_kl: 22.6111 - val_loss: -1.1638e+01 - val_nll: -1.6160e+01 - val_phi_r_nll: -3.5416e+00 - val_phi_v_nll: -3.0925e+00 - val_rec: -1.6160e+01 - val_sigma_reg: 2.1416e-08 - val_ur_nll: -2.9064e+00 - val_uv_nll: -3.6045e+00 - learning_rate: 1.0000e-04
+Epoch 34/40
+171/171 - 14s - 80ms/step - continuum_balance: 0.0000e+00 - continuum_repulsion: 0.0000e+00 - energy_mixture_nll: -2.9614e+00 - flow_line_repulsion: 0.0000e+00 - gate_aux_loss: 0.0290 - kl: 22.6069 - loss: -1.1400e+01 - nll: -1.5921e+01 - phi_r_nll: -3.4555e+00 - phi_v_nll: -3.0232e+00 - rec: -1.5921e+01 - sigma_reg: 2.9014e-08 - ur_nll: -2.9627e+00 - uv_nll: -3.5762e+00 - val_continuum_balance: 0.0000e+00 - val_continuum_repulsion: 0.0000e+00 - val_energy_mixture_nll: -2.9367e+00 - val_flow_line_repulsion: 0.0000e+00 - val_gate_aux_loss: 0.0296 - val_kl: 22.8055 - val_loss: -1.1352e+01 - val_nll: -1.5913e+01 - val_phi_r_nll: -3.5301e+00 - val_phi_v_nll: -2.9886e+00 - val_rec: -1.5913e+01 - val_sigma_reg: 2.1303e-08 - val_ur_nll: -2.9693e+00 - val_uv_nll: -3.5476e+00 - learning_rate: 1.0000e-04
+Epoch 35/40
+171/171 - 14s - 81ms/step - continuum_balance: 0.0000e+00 - continuum_repulsion: 0.0000e+00 - energy_mixture_nll: -3.0003e+00 - flow_line_repulsion: 0.0000e+00 - gate_aux_loss: 0.0285 - kl: 22.6892 - loss: -1.1492e+01 - nll: -1.6030e+01 - phi_r_nll: -3.4859e+00 - phi_v_nll: -3.0330e+00 - rec: -1.6030e+01 - sigma_reg: 2.8894e-08 - ur_nll: -2.9641e+00 - uv_nll: -3.6035e+00 - val_continuum_balance: 0.0000e+00 - val_continuum_repulsion: 0.0000e+00 - val_energy_mixture_nll: -2.9914e+00 - val_flow_line_repulsion: 0.0000e+00 - val_gate_aux_loss: 0.0290 - val_kl: 22.6941 - val_loss: -1.1674e+01 - val_nll: -1.6212e+01 - val_phi_r_nll: -3.5293e+00 - val_phi_v_nll: -3.0671e+00 - val_rec: -1.6212e+01 - val_sigma_reg: 2.4644e-08 - val_ur_nll: -3.0103e+00 - val_uv_nll: -3.6724e+00 - learning_rate: 1.0000e-04
+Epoch 36/40
+171/171 - 14s - 81ms/step - continuum_balance: 0.0000e+00 - continuum_repulsion: 0.0000e+00 - energy_mixture_nll: -2.9929e+00 - flow_line_repulsion: 0.0000e+00 - gate_aux_loss: 0.0281 - kl: 22.6996 - loss: -1.1496e+01 - nll: -1.6036e+01 - phi_r_nll: -3.5205e+00 - phi_v_nll: -3.0490e+00 - rec: -1.6036e+01 - sigma_reg: 3.3288e-08 - ur_nll: -2.9576e+00 - uv_nll: -3.5725e+00 - val_continuum_balance: 0.0000e+00 - val_continuum_repulsion: 0.0000e+00 - val_energy_mixture_nll: -3.0776e+00 - val_flow_line_repulsion: 0.0000e+00 - val_gate_aux_loss: 0.0285 - val_kl: 22.8459 - val_loss: -1.1747e+01 - val_nll: -1.6317e+01 - val_phi_r_nll: -3.5645e+00 - val_phi_v_nll: -3.0039e+00 - val_rec: -1.6317e+01 - val_sigma_reg: 2.6735e-08 - val_ur_nll: -3.0543e+00 - val_uv_nll: -3.6734e+00 - learning_rate: 1.0000e-04
+Epoch 37/40
+171/171 - 14s - 81ms/step - continuum_balance: 0.0000e+00 - continuum_repulsion: 0.0000e+00 - energy_mixture_nll: -3.0374e+00 - flow_line_repulsion: 0.0000e+00 - gate_aux_loss: 0.0277 - kl: 22.7900 - loss: -1.1534e+01 - nll: -1.6091e+01 - phi_r_nll: -3.4737e+00 - phi_v_nll: -3.0769e+00 - rec: -1.6091e+01 - sigma_reg: 3.5049e-08 - ur_nll: -2.9794e+00 - uv_nll: -3.5795e+00 - val_continuum_balance: 0.0000e+00 - val_continuum_repulsion: 0.0000e+00 - val_energy_mixture_nll: -2.8843e+00 - val_flow_line_repulsion: 0.0000e+00 - val_gate_aux_loss: 0.0280 - val_kl: 22.8920 - val_loss: -1.1362e+01 - val_nll: -1.5940e+01 - val_phi_r_nll: -3.5790e+00 - val_phi_v_nll: -3.1023e+00 - val_rec: -1.5940e+01 - val_sigma_reg: 2.4850e-08 - val_ur_nll: -2.7374e+00 - val_uv_nll: -3.6931e+00 - learning_rate: 1.0000e-04
+Epoch 38/40
+171/171 - 13s - 77ms/step - continuum_balance: 0.0000e+00 - continuum_repulsion: 0.0000e+00 - energy_mixture_nll: -3.0352e+00 - flow_line_repulsion: 0.0000e+00 - gate_aux_loss: 0.0272 - kl: 22.9143 - loss: -1.1676e+01 - nll: -1.6258e+01 - phi_r_nll: -3.5347e+00 - phi_v_nll: -3.0910e+00 - rec: -1.6258e+01 - sigma_reg: 3.3274e-08 - ur_nll: -3.0203e+00 - uv_nll: -3.6318e+00 - val_continuum_balance: 0.0000e+00 - val_continuum_repulsion: 0.0000e+00 - val_energy_mixture_nll: -3.0475e+00 - val_flow_line_repulsion: 0.0000e+00 - val_gate_aux_loss: 0.0270 - val_kl: 23.0297 - val_loss: -1.1847e+01 - val_nll: -1.6453e+01 - val_phi_r_nll: -3.6001e+00 - val_phi_v_nll: -3.0643e+00 - val_rec: -1.6453e+01 - val_sigma_reg: 2.6394e-08 - val_ur_nll: -3.0694e+00 - val_uv_nll: -3.7254e+00 - learning_rate: 1.0000e-04
+Epoch 39/40
+171/171 - 12s - 72ms/step - continuum_balance: 0.0000e+00 - continuum_repulsion: 0.0000e+00 - energy_mixture_nll: -3.0366e+00 - flow_line_repulsion: 0.0000e+00 - gate_aux_loss: 0.0268 - kl: 22.9629 - loss: -1.1600e+01 - nll: -1.6193e+01 - phi_r_nll: -3.4682e+00 - phi_v_nll: -3.1098e+00 - rec: -1.6193e+01 - sigma_reg: 3.6516e-08 - ur_nll: -3.0237e+00 - uv_nll: -3.6083e+00 - val_continuum_balance: 0.0000e+00 - val_continuum_repulsion: 0.0000e+00 - val_energy_mixture_nll: -3.0937e+00 - val_flow_line_repulsion: 0.0000e+00 - val_gate_aux_loss: 0.0269 - val_kl: 22.9460 - val_loss: -1.1751e+01 - val_nll: -1.6340e+01 - val_phi_r_nll: -3.4300e+00 - val_phi_v_nll: -3.1539e+00 - val_rec: -1.6340e+01 - val_sigma_reg: 3.5982e-08 - val_ur_nll: -3.0276e+00 - val_uv_nll: -3.6892e+00 - learning_rate: 1.0000e-04
+Epoch 40/40
+171/171 - 12s - 71ms/step - continuum_balance: 0.0000e+00 - continuum_repulsion: 0.0000e+00 - energy_mixture_nll: -3.0643e+00 - flow_line_repulsion: 0.0000e+00 - gate_aux_loss: 0.0265 - kl: 22.9826 - loss: -1.1722e+01 - nll: -1.6318e+01 - phi_r_nll: -3.5499e+00 - phi_v_nll: -3.0938e+00 - rec: -1.6318e+01 - sigma_reg: 3.8851e-08 - ur_nll: -3.0291e+00 - uv_nll: -3.6344e+00 - val_continuum_balance: 0.0000e+00 - val_continuum_repulsion: 0.0000e+00 - val_energy_mixture_nll: -3.1220e+00 - val_flow_line_repulsion: 0.0000e+00 - val_gate_aux_loss: 0.0270 - val_kl: 23.1705 - val_loss: -1.1927e+01 - val_nll: -1.6561e+01 - val_phi_r_nll: -3.6159e+00 - val_phi_v_nll: -3.1684e+00 - val_rec: -1.6561e+01 - val_sigma_reg: 4.6341e-08 - val_ur_nll: -3.0219e+00 - val_uv_nll: -3.6873e+00 - learning_rate: 1.0000e-04
+Restoring model weights from the end of the best epoch: 40.
+
+DM1_2_iso: trained 40 epochs in 486s
+Saved final trained model to: /Volumes/X10Pro/MAGI/trained_models/v0_8_2_DM1_2_iso_seed42
+saved -> /Volumes/X10Pro/MAGI/trained_models/v0_8_2_DM1_2_iso_seed42
