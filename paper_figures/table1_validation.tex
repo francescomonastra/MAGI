@@ -1,0 +1,57 @@
+% Table 1 for the proceeding. Every number traceable to MAGI_state_reference.pdf.
+% R = (MAGI counts / MAGI injected crossings) / (real counts / real shot particles),
+% so R = 1 means a MAGI crossing produces detector events at exactly the rate a
+% real recorded crossing does. eps = R/chi is the efficiency factor; a perfect
+% surrogate returns eps = 1/chi, not 1.
+\begin{table*}[t]
+\centering
+\caption{MAGI v0.8.2 against full Geant4, at the detector, in the same mass
+model. Counts are events with summed deposit in the quoted band. Uncertainties
+are Poisson on both arms. The DM1.2 0.1--30\,keV row is an integrated rate, not
+a spectral comparison: DM127 is an anti-coincidence detector and the reference
+holds only 41 events there.}
+\label{tab:validation}
+\begin{tabular}{llrrrl}
+\hline\hline
+Source / setup & Band & ref.\ counts & MAGI counts & $R$ & notes \\
+\hline
+\multicolumn{6}{l}{\textit{DM1.2 laboratory cryostat} --- $2\times10^{8}\,\mu$ (iso) vs $1.2\times10^{6}$ injected crossings, 3-seed ensemble} \\
+ & all deposits      & 1733 & 2019 & $0.970 \pm 0.032$ & \\
+ & 100--300\,keV (MIP) & 1325 & 1589 & $\mathbf{0.999 \pm 0.037}$ & headline; $\varepsilon = 199.9 \pm 7.4$ vs ideal 200.13 \\
+ & 300--1000\,keV    &  310 &  323 & $0.868 \pm 0.069$ & \\
+ & 30--100\,keV      &   42 &   46 & $0.912 \pm 0.195$ & \\
+ & 0.1--30\,keV      &   41 &   43 & $0.873 \pm 0.191$ & reference-limited ($\pm15.6\,\%$) \\
+ & $>1000$\,keV      &   13 &   17 & $1.089 \pm 0.401$ & \\
+\hline
+\multicolumn{6}{l}{\textit{SRON X-IFU model, cosmic rays}} \\
+ & 0.1--30\,keV, normalization-free &   51 &  500 & $0.848 \pm 0.125$ & real crossings vs MAGI, same geometry \\
+ & 1--20\,keV, Det.~1 flux          & \multicolumn{2}{c}{---} & $0.76$ & $\varepsilon = 124.8 \pm 5.6$ vs ideal 164.4 \\
+ & 1--20\,keV, mean over 6 detectors& \multicolumn{2}{c}{---} & $0.79$ & $\varepsilon = 124.1 \pm 15.2$ \\
+\hline
+\multicolumn{6}{l}{\textit{$^{40}$K, SRON BuildingModel} --- $2\times10^{8}$ injected on both arms} \\
+ & 0.1--30\,keV      &   17 &   19 & $1.118 \pm 0.373$ & KS $D=0.238$, $p=0.60$ \\
+\hline\hline
+\end{tabular}
+
+\vspace{2mm}
+\caption{Crossing-level fidelity and cost, cosmic rays on the SRON model.}
+\label{tab:fidelity}
+\begin{tabular}{lll}
+\hline\hline
+Quantity & Value & Comment \\
+\hline
+Correlation residual, mean $|\Delta\rho|$ & 0.015 (max 0.042) & 10 feature pairs, Fig.~2 \\
+Species fractions & correct to $0.3\,\%$ & $\gamma$, $e^{-}$, $e^{+}$, $\mu^{-}$ \\
+Energy marginals, per decade & within a few \% & 0.1\,MeV--10\,GeV \\
+Geometry marginals, RMS per bin & 5--11\,\% & vs a $0.44\,\%$ Poisson floor \\
+Spectral shape, SRON Det.~1 & KS $p = 0.20$ & indistinguishable from reference \\
+\hline
+Statistical amplification (DM1.2) & $194.2\times$ & ideal $1/\chi = 200.13$ \\
+Transport cost ratio & $95.8\times$ & crossing vs thrown muon \\
+Net throughput gain & $2.03\times$ & measured, same machine \\
+Outer / inner cost split & $52\,\% / 48\,\%$ & MAGI eliminates the outer \\
+Break-even, design campaign & 2nd variant & one training set, $N$ inner designs \\
+$^{40}$K sample amplification & $287\times$ & $1.87\times10^{6} \to 5.38\times10^{8}$ \\
+\hline\hline
+\end{tabular}
+\end{table*}

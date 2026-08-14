@@ -154,7 +154,7 @@ all deposits            & \num{1733} & \num{2019} & $0.970 \pm 0.032$ \\
 \textbf{100--300\,keV (MIP)} & \num{1325} & \num{1589} & $\mathbf{0.999 \pm 0.037}$ \\
 300--1000\,keV          & 310  & 323  & $0.868 \pm 0.069$ \\
 30--100\,keV            & 42   & 46   & $0.912 \pm 0.195$ \\
-0.1--30\,keV (X-IFU)    & 41   & 43   & $0.873 \pm 0.191$ \\
+0.1--30\,keV            & 41   & 43   & $0.873 \pm 0.191$ \\
 $>$1000\,keV            & 13   & 17   & $1.089 \pm 0.401$ \\
 \bottomrule
 \end{tabular}
@@ -173,7 +173,7 @@ comparable with the SRON CR value in \S\ref{sec:cr}.}
 \toprule
 Band & $\varepsilon$ & ideal $1/\chi$ & $R = \varepsilon\chi$ \\
 \midrule
-0.1--30\,keV (X-IFU)  & $174.8 \pm 38.2$ & 200.13 & 0.873 \\
+0.1--30\,keV          & $174.8 \pm 38.2$ & 200.13 & 0.873 \\
 1--20\,keV            & $217.9 \pm 56.8$ & 200.13 & 1.089 \\
 100--300\,keV (MIP)   & $199.9 \pm 7.4$  & 200.13 & 0.999 \\
 all deposits          & $194.2 \pm 6.4$  & 200.13 & 0.970 \\
@@ -183,11 +183,16 @@ all deposits          & $194.2 \pm 6.4$  & 200.13 & 0.970 \\
 \end{table}
 
 \paragraph{What can and cannot be claimed.}
-The MIP band is the spectral test: \num{1325} reference events, $\pm2.7\,\%$,
-and $\varepsilon$ within $0.4\,\%$ of its ideal value. The X-IFU band is an
+\textbf{DM127 is an anti-coincidence detector} (\texttt{ACDSD} in
+\texttt{GDMLDetectorConstruction.cc}), so the X-IFU 0.1--30\,keV science band is
+\emph{not} the relevant band for it and must not be labelled as such --- the
+0.1--30\,keV row is retained only because it is the band the SRON efficiency
+table uses. The physically relevant band here is the MIP peak, and that is also
+where the statistics are: \num{1325} reference events, $\pm2.7\,\%$, with
+$\varepsilon$ within $0.4\,\%$ of ideal. The 0.1--30\,keV row is an
 \emph{integrated rate only} --- 41 reference events, $\pm15.6\,\%$ before MAGI
-contributes any error --- and must not be presented as a spectral comparison.
-More MAGI generation cannot improve it; the reference is the cap.
+contributes any error. More MAGI generation cannot improve it; the reference is
+the cap.
 
 DM1.2 has a \textbf{single} sensitive detector, so there is no across-detector
 spread to quote as a systematic; the $\pm38.2$ is pure Poisson.
@@ -585,8 +590,13 @@ effect. ETA $\sim$17\,h.
   \item CR, SRON, efficiency: $124.1 \pm 15.2$ over 6 detectors ($R = 0.76$).
   \item DM1.2, 3-seed ensemble: $R = 0.970 \pm 0.032$ overall,
         $0.999 \pm 0.037$ in the MIP band, $100\,\%$ crossing coverage.
-  \item DM1.2 efficiency: $174.8 \pm 38.2$ (X-IFU band), $199.9 \pm 7.4$ (MIP),
-        against ideal 200.13.
+  \item DM1.2 efficiency: $199.9 \pm 7.4$ in the MIP band against ideal
+        200.13 ($174.8 \pm 38.2$ over 0.1--30\,keV, reference-limited).
+  \item Correlation matrix, CR crossings: mean $|\Delta\rho| = 0.015$ over the
+        10 feature pairs, max 0.042.
+  \item Geometry marginals reproduced to 5--11\,\% RMS per bin
+        ($u_r$ 5.5\,\%, $u_v$ 6.9\,\%, $\phi_r$ 6.0\,\%, $\phi_v$ 11.1\,\%),
+        against a 0.44\,\% Poisson floor --- a real, characterized defect.
   \item $^{40}$K, BuildingModel: $R = 1.118 \pm 0.373$, KS $p = 0.60$.
   \item Species fractions reproduced to $0.3\,\%$; impact-parameter
         distribution to within $2$--$9\,\%$.
@@ -604,8 +614,10 @@ effect. ETA $\sim$17\,h.
   \item Any aggregate median-E-vs-$b$ number (\S\ref{sec:seed}).
   \item The $^{40}$K 44-days comparison ($0.049$) as a MAGI result --- the
         source geometries differ by 57$\times$ (\S4 above).
-  \item DM1.2 X-IFU band as a \emph{spectral} comparison --- 41 reference
-        events; it is an integrated rate.
+  \item The DM1.2 0.1--30\,keV band as a \emph{spectral} comparison, or as
+        an ``X-IFU band'' --- 41 reference events, and DM127 is an
+        anti-coincidence detector, not a TES absorber.
+  \item Sub-percent agreement on the geometry marginals --- they are 5--11\,\%.
   \item Impact-parameter bins below $b \approx 5$\,mm at present sample sizes.
   \item Absolute rates from any DM1.2 \texttt{focused}-source run.
   \item \textbf{A ${\sim}200\times$ speed-up.} 200.13 is the statistical
