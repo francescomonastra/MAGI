@@ -370,16 +370,18 @@ and its scale factors. The $y$-axes are not comparable between panels.}
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=0.92\textwidth]{../paper_figures/fig2_corner_DM1_2_iso.pdf}
-\caption{\textbf{Figure 2 candidate --- DM1.2 (recommended).} Crossing
+\caption{\textbf{Figure 2 --- DM1.2.} Crossing
 population, real vs MAGI. Lower triangle: 2D contours. Diagonal: marginals.
 Upper triangle: each cell split diagonally, lower-left half the real Pearson
 $\rho$, upper-right half MAGI's, on a common scale with the residual printed ---
 a visually uniform cell is a reproduced correlation.}
 \end{figure}
 
-\paragraph{Choosing Figure 2.} Three sources have a loadable v0.8.2 checkpoint.
-Torio and Radio do not --- their checkpoints on this machine are incomplete
-(weights still on Drive), so they cannot be generated from.
+\paragraph{Why DM1.2 and not the others.} Three sources have a loadable
+v0.8.2 checkpoint (Torio and Radio do not --- their checkpoints on this machine
+are incomplete, weights still on Drive). \textbf{DM1.2 was chosen}, and the
+alternatives are recorded here because the choice is not the one the summary
+statistic alone would make.
 
 \begin{center}
 \begin{tabular}{lrrr}
@@ -393,14 +395,17 @@ DM1.2 iso        & 0.0176 & 0.0836 & \textbf{0.62} \\
 \end{tabular}
 \end{center}
 
-\noindent\textbf{Recommendation: DM1.2}, despite the worst mean residual.
-$^{40}$K wins on the number, but every correlation in its truth is
+\noindent DM1.2 has the \emph{worst} mean residual of the three, and is still
+the right figure. $^{40}$K wins on the number, but every correlation in its truth is
 $|\rho| \le 0.21$ --- there is almost no structure to reproduce, and a referee
 can fairly say that reproducing near-zero correlations is not a test. DM1.2
 carries genuinely strong structure ($u_r$--$u_v = -0.62$,
 $\log E$--$u_v = -0.51$) and MAGI tracks it. The honest cost is its one visible
 miss: $u_r$--$u_v$ reads $-0.62$ real against $-0.54$ MAGI,
-$\Delta = +0.084$, the largest single residual anywhere.
+$\Delta = +0.084$, the largest single residual anywhere. That is worth showing
+rather than hiding --- it is the same direction-conditional geometry error that
+\S\ref{sec:seed} identifies, visible in the one panel where the truth has enough
+structure to expose it.
 
 \section{Cost --- measured on DM1.2}
 \label{sec:cost}
