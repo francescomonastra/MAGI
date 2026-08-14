@@ -154,9 +154,9 @@ print(f"SRON Det1  ref {e_ref_sr.size:,}  MAGI {e_magi_sr.size:,}")
 print(f"ChiCR = {ChiCR:.6e}   1/ChiCR = {1/ChiCR:.2f}")
 
 # ---------------------------------------------------------------- figure
-fig = plt.figure(figsize=(7.1, 3.7))
+fig = plt.figure(figsize=(7.1, 3.5))
 gs = GridSpec(2, 2, height_ratios=[2.6, 1], hspace=0.06, wspace=0.26,
-              left=0.075, right=0.985, top=0.855, bottom=0.13)
+              left=0.075, right=0.985, top=0.925, bottom=0.13)
 
 # --- (a) DM1.2 -------------------------------------------------------------
 ax = fig.add_subplot(gs[0, 0])
@@ -242,10 +242,10 @@ ax2.text(0.972, 0.045,
 for a in (axr, ax2r):
     a.set_yticks([0.0, 0.5, 1.0, 1.5, 2.0])
 
-# one legend for the whole figure
-fig.legend(handles=[h_ref, h_magi], labels=["full Geant4", "MAGI v0.8.2"],
-           loc="upper center", ncol=2, fontsize=8.5,
-           bbox_to_anchor=(0.53, 0.995), handlelength=1.8, columnspacing=2.2)
+# one legend for the whole figure, parked in panel (b)'s empty upper right
+ax2.legend(handles=[h_ref, h_magi], labels=["full Geant4", "MAGI v0.8.2"],
+           loc="upper right", fontsize=7.5, handlelength=1.8,
+           borderaxespad=0.5)
 
 out = "/Volumes/X10Pro/MAGI/paper_figures/fig1_spectra.pdf"
 fig.savefig(out, bbox_inches="tight")

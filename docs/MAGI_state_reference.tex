@@ -9,6 +9,7 @@
 \usepackage{amsmath}
 \usepackage{siunitx}
 \usepackage{xcolor}
+\usepackage{graphicx}
 \usepackage[colorlinks=true,linkcolor=blue!50!black,urlcolor=blue!50!black]{hyperref}
 \usepackage{fancyhdr}
 \usepackage{enumitem}
@@ -343,6 +344,64 @@ so it is not systematically low. Every v0.8.2 $^{40}$K \emph{Flower} flux and
 efficiency rises by 1.0777; the Detector-1 efficiency goes $3472 \to 3741$.
 The detector-level result above is unaffected --- it never uses the constant.
 
+
+\section{Figures for the proceeding}
+\label{sec:figs}
+
+Built by \texttt{paper\_figures/make\_fig1.py} and \texttt{make\_fig2.py}
+\ev{E16}; vector PDF at 7.1\,in width, sized for a two-column page.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{../paper_figures/fig1_spectra.pdf}
+\caption{\textbf{Figure 1 --- spectral comparison.}
+(a) DM1.2, full deposited-energy band, normalized differential rate. The MIP
+band is shaded. (b) SRON XFDM Detector 1 (TES array), flux against the RUN
+CRYOAC reference over 0--20\,keV. Ratio panels carry \emph{exact} Poisson
+confidence intervals (Clopper--Pearson on the conditional binomial), not
+$\sqrt{N}$ propagation --- several bins hold single-digit counts where the true
+interval is strongly asymmetric.
+\textbf{Caption must state} that the two panels sit on different flux
+references: (a) uses \texttt{Sim/OmniFluxes.tsv} with $R_{\rm gen}=118$\,cm,
+(b) uses \texttt{Sim/S1GDMLSRON/OmniFluxes\_Run1.tsv} with the Building radius
+and its scale factors. The $y$-axes are not comparable between panels.}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.92\textwidth]{../paper_figures/fig2_corner_DM1_2_iso.pdf}
+\caption{\textbf{Figure 2 candidate --- DM1.2 (recommended).} Crossing
+population, real vs MAGI. Lower triangle: 2D contours. Diagonal: marginals.
+Upper triangle: each cell split diagonally, lower-left half the real Pearson
+$\rho$, upper-right half MAGI's, on a common scale with the residual printed ---
+a visually uniform cell is a reproduced correlation.}
+\end{figure}
+
+\paragraph{Choosing Figure 2.} Three sources have a loadable v0.8.2 checkpoint.
+Torio and Radio do not --- their checkpoints on this machine are incomplete
+(weights still on Drive), so they cannot be generated from.
+
+\begin{center}
+\begin{tabular}{lrrr}
+\toprule
+Dataset & mean $|\Delta\rho|$ & max $|\Delta\rho|$ & strongest $|\rho|$ in the truth \\
+\midrule
+$^{40}$K (Small) & \textbf{0.0134} & 0.0266 & 0.21 \\
+CR               & 0.0149 & 0.0417 & 0.28 \\
+DM1.2 iso        & 0.0176 & 0.0836 & \textbf{0.62} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent\textbf{Recommendation: DM1.2}, despite the worst mean residual.
+$^{40}$K wins on the number, but every correlation in its truth is
+$|\rho| \le 0.21$ --- there is almost no structure to reproduce, and a referee
+can fairly say that reproducing near-zero correlations is not a test. DM1.2
+carries genuinely strong structure ($u_r$--$u_v = -0.62$,
+$\log E$--$u_v = -0.51$) and MAGI tracks it. The honest cost is its one visible
+miss: $u_r$--$u_v$ reads $-0.62$ real against $-0.54$ MAGI,
+$\Delta = +0.084$, the largest single residual anywhere.
+
 \section{Cost --- measured on DM1.2}
 \label{sec:cost}
 
@@ -651,6 +710,115 @@ effect. ETA $\sim$17\,h.
         continuum and geometry but is $\sim$9$\times$ short for lines.
 \end{enumerate}
 
+
+\section{Summary --- the basis for the paper}
+\label{sec:summary}
+
+\subsection*{The claim}
+
+MAGI is a conditional VAE that learns the phase-space distribution of particles
+crossing a closed surface around a cryogenic detector, so that the expensive
+transport from the outer mass model down to that surface is paid once and the
+learned distribution is resampled thereafter. The paper's contribution is not
+that the marginals are reproduced --- that is table stakes for a generative
+model --- but that the surrogate is validated \textbf{downstream}: its output is
+pushed through the real Geant4 mass model and the resulting \emph{detector}
+spectrum is compared with the full simulation. That closure is rare in the ML
+literature and is the strongest thing here.
+
+\subsection*{What was measured, and on what}
+
+Three independent sources, two mass models, one code path:
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+Setup & Reference & Result \\
+\midrule
+DM1.2 lab cryostat, $\mu$ & $2\times10^{8}$ muons (iso) & $R = 0.970 \pm 0.032$; MIP $0.999 \pm 0.037$ \\
+SRON XFDM, cosmic rays & real recorded crossings & $R = 0.848 \pm 0.125$ \\
+SRON XFDM, cosmic rays & RUN CRYOAC & mean flux ratio 0.79; KS $p = 0.20$ \\
+$^{40}$K, BuildingModel & real recorded crossings & $R = 1.118 \pm 0.373$; KS $p = 0.60$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+DM1.2 is the cleanest: a 3-seed ensemble, $100\,\%$ crossing coverage after the
+overlap fix, and an efficiency factor of $200 \pm 7$ in the MIP band against an
+ideal $1/\chi = 200$. $^{40}$K passes at matched $N$. CR sits $15$--$24\,\%$ low
+and is the one open discrepancy.
+
+\subsection*{Fidelity of the generated population}
+
+Correlation residual mean $|\Delta\rho| = 0.015$ (CR), 0.013 ($^{40}$K), 0.018
+(DM1.2); species fractions to $0.3\,\%$; energy marginals within a few percent
+per decade. \textbf{Geometry marginals are reproduced to 5--11\,\% RMS per bin},
+against a $0.44\,\%$ Poisson floor --- a real, characterized limitation, and the
+number to quote rather than any claim of sub-percent geometric fidelity.
+
+\subsection*{Cost --- state it carefully}
+
+The efficiency factor is \emph{statistical amplification}, not compute saving.
+On DM1.2, measured with both arms on the same machine: amplification
+$194\times$ (ideal 200.13), transport cost ratio $95.8\times$, net throughput
+gain $\mathbf{2.03\times}$. One full run splits $52\,\%$ outer / $48\,\%$ inner;
+MAGI eliminates the outer only, so
+$\text{speed-up} = \chi^{-1}\,c_{\rm primary}/c_{\rm crossing}$.
+
+The argument that carries the paper is \textbf{reuse}: the crossing population is
+fixed by the geometry \emph{outside} the sphere, so a design campaign that
+iterates the inner assembly pays the full simulation once. Break-even is the
+\textbf{second design variant}. For a flight model, where the outer share far
+exceeds DM1.2's $52\,\%$, break-even approaches the first redesign. Separately,
+MAGI amplified an exhausted $^{40}$K sample $287\times$ ---
+$1.87\times10^{6} \to 5.38\times10^{8}$ crossings --- which no amount of compute
+can buy from the original sample.
+
+\subsection*{Limitations to state in the paper}
+
+\begin{enumerate}[nosep]
+  \item \textbf{The CR $15$--$24\,\%$ deficit is not fully explained.}
+        $3.6\,\%$ is attributed to an inconsistent ingoing-particle cut; the
+        remainder is uncharacterized since the energy$\times$geometry diagnosis
+        was withdrawn (\S\ref{sec:seed}).
+  \item \textbf{A direction-conditional species-mix error of $\sim$5\,\%.}
+        Global species fractions are right to $0.3\,\%$, but conditioned on
+        pointing at the detector the mix is off by 5--9\,\%. On DM1.2 this
+        produces a coherent $4\,\%$ deficit in deposited energy, traced to
+        incidence angle (median $\sec\theta$ 0.955 of truth).
+  \item \textbf{No seed systematic is established}, in either direction. The
+        previously reported $\pm40\,\%$ was an artefact of a metric that
+        measures the species mix on a bimodal source; a detector-level
+        three-seed CR test is running (\S\ref{sec:inprogress}).
+  \item \textbf{SRON and DM1.2 are on different ingoing conventions} --- the
+        SRON training sets contain $10.4\,\%$ ($^{40}$K: $22.5\,\%$) outgoing
+        crossings, DM1.2 none.
+  \item \textbf{Cost is measured on one geometry only}, and DM1.2 is the
+        pessimistic case.
+\end{enumerate}
+
+\subsection*{A methodological point worth making}
+
+\texttt{energy\_vs\_impact\_parameter} passed its own self-verification cleanly
+(1.000 on identical inputs, 0.050 on an injected anti-correlation) while being
+the wrong estimator for the population it was applied to. Self-verification
+proves a metric computes what it computes; it cannot reveal that the statistic
+is inappropriate. On a bimodal multi-species source the aggregate median is a
+knife-edge function of the species mix --- a $\pm5\,\%$ mix shift swings it over
+0.70--1.60 with \emph{zero} energy error. This cost a development cycle and is
+worth stating positively: it tells anyone reusing the method which check to run,
+and it is not visible in any diagnostic the field would normally apply.
+
+\subsection*{Release readiness}
+
+Against the seven-layer picture: layers 1, 2 and 5 are strong (5 unusually so);
+layer 3 has one hole (no classifier two-sample test) that is now known to be
+load-bearing, since the defect found here is exactly what such a test detects;
+layer 4 has no memorization test while the paper quotes a $287\times$
+amplification; layer 6 lost its strongest entry with the seed withdrawal;
+layer 7 is measured on DM1.2 only. \textbf{Layer 0 --- LICENSE, tag, DOI --- is
+not started and blocks release.}
+
 \section{Provenance}
 
 \begin{longtable}{p{1.1cm}>{\raggedright\arraybackslash}p{14.5cm}}
@@ -705,6 +873,8 @@ E13& \texttt{MAGI/tools/train\_v083\_cr\_seed.py},
      \texttt{MAGI/docs/v0.8.3\_seed\_variance.md}. \\
 E14& \texttt{S1GDMLSRON\_CryoSphereEmission/cr\_seed\_run/run\_cr\_seeds.sh},
      launched 14/08/2026 07:54. \textbf{In progress.} \\
+E16& \texttt{MAGI/paper\_figures/make\_fig1.py},
+     \texttt{make\_fig2.py}, \texttt{table1\_validation.tex}. \\
 E15& Timings from run-directory timestamps and log headers:
      \texttt{S1GDML\_DM1.2/iso\_run/iso\_run.log} (12/08 12:36:49 $\to$
      13/08 01:19:21, 8 jobs); \texttt{magi\_iso\_run/magi\_iso.log}
