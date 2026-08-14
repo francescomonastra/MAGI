@@ -338,6 +338,114 @@ so it is not systematically low. Every v0.8.2 $^{40}$K \emph{Flower} flux and
 efficiency rises by 1.0777; the Detector-1 efficiency goes $3472 \to 3741$.
 The detector-level result above is unaffected --- it never uses the constant.
 
+\section{Cost --- measured on DM1.2}
+\label{sec:cost}
+
+The cost claim must not be an absolute wall-clock number, which depends on the
+machine. It must be a \emph{ratio} with both sides measured on the same
+hardware, and it must be decomposed --- because the naive figure is wrong by two
+orders of magnitude. DM1.2 is the only case where both sides ran here; the SRON
+equivalent \textbf{cannot} be computed, since that reference ran on a cluster
+\ev{E15}.
+
+\begin{center}
+\begin{tabular}{lrrrl}
+\toprule
+Step & wall & jobs & core-h & output \\
+\midrule
+full simulation, $2\times10^{8}$ muons & 12.71\,h & 8 & \textbf{101.67}
+  & \num{999358} crossings, \num{1733} events \\
+MAGI generation, $1.2\times10^{6}$ & 31\,s & 6 & 0.05 & --- \\
+MAGI training, 3 seeds & 486/620/743\,s & 1 & 0.51 & --- \\
+MAGI injection, $1.2\times10^{6}$ & 9.74\,h & 6 & \textbf{58.46}
+  & \num{2019} events \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{The efficiency factor is not the speed-up.} This is the trap, and it
+belongs in the paper explicitly because a referee will look for it.
+
+\begin{center}
+\begin{tabular}{lr}
+\toprule
+Detector events per thrown muon & \num{8.665e-6} \\
+Detector events per injected crossing & \num{1.683e-3} \\
+\textbf{Statistical amplification} & \textbf{194.2$\times$} (ideal $1/\chi = 200.13$) \\
+\midrule
+core-h per thrown muon & \num{5.084e-7} \\
+core-h per injected crossing & \num{4.872e-5} \\
+\textbf{Transport cost ratio} & \textbf{95.8$\times$} \\
+\midrule
+\textbf{Net throughput gain} & $\mathbf{194.2/95.8 = 2.03\times}$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Cross-checked by equivalent statistics: $1.2\times10^{6}$ crossings carry
+$2.402\times10^{8}$ equivalent muons, so MAGI delivers \num{4.11e6}
+equiv-muons/core-h against the full simulation's \num{1.97e6} ---
+$2.09\times$, consistent. A crossing costs $\sim$96$\times$ more to transport
+than a thrown muon \emph{because it starts on the sphere, inside the assembly,
+in material and adjacent to the detector}, whereas most of the $2\times10^{8}$
+thrown muons miss the apparatus and are killed almost immediately. MAGI removes
+the cheapest transport in the problem.
+
+\paragraph{General form, and why DM1.2 is the pessimistic case.}
+\begin{equation}
+\text{speed-up} \;=\; \frac{1}{\chi} \times
+\frac{c_{\mathrm{primary}}}{c_{\mathrm{crossing}}}
+\end{equation}
+One full run decomposes into outer transport (primary\,$\to$\,sphere,
+\textbf{eliminated} by MAGI) 53.0 core-h, $52\,\%$; and inner transport
+(sphere\,$\to$\,detector, \textbf{still paid}) 48.7 core-h, $48\,\%$. The gain
+is set by how much material sits \emph{outside} the CryoSphere relative to
+inside. DM1.2 is close to the worst case: a small laboratory cryostat with an
+$R=95$\,mm sphere enclosing most of the assembly. For a spacecraft primaries
+traverse metres of structure while the sphere-to-detector distance stays at
+centimetres, so the gain should be far larger --- but \textbf{that has not been
+measured and must not be asserted.}
+
+\paragraph{Reuse across design variants --- where the speed-up lives.}
+The decisive property is that the CryoSphere crossing population is determined
+\emph{entirely by the geometry outside the sphere}. Design iteration changes the
+inside --- detector layout, filters, readout electronics, shielding around the
+absorber --- and leaves the outer structure untouched, so the training set stays
+valid across the whole campaign and the full simulation is paid \textbf{once},
+not once per variant. For $N$ inner-design variants at reference-equivalent
+statistics: full simulation $N \times 101.7$ core-h; MAGI
+$102.2 + N \times 48.7$ core-h.
+
+\begin{center}
+\begin{tabular}{rrrr}
+\toprule
+$N$ variants & full sim & MAGI & speed-up \\
+\midrule
+1  & 102   & 151   & 0.67$\times$ \\
+2  & 203   & 200   & 1.02$\times$ \\
+5  & 508   & 346   & 1.47$\times$ \\
+10 & 1{,}017 & 589 & 1.73$\times$ \\
+20 & 2{,}033 & 1{,}076 & 1.89$\times$ \\
+$\infty$ & & & \textbf{2.09$\times$} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{Break-even at $N \approx 1.93$ --- the second design variant.} This is
+the same arithmetic as ``1.93$\times$ more statistics of the same geometry'',
+but it means something entirely different: nobody wants to re-run an identical
+geometry for twice the statistics, whereas testing a second inner configuration
+is what a design campaign does on day one. For a flight model, where the outer
+share exceeds DM1.2's $52\,\%$, the break-even approaches $N=1$ --- MAGI pays
+for itself on the \emph{first} redesign.
+
+\paragraph{The claim that does not depend on compute at all.}
+MAGI converts a \textbf{statistically exhausted} sample into an unlimited one.
+The $^{40}$K training set holds \num{1873609} real crossings and more cannot be
+had without re-running an enormous campaign; MAGI generated \num{538205667} from
+it, a \textbf{287$\times$ amplification}, validated at the detector at
+$1.118 \pm 0.373$. No amount of compute buys that from the original sample.
+
 \section{Correction: the ``seed systematic'' is withdrawn}
 \label{sec:seed}
 
@@ -482,6 +590,11 @@ effect. ETA $\sim$17\,h.
   \item $^{40}$K, BuildingModel: $R = 1.118 \pm 0.373$, KS $p = 0.60$.
   \item Species fractions reproduced to $0.3\,\%$; impact-parameter
         distribution to within $2$--$9\,\%$.
+  \item Cost, DM1.2: \textbf{194$\times$} statistical amplification per
+        transported particle (ideal 200.13) and \textbf{2.03$\times$} net
+        throughput, both measured on the same machine; 52\,\%/48\,\%
+        outer/inner cost split; break-even at the 2nd design variant.
+  \item $^{40}$K: \textbf{287$\times$} amplification of an exhausted sample.
 \end{itemize}
 \end{callout}
 
@@ -495,6 +608,12 @@ effect. ETA $\sim$17\,h.
         events; it is an integrated rate.
   \item Impact-parameter bins below $b \approx 5$\,mm at present sample sizes.
   \item Absolute rates from any DM1.2 \texttt{focused}-source run.
+  \item \textbf{A ${\sim}200\times$ speed-up.} 200.13 is the statistical
+        amplification, not the compute saving; the measured throughput gain is
+        $2.03\times$ (\S\ref{sec:cost}).
+  \item Any numeric cost extrapolation to Athena/X-IFU --- the outer/inner
+        core-hour split has not been measured on a flight mass model.
+  \item Absolute wall-clock timings as a cross-machine claim.
 \end{itemize}
 \end{callout}
 
@@ -509,9 +628,10 @@ effect. ETA $\sim$17\,h.
         recomputed, then retrain --- makes SRON consistent with DM1.2.
   \item \textbf{Detector-level seed spread} on CR (\S\ref{sec:inprogress}).
   \item \textbf{$e^{-}$ behaviour at small $b$} --- needs generation, not seeds.
-  \item \textbf{Speed-up figure} (MAGI generation vs full Geant4) for the talk.
-        Measured input: on DM1.2, \texttt{iso} throughput is
-        \num{2062} muons/s/core.
+  \item \textbf{Outer/inner core-hour split on a flight mass model.} DM1.2 is
+        measured (\S\ref{sec:cost}); the Athena/X-IFU case --- where the
+        argument is strongest --- is not, and is the one number that would let
+        the cost claim be stated for a real mission.
   \item \texttt{GeneratedParticlesRecycled} did not fire during $\sim$107$\times$
         recycling --- the warning path in \texttt{PrimaryGeneratorAction.cc} is
         unreachable. Silent recycling is exactly what it exists to catch.
@@ -573,6 +693,13 @@ E13& \texttt{MAGI/tools/train\_v083\_cr\_seed.py},
      \texttt{MAGI/docs/v0.8.3\_seed\_variance.md}. \\
 E14& \texttt{S1GDMLSRON\_CryoSphereEmission/cr\_seed\_run/run\_cr\_seeds.sh},
      launched 14/08/2026 07:54. \textbf{In progress.} \\
+E15& Timings from run-directory timestamps and log headers:
+     \texttt{S1GDML\_DM1.2/iso\_run/iso\_run.log} (12/08 12:36:49 $\to$
+     13/08 01:19:21, 8 jobs); \texttt{magi\_iso\_run/magi\_iso.log}
+     (13/08 13:12:42 $\to$ 22:57:20, 6 jobs);
+     \texttt{MAGI/tools/dm12\_iso\_seed\{42,7,13\}.log} (486/620/743\,s).
+     Both Geant4 runs saturated the same 8-core machine (8 vs 6 jobs), so the
+     per-core normalization carries a $\pm10$--$20\,\%$ systematic. \\
 \end{longtable}
 
 \vspace{4mm}
