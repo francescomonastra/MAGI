@@ -1100,13 +1100,43 @@ sensitive to the joint, which is \S\ref{sec:coupling}.
         scatter is real.
 \end{enumerate}
 
-\section{Head coupling, re-tested against the joint metric (in progress)}
+\section{Head coupling, re-tested against the joint metric}
 \label{sec:coupling}
 
 Launched 19 August 2026 09:37 CEST \ev{E19}. \S\ref{sec:classifier} left the
 conversion deficit characterised but not mechanistically explained, and named
 \texttt{energy\_condition\_geometry} as the mechanism it calls for. This section
-records the test. \textbf{It carries no result yet.}
+records the test.
+
+\begin{callout}{warn}{red!4}{Result: null. Coupling does not close the gap}
+Scored 19 August 2026 19:56 CEST. Classifier AUC against \num{400000} real
+crossings:
+\begin{center}
+\begin{tabular}{lrrl}
+\toprule
+Arm & AUC & $c{>}0.8$ density ratio & Hole composition \\
+\midrule
+Reference (Colab)     & 0.6604 & $28.7\times$ & 93\,\% gamma at 511\,keV \\
+Baseline (local)      & 0.6630 & $27.4\times$ & 95\,\% gamma at 511\,keV \\
+\textbf{Coupled (local)} & \textbf{0.6568} & $25.0\times$ & 94\,\% gamma at 511\,keV \\
+\bottomrule
+\end{tabular}
+\end{center}
+$\Delta\mathrm{AUC} = -0.0062$ (0.6630 $\to$ 0.6568), against the $\lvert d\rvert
+\geq 0.03$ threshold set before scoring. \textbf{No meaningful change.} The
+conditional-independence edge between energy and geometry is not what the
+classifier is reading; the next candidates are the geometry heads themselves
+(Gaussian/unit-circle, no flow, unlike the energy head's RQS flow) or the
+latent.
+\end{callout}
+
+The reference-vs-baseline gap (0.6604 vs 0.6630, $\Delta=0.0026$) is the
+device/seed control this design bought: it bounds Colab-GPU/M1-CPU and
+seed-to-seed AUC variation well below the coupling effect, so the null above is
+not noise. The $c{>}0.8$ coverage hole persists at closely the same size and
+composition in all three arms --- $25$--$29\times$, $93$--$95\,\%$ gamma at
+511\,keV --- confirming it is a property of the coverage mechanism this
+architecture family shares, not of any one training run.
 
 \paragraph{Why the v0.8.3 checkpoints could not answer this.}
 The three v0.8.3 runs \ev{E13} moved \texttt{latent\_dim} $8\to12$ alongside the
@@ -1163,7 +1193,8 @@ mechanism, five days before the meeting.
 The arm also runs \emph{regardless} of the AUC verdict. Gating it on a favourable
 AUC would select exactly the cases that cannot test the AUC~$\to R$ link: a null
 AUC with a moved $Q$, or the reverse, is the informative outcome, and only an
-unconditional run can find it.
+unconditional run can find it. \textbf{This is now the operative case}: the AUC
+verdict is null, and only the third arm can say whether $Q$ agrees.
 \end{callout}
 
 An AUC improvement is \textbf{not} licence to quote an improved $R$. AUC is a
@@ -1175,6 +1206,11 @@ under test, not a premise --- which is the whole reason the third arm exists.
 \texttt{zones}~=~2: continuum plus a single pinned line at 511\,keV. There is
 less for the coupling to express here than on a line-rich source, so a null on CR
 bounds the mechanism on \emph{this} source rather than in general.
+
+\paragraph{Status as this section stands.} AUC: done, null. Third arm ($Q$):
+running, chained behind the scorer, launched \ev{E20}; results expected
+overnight 19/20 August, inside the Thursday freeze. Production model
+unaffected either way --- \texttt{v0\_8\_2\_CR\_ingoingfix} stays reported.
 
 \section{Result 4 --- the detector-level seed test}
 \label{sec:inprogress}

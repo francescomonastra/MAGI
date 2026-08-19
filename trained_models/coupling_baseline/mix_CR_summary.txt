@@ -1,0 +1,16 @@
+MAGI trained model summary
+===========================
+
+Model name: mix_CR
+Model class: CVAE_MixEnergy_ContPhi_TaskAdaptive
+Created at unix: 1787141197.497869
+
+Weights: /Volumes/X10Pro/MAGI/trained_models/coupling_baseline/mix_CR.weights.h5
+Config: /Volumes/X10Pro/MAGI/trained_models/coupling_baseline/mix_CR_config.json
+Metadata: /Volumes/X10Pro/MAGI/trained_models/coupling_baseline/mix_CR_metadata.json
+History: /Volumes/X10Pro/MAGI/trained_models/coupling_baseline/mix_CR_history.json
+Task weights: /Volumes/X10Pro/MAGI/trained_models/coupling_baseline/mix_CR_task_weights.json
+Callbacks: saved in metadata
+
+Notes:
+Head-coupling A/B (baseline). Identical data/split/transformers/seed; only energy_condition_geometry differs.

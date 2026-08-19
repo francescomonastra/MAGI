@@ -1804,8 +1804,17 @@ essentially none on species --- the signature of a joint mismatch rather than a
 broken marginal. \code{energy\_condition\_geometry} is the mechanism that
 addresses it directly; see the note in Section~\ref{sec:usage}. Do not read the
 v0.8.3 non-adoption as a settled negative: that test confounded the flag with a
-latent-width change and was scored on marginals. The controlled version is
-running; until it reports, this is an open question, not an established result.
+latent-width change and was scored on marginals.
+
+\textbf{Result, 19/08/2026: null.} $\Delta\mathrm{AUC} = -0.0062$, inside the
+$|d| \geq 0.03$ threshold set before scoring. The conditional-independence edge
+between energy and geometry is not what the classifier reads, and the coverage
+hole persists at closely the same size and composition in the reference,
+baseline and coupled arms alike --- a property of the architecture family, not
+of one training run. A third, detector-level arm
+(\code{docs/MAGI\_state\_reference.tex}, \S\,\textit{Head coupling}) is running
+regardless of the AUC verdict, to test whether AUC and the detector-level $R$
+move together at all.
 
 \subsection{Negative results already established}
 

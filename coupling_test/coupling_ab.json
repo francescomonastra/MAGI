@@ -1,0 +1,20 @@
+[
+  {
+    "tag": "baseline",
+    "coupled": false,
+    "save_dir": "/Volumes/X10Pro/MAGI/trained_models/coupling_baseline",
+    "epochs": 40,
+    "val_loss": -14.357231140136719,
+    "val_kl": 25.51691246032715,
+    "wall_s": 16124
+  },
+  {
+    "tag": "coupled",
+    "coupled": true,
+    "save_dir": "/Volumes/X10Pro/MAGI/trained_models/coupling_coupled",
+    "epochs": 40,
+    "val_loss": -13.51839828491211,
+    "val_kl": 25.334577560424805,
+    "wall_s": 20870
+  }
+]
