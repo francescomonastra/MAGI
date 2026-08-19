@@ -1172,7 +1172,7 @@
       "5": "e+"
     },
     "n_types": 6,
-    "radius": 100.0,
+    "radius": 99.0141,
     "center": [
       0.0,
       0.0,
@@ -1204,7 +1204,8 @@
       "beta_2": 0.999,
       "epsilon": 1e-07,
       "amsgrad": false
-    }
+    },
+    "radius_note": "radius corrected 100.0 -> 99.0141 on 18/08/2026. The CryoSphere did not change between training sets; R=100 was ~0.99 mm outside the recorded crossing surface for BOTH models and biased aimed flux low by ~1.7%. Corrected here so the old-vs-new retest differs only in the training set. Original metadata kept as mix_CR_metadata.json.orig; results already published from this checkpoint (R = 0.848 +/- 0.125) were generated at R=100."
   },
   "evaluation_metadata": {}
 }

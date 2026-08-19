@@ -1,0 +1,16 @@
+MAGI trained model summary
+===========================
+
+Model name: mix_CR
+Model class: CVAE_MixEnergy_ContPhi_TaskAdaptive
+Created at unix: 1786958073.1702466
+
+Weights: /content/drive/MyDrive/MAGI_data/trained_models/v0_8_2_CR_ingoingfix/mix_CR.weights.h5
+Config: /content/drive/MyDrive/MAGI_data/trained_models/v0_8_2_CR_ingoingfix/mix_CR_config.json
+Metadata: /content/drive/MyDrive/MAGI_data/trained_models/v0_8_2_CR_ingoingfix/mix_CR_metadata.json
+History: /content/drive/MyDrive/MAGI_data/trained_models/v0_8_2_CR_ingoingfix/mix_CR_history.json
+Task weights: /content/drive/MyDrive/MAGI_data/trained_models/v0_8_2_CR_ingoingfix/mix_CR_task_weights.json
+Callbacks: saved in metadata
+
+Notes:
+v0.8.2 mixture energy head: conditional RQS-flow continuum (24 bins, 3 transforms) with a CDF pre-warp, plus fixed-position Gaussian lines with widths pinned to the X-IFU 4 eV FWHM resolution. Energy head and gate conditioned on the latent z (energy_flow_condition='z_cond') with a learnable conditional coupling prior p(z|cond) additionally conditioned on the routing zone (prior_zone_conditioning=True), so energy<->geometry coupling survives generation AND rare-line routing is correctly placed in latent space. Gate supervised with a focal-weighted auxiliary CE (w_gate_aux=2.0, gamma=1.0) against the continuum majority, with resolution-bandwidth gate targets (bandwidth_mode='exact' was tried and rejected, see docs/v0.8.1_line_truth.md section 14.2). Geometry unchanged from v0.7.2 (quantile u_r/u_v/phi_r/phi_v).

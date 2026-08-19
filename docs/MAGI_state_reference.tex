@@ -51,7 +51,7 @@
 \title{\textbf{MAGI: state of validation}\\[2mm]
 \large An internal reference for paper writing}
 \author{F.\ Monastra (INAF)}
-\date{Compiled 14 August 2026}
+\date{Compiled 19 August 2026}
 
 \begin{document}
 \maketitle
@@ -306,6 +306,45 @@ the training set's $10.37\,\%$ --- accounting for $3.6\,\%$ of the rate deficit.
 This also means \textbf{SRON and DM1.2 models are on different conventions.}
 
 \section{Result 3 --- $^{40}$K, SRON BuildingModel}
+\label{sec:k40}
+
+\begin{callout}{warn}{red!4}{Correction 17/08/2026: the training population is
+albedo, not the crossing population}
+The $^{40}$K training set was recorded by
+\texttt{Old-Simulations/Sim/S1GDMLSRON\_CryoSphereEmission},
+whose \texttt{EventAction.cc:237} carries
+\texttt{SphereCenter(0., 0., -3007.6*mm)} --- the 2500\,mm error of
+\S\ref{sec:cr}. \textbf{$100.00\,\%$} of its crossings are ingoing with respect
+to that wrong centre (and $97.28\,\%$ move downward), against $77.45\,\%$
+ingoing w.r.t.\ the true $-507.66$. $^{40}$K gammas travel \emph{up} from the
+floor, so a cut toward a centre 2500\,mm \emph{below} kept only photons that
+passed the sphere, scattered off the structure above and came back.
+
+The spectrum confirms it independently: the median is \textbf{211.2\,keV}
+against the Compton $180^\circ$ backscatter energy of the 1460.8\,keV line,
+\textbf{217.5\,keV}; $30.4\,\%$ of crossings lie within $\pm15\,\%$ of it, the
+histogram peaks at 160--180\,keV, and the 1461\,keV line appears \emph{once in
+1.87\,M} --- an unscattered line photon cannot be moving downward at the sphere.
+
+Geometry was excluded by measurement, not assumed: an A/B gave 365.6\,keV
+(original slab), 374.7\,keV (reduced slab) and 366.8\,keV (shielded
+BuildingModel), all $\sim$370\,keV and insensitive to the slab at the $3\,\%$
+level. Re-crossings ($0.86\,\%$ of events; first-crossing-only median unchanged
+at 211.2\,keV) and species composition ($99.3\,\%$ gamma both sides) were
+excluded too.
+
+\textbf{Ra-226 and Th-232 are affected identically} and cannot substitute:
+both are $100.00\,\%$ ingoing w.r.t.\ the buggy centre, both have medians at
+$0.83$--$0.86$ of their backscatter energies, Ra-226 has \emph{zero} events at
+its 1764.5\,keV line, and Th-232's maximum recorded energy (2505\,keV) falls
+\emph{below} its 2614.5\,keV line altogether.
+
+\textbf{What survives.} The numbers below are unchanged and remain a valid
+\emph{closure} result --- MAGI reproduces the distribution it was trained on,
+and that survives transport to detector level. They are \textbf{not} evidence
+about $^{40}$K background physics, because both arms of the comparison draw on
+the same biased population. Restated as a physics claim they would be wrong.
+\end{callout}
 
 \paragraph{$R = \mathbf{1.118 \pm 0.373}$, KS $D = 0.2384$, $p = 0.60$}
 \ev{E9}: $2\times10^{8}$ injected on both sides into
@@ -320,15 +359,22 @@ continuity was verified from the crossing counts ($\sim$40.15\,M re-registered
 per job, 0.80 per injected event, uniform across four jobs) rather than assumed
 \ev{E9}.
 
-\paragraph{The 22$\times$ gap is Geant4 bookkeeping, not MAGI.}
-Against the 44-days reference the same run reads $0.049 \pm 0.012$. The
-reference and the MAGI training set \emph{do not share a $^{40}$K source}: the
-reference samples a $2000\times2000\times400$\,mm volume centred at
-$z=-1600$\,mm, the training set $750\times750\times50$\,mm at $z=-1250$\,mm ---
-a \textbf{57$\times$} smaller sampling volume \ev{E10}. The crossing yield
-depends on source geometry and not on a scalar, so the two cannot be chained,
-and the existing training set cannot be renormalized into the reference.
-MAGI sits with the population it was trained on.
+\paragraph{The 22$\times$ gap --- superseded explanation.}
+Against the 44-days reference the same run reads $0.049 \pm 0.012$. This was
+previously attributed \ev{E10} to the two runs not sharing a $^{40}$K source
+volume (a $57\times$ ratio between a $2000\times2000\times400$\,mm box at
+$z=-1600$\,mm and $750\times750\times50$\,mm at $z=-1250$\,mm).
+
+\textbf{That attribution is now known to be incomplete, and its direction was
+wrong.} The user confirms the slab was the \emph{reduced} one and the model
+unshielded; the old campaign's own macro samples the large box confined to the
+reduced slab, so both runs sample the same physical volume and the $57\times$
+never applied as stated. The dominant effect is the albedo selection above: the
+training set retains only the back-scattered fraction, which both suppresses the
+yield and softens the spectrum. The two still cannot be chained, and the
+conclusion --- MAGI sits with the population it was trained on --- stands, but
+for a different and larger reason. \textbf{$^{40}$K returns in September}
+(\S\ref{sec:open}); this section is not to be used as a physics result before then.
 
 \paragraph{Bookkeeping correction.}
 \texttt{NgenPotassiumForMAGI\_v082} was declared \num{580000000}; measured from
@@ -388,11 +434,15 @@ statistic alone would make.
 \toprule
 Dataset & mean $|\Delta\rho|$ & max $|\Delta\rho|$ & strongest $|\rho|$ in the truth \\
 \midrule
-$^{40}$K (Small) & \textbf{0.0134} & 0.0266 & 0.21 \\
+$^{40}$K (Small)$^{\dagger}$ & \textbf{0.0134} & 0.0266 & 0.21 \\
 CR               & 0.0149 & 0.0417 & 0.28 \\
 DM1.2 iso        & 0.0176 & 0.0836 & \textbf{0.62} \\
 \bottomrule
 \end{tabular}
+
+{\footnotesize $^{\dagger}$ Measured on the albedo population of
+\S\ref{sec:k40}; a valid fit-quality metric on that set, not a statement about
+$^{40}$K physics. The same caveat applies to Torio and Radio.}
 \end{center}
 
 \noindent DM1.2 has the \emph{worst} mean residual of the three, and is still
@@ -407,15 +457,340 @@ rather than hiding --- it is the same direction-conditional geometry error that
 \S\ref{sec:seed} identifies, visible in the one panel where the truth has enough
 structure to expose it.
 
-\section{Cost --- measured on DM1.2}
+
+\section{Result 5 --- the CR retest and the memorisation test}
+\label{sec:retest}
+
+\subsection{The ingoing-cut prediction, scored out of sample}
+
+The corrected CR training set (\num{3737351} crossings, $\chi=\num{6.921e-3}$,
+$0.00\,\%$ outgoing) was used to retrain v0.8.2 on Colab. Before either model was
+injected, a prediction was recorded from the training sets alone: aimed yield per
+primary at $b<20$\,mm $\times 1.268$ overall and $\times 1.092$ for muons.
+
+Both checkpoints were then generated and injected in the same session, same
+geometry (\texttt{Flower\_fixed}), matched $N$, both emitted on the corrected
+sphere. \textbf{Only the training set differs.}
+
+\begin{center}
+\begin{tabular}{lrrrr}
+\toprule
+Band & per crossing & \textbf{per primary} & predicted & $\sigma$ \\
+\midrule
+all deposits       & 1.097 & $\mathbf{1.248 \pm 0.047}$ & 1.268 & \textbf{0.4} \\
+0.1--30\,keV       & 1.053 & $1.198 \pm 0.121$ & 1.268 & 0.6 \\
+1--20\,keV         & 1.026 & $1.167 \pm 0.130$ & 1.268 & 0.8 \\
+1--7\,keV (MIP)    & 0.876 & $0.996 \pm 0.149$ & 1.092 & 0.6 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{callout}{warn}{red!4}{A units trap, recorded because it nearly inverted
+the conclusion}
+The first reading of this table used the \emph{per injected crossing} column and
+declared the prediction falsified at $4.2\sigma$. That column divides $\chi$ out
+--- and $\chi$ is exactly what the ingoing fix changed
+($\num{6.084e-3}\to\num{6.921e-3}$). The prediction was stated per \emph{primary},
+so the correct comparison multiplies by $\chi$. It agrees to $0.4\sigma$.
+Both columns are meaningful and neither is wrong: per crossing measures how
+efficiently a MAGI crossing converts into a detector event, per primary is the
+flux. Quote the one the claim is about.
+\end{callout}
+
+\paragraph{Against the full simulation.} Detector~1, flux units, normalisation
+identical to Fig.~1(b) (Fig.~\ref{fig:crfull}):
+
+\begin{center}
+\begin{tabular}{lrr}
+\toprule
+Checkpoint & MAGI/full, 0--20\,keV & from unity \\
+\midrule
+censored training set      & $0.802 \pm 0.078$ & $2.6\sigma$ \\
+ingoing-fixed training set & $\mathbf{0.941 \pm 0.088}$ & $0.7\sigma$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The deficit moves from $2.6\sigma$ below unity to consistent with it. The
+\emph{improvement} itself is $+0.139 \pm 0.117$, only $1.2\sigma$: suggestive,
+not decisive, on 107 and 114 Detector-1 events. \textbf{Do not claim the CR
+discrepancy is resolved on this run alone.} What is established is that the
+prediction made from the crossings held at detector level, out of sample.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.72\textwidth]{../paper_figures/fig_cr_vs_full.pdf}
+\caption{CR at detector level, SRON XFDM Detector~1. Full Geant4 (RUN CRYOAC)
+against MAGI trained on the censored and on the ingoing-fixed set, in flux units
+with the Fig.~1(b) normalisation. Each MAGI crossing stands for $1/\chi$
+primaries, and $\chi$ differs between the two checkpoints --- which is the effect
+under test.}
+\label{fig:crfull}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.72\textwidth]{../paper_figures/fig_cr_retest.pdf}
+\caption{The same two checkpoints against each other, per injected crossing,
+over the full deposit range. This is the $\chi$-free view: it isolates how
+efficiently a crossing converts into a detector event, and is flat near unity
+apart from the MIP band.}
+\label{fig:crretest}
+\end{figure}
+
+
+\subsection{Arm A --- the corrected checkpoint against real crossings}
+\label{sec:armAB}
+
+The retest above was model against model. This is model against \emph{truth}:
+\num{3583201} real recorded crossings and \num{3590382} MAGI crossings, injected
+back to back into the same geometry, same binary, same physics, both as text
+through the same parser, both on the corrected sphere.
+
+\begin{center}
+\begin{tabular}{lrrr}
+\toprule
+Band & real rate & MAGI rate & $R$ \\
+\midrule
+all deposits        & \num{4.382e-4} & \num{4.033e-4} & $\mathbf{0.920 \pm 0.034}$ \\
+0.1--30\,keV (X-IFU)& \num{5.665e-5} & \num{4.791e-5} & $0.846 \pm 0.088$ \\
+1--20\,keV          & \num{4.940e-5} & \num{3.788e-5} & $0.767 \pm 0.087$ \\
+1--7\,keV (MIP)     & \num{2.623e-5} & \num{2.117e-5} & $0.807 \pm 0.124$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The old checkpoint scored $0.848 \pm 0.125$ in the X-IFU band. The corrected one
+scores $0.846 \pm 0.088$ --- \textbf{the same number}, on \num{3.6e6} crossings
+per arm instead of the 51 counts behind the older value.
+
+\paragraph{The three runs are mutually consistent.} From the retest,
+new/old per crossing is $1.053$ in this band; with new/real $=0.846$ that implies
+old/real $=0.803$, against the published $0.848 \pm 0.125$. Independent routes,
+one answer.
+
+\begin{callout}{warn}{red!4}{Two different quantities, both now measured}
+\textbf{Per primary (flux):} $0.941 \pm 0.088$ of the full simulation. The
+ingoing fix repaired $\chi$, so the \emph{normalisation} is right.
+
+\textbf{Per crossing (conversion):} $0.85$--$0.92$. A MAGI crossing still yields
+$8$--$15\,\%$ fewer detector events than a real one.
+
+These do not conflict. The flux problem is solved; a \textbf{conversion deficit}
+survives, and it lives in the model, not in the censored training set.
+\end{callout}
+
+\paragraph{What the deficit is not.} Three candidates were excluded by direct
+measurement on \num{1.2e6} real and \num{1.2e6} generated crossings:
+
+\begin{center}
+\begin{tabular}{lrr}
+\toprule
+Quantity & MAGI/real & verdict \\
+\midrule
+aimed crossings, $b<20$\,mm     & $1.021 \pm 0.006$ & not the cause \\
+aimed crossings, $b<10$\,mm     & $1.012 \pm 0.013$ & not the cause \\
+$\cos$(angle to detector), 99.9\,\% tail & $0.99930$ vs $0.99933$ & not the cause \\
+species fraction, $\mu^{-}$     & $1.000$ & not the cause \\
+species shares among aimed      & within $1\,\%$ & not the cause \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+MAGI points \emph{as many} crossings at the detector, with the same species mix.
+The angular tail that matters is reproduced to the fourth decimal.
+
+\paragraph{What remains.} Two residuals, neither yet shown to be the cause:
+
+\begin{center}
+\begin{tabular}{lrrr}
+\toprule
+Among aimed crossings ($b<20$) & real & MAGI & ratio \\
+\midrule
+median $E$, $\gamma$   & 423.0\,keV & 445.1\,keV & 1.052 \\
+median $E$, $\mu^{-}$  & 819.4\,MeV & 784.4\,MeV & 0.957 \\
+median $E$, $e^{-}$    & 2.418\,MeV & 2.928\,MeV & \textbf{1.211} \\
+$\mu^{-}$ share of aimed & 0.4105 & 0.3973 & 0.968 \\
+broad forward population, $b<100$\,mm & 0.8155 & 0.7619 & \textbf{0.934} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The $b<100$\,mm figure is suggestive --- $0.934$ against an all-deposits $R$ of
+$0.920$ --- but a $6.6\,\%$ shortfall in the wide forward cone alongside a
+\emph{surplus} in the core is a reshaping of the angular distribution, not a
+simple loss, and it is not established that it drives the detector rate.
+
+\textbf{The mechanism is not localised.} It is not normalisation, not aiming, not
+species. It is a few-percent, species-dependent distortion of the joint
+distribution whose effect on a small detector is an order of magnitude larger
+than the distortion itself --- which is exactly the regime a marginal-based check
+cannot see, and why the downstream test exists.
+
+
+\subsection{Localising the deficit: a classifier two-sample test}
+\label{sec:classifier}
+
+\paragraph{Real and generated crossings are separable.} A gradient-boosted
+classifier trained to tell real from MAGI crossings, on the seven continuous
+features plus species, reaches \textbf{AUC $= 0.68$} (0.5 would be
+indistinguishable). This is a sharper instrument than anything used before: it
+sees the joint, it is cheap, and on \num{4e5} samples per class its statistical
+error is negligible next to the $\pm0.09$ on $R$.
+
+\paragraph{The mismatch is diffuse, not a broken head.} Permutation importance is
+flat across all six continuous variables and essentially zero on species:
+
+\begin{center}
+\begin{tabular}{lrlr}
+\toprule
+feature & $\Delta$AUC & feature & $\Delta$AUC \\
+\midrule
+$\sin\phi_v$ & $+0.0724$ & $\log_{10}E$ & $+0.0556$ \\
+$\sin\phi_r$ & $+0.0702$ & $u_r$        & $+0.0508$ \\
+$u_v$        & $+0.0633$ & is\_gamma    & $+0.0049$ \\
+$\cos\phi_v$ & $+0.0624$ & is\_$\mu^-$  & $+0.0008$ \\
+$\cos\phi_r$ & $+0.0622$ & is\_$e^-$    & $+0.0003$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+A wrong marginal would put one variable far above the rest. Instead the
+classifier separates only by reading the \emph{combination}. Per-species AUCs
+agree ($\gamma$ 0.651, $\mu^-$ 0.614, $e^-$ 0.630), so it is not one population.
+This is consistent with everything else measured: marginals reproduced to
+5--11\,\% RMS, correlation residual $0.0147$ against KDSource's $0.0025$, and
+DM1.2 over-dispersed at $1.536$ in nearest-neighbour distance
+(\S\ref{sec:memorisation}).
+
+\paragraph{Reweighting cannot repair it --- and that is the result.} The planned
+test was to reweight MAGI to the real joint by likelihood ratio and re-inject. It
+was run twice and \emph{refused to inject both times}, because the reweighted
+sample stayed separable:
+
+\begin{center}
+\begin{tabular}{lrr}
+\toprule
+ & AUC before & AUC after \\
+\midrule
+single-shot, uncalibrated, 2:1 pool & 0.672 & 0.608 \\
+isotonic-calibrated, 4 iterations, 6:1 pool & 0.682 & 0.577 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The second attempt reached in-loop AUC $0.537$ but validated at $0.577$, with
+maximum weight climbing $11 \to 52$ and effective sample size falling to
+$5.4$\,M of 12\,M. That is weight degeneracy: \textbf{you cannot upweight samples
+the generator never produced}. The obstruction is coverage, not density shape.
+
+\paragraph{Where MAGI does not go.} With $c(x) = P(\text{real}\,|\,x)$:
+
+\begin{center}
+\begin{tabular}{lrrr}
+\toprule
+ & \% of real & \% of MAGI & density ratio \\
+\midrule
+$c>0.70$ & $7.62\,\%$ & $1.43\,\%$ & $5.3\times$ \\
+$c>0.80$ & $2.73\,\%$ & $0.28\,\%$ & $9.9\times$ \\
+$c>0.90$ & $0.62\,\%$ & $0.024\,\%$ & $25.8\times$ \\
+$c>0.95$ & $0.10\,\%$ & $0.001\,\%$ & $\mathbf{104\times}$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The under-covered events ($c>0.8$) are $87.4\,\%$ gamma against $56.9\,\%$
+overall, with median energy \textbf{511.0\,keV} against 2831\,keV, median
+$u_r = +0.108$ against $+0.326$ and median $v_z = -0.004$ against $-0.427$:
+\textbf{annihilation photons entering horizontally near the sphere's equator}.
+The model carries exactly one pinned line, at $10^{-0.2916} = 511$\,keV. It has
+the line and it has the angular distribution; what it lacks is their joint. The
+energy head and the geometry heads are coupled only through an 8-dimensional
+latent, and this combination falls through it.
+
+\begin{callout}{warn}{red!4}{This hole does not explain the detector deficit}
+The under-covered events are \emph{depleted} among aimed crossings --- enrichment
+$0.87\times$, carrying $2.38\,\%$ of the aimed population against $2.73\,\%$ of
+the whole. The most prominent mismatch is not where the detector looks. The
+conversion deficit is therefore characterised (diffuse, joint, coverage-flavoured,
+resistant to reweighting) but \textbf{not mechanistically explained}. Do not
+present the 511\,keV hole as its cause.
+\end{callout}
+
+\paragraph{What this unlocks.} Every architecture change until now has been judged
+on marginals, or on a downstream $R$ carrying $\pm0.09$. The classifier AUC is
+sensitive to the joint, costs minutes, and resolves differences far below what
+$R$ can. \texttt{energy\_condition\_geometry} --- conditioning the energy head on
+sampled geometry, the exact mechanism this defect calls for --- already exists as
+the v0.8.3 feature that was implemented, tested and not adopted
+(\S\ref{sec:v083}). It had never been evaluated against this metric. That test
+was brought forward from September and launched 19/08; see \S\ref{sec:coupling}.
+
+\subsection{Memorisation --- does MAGI generate, or recall?}
+\label{sec:memorisation}
+
+The KDSource benchmark showed a $287\times$ amplification does not by itself
+distinguish MAGI from a kernel resampler. This test does. For each generated
+sample, the nearest-neighbour distance to a reference set of real crossings, in
+the model's own feature space with the azimuths carried as $(\cos,\sin)$ pairs so
+the metric respects periodicity. Memorisation puts generated samples closer to
+training points than real data lies from itself.
+
+\begin{center}
+\begin{tabular}{lrrrr}
+\toprule
+Arm & \multicolumn{2}{c}{DM1.2} & \multicolumn{2}{c}{CR (ingoing-fixed)} \\
+    & ratio & near-dup & ratio & near-dup \\
+\midrule
+real $\to$ real (LOO)      & 1.000 & $1.00\,\%$ & 1.000 & $1.00\,\%$ \\
+held-out real \emph{(control)} & 0.999 & $1.07\,\%$ & 1.001 & $0.90\,\%$ \\
+\textbf{MAGI}              & \textbf{1.536} & $\mathbf{0.34\,\%}$ & \textbf{1.027} & $\mathbf{0.89\,\%}$ \\
+KDE, Silverman             & 4.123 & $0.00\,\%$ & 2.028 & $0.00\,\%$ \\
+KDE, adaptive kNN          & 5.304 & $0.00\,\%$ & 3.999 & $0.00\,\%$ \\
+memoriser, jitter 0 \emph{(control)} & 0.000 & $100\,\%$ & 0.000 & $100\,\%$ \\
+memoriser, jitter 0.02     & 0.399 & $9.0\,\%$ & 0.207 & $99.9\,\%$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{MAGI does not memorise.} Both ratios exceed 1, and both near-duplicate
+fractions are \emph{below} real data's own --- MAGI reproduces training points
+less often than real crossings coincide with each other. Recall drives the ratio
+down, and no point on the memoriser curve approaches these values.
+
+The metric is calibrated in both directions before being trusted: held-out real
+data reads as real ($0.999$/$1.001$, KS $p=0.81$/$0.96$) and literal copies read
+as pure recall ($0.000$, $100\,\%$). That two-sided validation is what makes the
+MAGI numbers interpretable.
+
+CR at $1.027$ is materially better than DM1.2 at $1.536$: the CR model sits
+essentially where real data sits, while DM1.2 is over-dispersed by $\sim$$54\,\%$
+in nearest-neighbour distance --- the opposite failure from memorisation, and
+consistent with its 5--11\,\% marginal defects. KDSource is $2$--$5\times$ further
+off the manifold in both bandwidth modes, which is the trade behind its
+correlation win and its $15.45\,\%$ physically-impossible samples.
+
+\begin{callout}{warn}{red!4}{Controls that failed first, and were fixed}
+The KDE arm was originally introduced as ``a memoriser by construction''. It is
+not: at Silverman bandwidth in 7-D the kernel is $\sim$$4\times$ the
+nearest-neighbour spacing, so it over-smooths. A second control at jitter $0.02$
+was then judged against a hand-picked $50\,\%$ near-duplicate threshold, which
+its own displacement ($0.053$) could not reach past $\varepsilon=0.033$. Both were
+replaced by a calibration curve. Neither error survived into a result, because
+the script refused to conclude while its negative control was unvalidated.
+\end{callout}
+
+
+\section{Cost --- measured on DM1.2 and on SRON}
 \label{sec:cost}
 
 The cost claim must not be an absolute wall-clock number, which depends on the
 machine. It must be a \emph{ratio} with both sides measured on the same
 hardware, and it must be decomposed --- because the naive figure is wrong by two
-orders of magnitude. DM1.2 is the only case where both sides ran here; the SRON
-equivalent \textbf{cannot} be computed, since that reference ran on a cluster
-\ev{E15}.
+orders of magnitude. DM1.2 was long the only case where both sides ran here,
+since the SRON reference ran on a cluster \ev{E15}. As of 15 August 2026 SRON
+has been measured directly, by re-running \emph{both} arms locally back to back
+(\S\ref{sec:cost-sron}) \ev{E18}.
 
 \begin{center}
 \begin{tabular}{lrrrl}
@@ -465,6 +840,16 @@ the cheapest transport in the problem.
 \text{speed-up} \;=\; \frac{1}{\chi} \times
 \frac{c_{\mathrm{primary}}}{c_{\mathrm{crossing}}}
 \end{equation}
+\textbf{$c_{\mathrm{primary}}$ here is the cost per primary of the
+\emph{whole} run, outer and inner together} --- $2\times10^{8} \times
+\num{5.084e-7} = 101.7$ core-h, the full simulation. With that reading
+$\chi^{-1}c_{\mathrm{primary}}/c_{\mathrm{crossing}}$ is
+$C_{\mathrm{total}}/C_{\mathrm{inner}}$, and the equation returns the throughput
+gain directly. Substituting an \emph{outer-only} cost per primary instead
+returns $C_{\mathrm{outer}}/C_{\mathrm{inner}}$, which is smaller by exactly
+one; see \S\ref{sec:cost-sron}, where that is the difference between
+$2.33\times$ and $3.33\times$.
+
 One full run decomposes into outer transport (primary\,$\to$\,sphere,
 \textbf{eliminated} by MAGI) 53.0 core-h, $52\,\%$; and inner transport
 (sphere\,$\to$\,detector, \textbf{still paid}) 48.7 core-h, $48\,\%$. The gain
@@ -472,8 +857,14 @@ is set by how much material sits \emph{outside} the CryoSphere relative to
 inside. DM1.2 is close to the worst case: a small laboratory cryostat with an
 $R=95$\,mm sphere enclosing most of the assembly. For a spacecraft primaries
 traverse metres of structure while the sphere-to-detector distance stays at
-centimetres, so the gain should be far larger --- but \textbf{that has not been
-measured and must not be asserted.}
+centimetres, so the gain should be far larger --- now measured on SRON, where
+the outer share rises from $52\,\%$ to $70\,\%$ (\S\ref{sec:cost-sron}).
+
+\paragraph{Methodological cross-check.} The inner cost per crossing is measured
+twice, independently: \num{4.8731e-5} core-h from the full-simulation arm
+(48.7 core-h / \num{999358} crossings) and \num{4.8717e-5} from the MAGI
+injection arm (58.46 / $1.2\times10^{6}$). They agree to $0.03\,\%$. The
+two-arm decomposition is therefore not an assumption; it is verified.
 
 \paragraph{Reuse across design variants --- where the speed-up lives.}
 The decisive property is that the CryoSphere crossing population is determined
@@ -508,12 +899,89 @@ is what a design campaign does on day one. For a flight model, where the outer
 share exceeds DM1.2's $52\,\%$, the break-even approaches $N=1$ --- MAGI pays
 for itself on the \emph{first} redesign.
 
+\subsection{SRON --- the flight-like model, measured}
+\label{sec:cost-sron}
+
+Both arms re-run locally, back to back, on an idle machine at identical
+parallelism (6 jobs), in the geometry the arm-A reference used
+\ev{E18}. Measuring them together is the point: the previously stored
+$c_{\mathrm{crossing}}$ came from a run whose machine load cannot be
+reconstructed, and a ratio of two numbers taken under different conditions is
+not a measurement.
+
+\begin{center}
+\begin{tabular}{lrrl}
+\toprule
+Arm & wall $\times$ 6 jobs & core-h & output \\
+\midrule
+1 --- outer, \num{21600000} primaries & 32.8\,min & 3.277
+  & \num{125352} crossings \\
+2 --- inner, \num{639996} crossings   & 71.9\,min & 7.192 & --- \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+$c_{\mathrm{primary}} = \num{1.5170e-7}$ core-h (\textbf{outer only}),
+$c_{\mathrm{crossing}} = \num{1.1237e-5}$ core-h. Locally measured
+$\chi = \num{5.8033e-3}$, i.e.\ $1/\chi = 172.3$, against the stored
+\num{6.084e-3} ($1/\chi = 164.4$): the stored value is confirmed to
+$4.6\,\%$, which is a genuine run-to-run difference, not Poisson
+($\pm0.3\,\%$ on \num{125352} crossings).
+
+\begin{callout}{warn}{red!4}{Correction to the run's own output}
+\texttt{run\_speedup.sh} prints ``SPEED-UP = 2.33x''. That is
+$C_{\mathrm{outer}}/C_{\mathrm{inner}}$, not the speed-up: ARM 1 measures the
+\emph{outer} cost per primary, whereas the DM1.2 formula takes the
+\emph{full-run} cost per primary. The two differ by exactly one.
+
+\[
+  \text{speed-up} \;=\; 1 + \frac{1}{\chi}\,
+  \frac{c_{\mathrm{primary,\,outer}}}{c_{\mathrm{crossing}}}
+  \;=\; 1 + 2.326 \;=\; \mathbf{3.33\times}
+\]
+
+The script's own printed split confirms it independently: outer $70\,\%$,
+inner $30\,\%$, and $1/0.30 = 3.33$. With the stored $\chi$, $3.22\times$.
+\textbf{Quote 3.33$\times$ (or 3.22$\times$), never 2.33$\times$.}
+\end{callout}
+
+\begin{center}
+\begin{tabular}{lrr}
+\toprule
+ & DM1.2 (lab) & SRON (flight-like) \\
+\midrule
+outer share of one full run & $52\,\%$ & $\mathbf{70\,\%}$ \\
+speed-up, asymptotic        & $2.09\times$ & $\mathbf{3.33\times}$ \\
+break-even, $N$ variants    & 1.93 & \textbf{1.43} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+This is the prediction of \S\ref{sec:cost} above, and it is now measured rather
+than asserted: more material outside the sphere, larger gain. SRON break-even
+ignores the training cost, which was not timed in this run; DM1.2's 1.93
+includes it (0.51 core-h, $0.5\,\%$ of one full run), so the SRON figure will
+move by a comparable and small amount.
+
+\textbf{Both numbers are lower bounds.} The Building\,$\to$\,Dome transport
+upstream is also eliminated by MAGI and is not counted in either arm. It
+cancels in the spectral comparison --- reference and training set descend from
+the same chain --- but it does \emph{not} cancel here.
+
 \paragraph{The claim that does not depend on compute at all.}
 MAGI converts a \textbf{statistically exhausted} sample into an unlimited one.
 The $^{40}$K training set holds \num{1873609} real crossings and more cannot be
 had without re-running an enormous campaign; MAGI generated \num{538205667} from
-it, a \textbf{287$\times$ amplification}, validated at the detector at
-$1.118 \pm 0.373$. No amount of compute buys that from the original sample.
+it, a \textbf{287$\times$ amplification}, and the generated population closes at
+the detector at $1.118 \pm 0.373$. No amount of compute buys that from the
+original sample.
+
+The arithmetic is independent of \emph{which} population was amplified, so the
+$287\times$ stands as stated. But that population is the albedo set of
+\S\ref{sec:k40}, so the sentence to use is ``MAGI amplifies an exhausted sample
+and the amplified population closes at detector level'' --- a statement about
+the method --- and \emph{not} ``MAGI reproduces the $^{40}$K background''.
+Until the September regeneration, DM1.2 and CR carry every physics claim.
 
 \section{Correction: the ``seed systematic'' is withdrawn}
 \label{sec:seed}
@@ -613,6 +1081,13 @@ fault, which explains why it did not help. The flag remains in
 \texttt{core/model.py} defaulting to \texttt{False}, so v0.8.2 is bit-identical
 and the experiment is resumable.
 
+\textbf{Superseded in part, 19/08.} That reading stands on the marginals, but the
+runs behind it changed \texttt{latent\_dim} as well as the flag and used the
+contaminated training set, so they never isolated the coupling.
+\S\ref{sec:classifier} then found a joint mismatch the marginals cannot see. Both
+facts point the same way: the flag deserves one controlled test against a metric
+sensitive to the joint, which is \S\ref{sec:coupling}.
+
 \paragraph{Revised priority for the next version.}
 \begin{enumerate}[nosep]
   \item Make \texttt{energy\_vs\_impact\_parameter} species-resolved by default
@@ -625,24 +1100,182 @@ and the experiment is resumable.
         scatter is real.
 \end{enumerate}
 
-\section{Work in progress --- no result yet}
+\section{Head coupling, re-tested against the joint metric (in progress)}
+\label{sec:coupling}
+
+Launched 19 August 2026 09:37 CEST \ev{E19}. \S\ref{sec:classifier} left the
+conversion deficit characterised but not mechanistically explained, and named
+\texttt{energy\_condition\_geometry} as the mechanism it calls for. This section
+records the test. \textbf{It carries no result yet.}
+
+\paragraph{Why the v0.8.3 checkpoints could not answer this.}
+The three v0.8.3 runs \ev{E13} moved \texttt{latent\_dim} $8\to12$ alongside the
+flag, and were trained on the \emph{pre-ingoing-fix} CR set --- their configs
+record \texttt{n\_types}~=~6 against the corrected set's~4. They are therefore
+neither a controlled test of the coupling nor trained on the data the current
+result rests on, whichever metric they are scored by. The A/B below is the first
+controlled test the flag has had.
+
+\paragraph{Design.} \texttt{run\_coupling\_ab.py} builds the dataset \emph{once}
+--- features, gate targets, quantile transformers, split, conditioning, tf.data
+pipelines --- and trains two models on that identical object: 40 epochs, seed 42,
+M1 CPU, \num{2616145} training rows. \texttt{energy\_condition\_geometry} is the
+only line that differs. The Colab reference checkpoint is re-scored alongside
+both, so device and seed variation between it and the two local models is
+measured rather than assumed. Scoring is classifier AUC against \num{400000} real
+crossings: sensitive to the joint, and with negligible statistical error next to
+the $\pm0.09$ that $R$ carries.
+
+\paragraph{The implementation is sound.} \texttt{core/model.py} factorises
+$p(\mathrm{geom}\mid z)\,p(E\mid\mathrm{geom},z)$ with teacher forcing on true
+targets during training and re-decoding from \emph{sampled} geometry at
+generation, so training and generation apply the same conditional. The geometry
+heads never see \texttt{geom\_obs}, so nothing leaks into their own
+reconstruction term.
+
+\paragraph{Third CR arm.} \ev{E20} The coupled checkpoint goes through the same
+detector chain as the baseline, in \texttt{cr\_arm\_coupled/} --- a separate
+directory, so the reported campaign of \S\ref{sec:armAB} is untouched and stays
+reproducible from its own. The real arm is \textbf{not} re-run:
+\texttt{job\_real\_*} is reused verbatim, so all three arms share one reference
+exactly and the Geant4 cost is halved to three jobs. Generation seeds
+($9200+53j$) and Geant4 seeds ($k=3,4,5$) are the baseline MAGI arm's, so the
+coupled arm differs from \texttt{job\_magi\_*} in exactly one thing: the
+checkpoint.
+
+Because both MAGI arms share the real arm their $R$ values are correlated, and
+the gap between their error bars is not the error on their difference. The
+reported statistic is therefore
+\[
+Q \;=\; \frac{(\text{events}/\text{crossing})_{\rm coupled}}
+             {(\text{events}/\text{crossing})_{\rm baseline}},
+\]
+in which the real arm cancels entirely, and which is paired on the Geant4 side as
+well. $Q = 1$ means coupling changed nothing at the detector.
+
+\begin{callout}{warn}{red!4}{This arm is additive, and it runs unconditionally}
+The production model stays \texttt{v0\_8\_2\_CR\_ingoingfix}. The memorisation
+test (\S\ref{sec:memorisation}), the classifier test (\S\ref{sec:classifier}),
+the reweighting and arm~A (\S\ref{sec:armAB}) are all keyed to that checkpoint;
+swapping it would invalidate four completed results to chase one unproven
+mechanism, five days before the meeting.
+
+The arm also runs \emph{regardless} of the AUC verdict. Gating it on a favourable
+AUC would select exactly the cases that cannot test the AUC~$\to R$ link: a null
+AUC with a moved $Q$, or the reverse, is the informative outcome, and only an
+unconditional run can find it.
+\end{callout}
+
+An AUC improvement is \textbf{not} licence to quote an improved $R$. AUC is a
+distributional distance on the crossing surface; $R$ is an integrated detector
+rate after inner transport. That the first implies the second is the hypothesis
+under test, not a premise --- which is the whole reason the third arm exists.
+
+\paragraph{One limit to read the result against.} The CR gate carries
+\texttt{zones}~=~2: continuum plus a single pinned line at 511\,keV. There is
+less for the coupling to express here than on a line-rich source, so a null on CR
+bounds the mechanism on \emph{this} source rather than in general.
+
+\section{Result 4 --- the detector-level seed test}
 \label{sec:inprogress}
 
-\begin{callout}{blue!40!black}{blue!4}{Running as of 14 August 2026, 08:00 CEST}
-\textbf{Three-seed detector-level CR comparison on SRON.} Six jobs, two per
-checkpoint (seeds 42, 7, 13), \num{1200000} crossings each --- verified exactly
+Completed 14 August 2026, 22:31 CEST \ev{E17}. Six jobs, two per checkpoint
+(seeds 42, 7, 13), \num{1200000} crossings each --- verified exactly
 \num{1200000} records per file with no neutrinos --- injected into
 \texttt{SRON\_CCNwithXFDM\_NoShield\_FlowerCryoAC\_fixed.gdml}, the same
-geometry as the arm-A reference \ev{E14}.
+geometry as the arm-A reference \ev{E14}. This is the measurement that had never
+been taken: every seed claim before it, withdrawn or not, was crossing-level.
 
-This is the measurement that has never been taken: every seed claim to date,
-withdrawn or not, is crossing-level. Expected sensitivity is $\sim$62 Detector-1
-counts per seed ($\pm13\,\%$) and $\sim$112 over all six detectors
-($\pm9\,\%$) --- enough to exclude a factor-2 spread decisively, marginal at
-$\pm20\,\%$, and \textbf{insufficient} to resolve the $\pm5\,\%$ aimed-mix
-effect. ETA $\sim$17\,h.
+\subsection{Seed-to-seed dispersion}
 
-\textbf{No number from this run may be quoted until it completes.}
+Counts per seed, and a $\chi^2$ test of the hypothesis that the three differ
+only by Poisson fluctuation (2 d.o.f.; injected totals identical to one part in
+$2.4\times10^{6}$):
+
+\begin{center}
+\begin{tabular}{lrrrrrr}
+\toprule
+Channel & 7 & 13 & 42 & mean & $\chi^2$ & $p$ \\
+\midrule
+0.1--30\,keV, Det 1 &  70 &  57 &  49 &  58.7 &  3.83 & 0.147 \\
+0.1--30\,keV, all 6 & 129 & 103 &  90 & 107.3 &  7.35 & 0.025 \\
+1--20\,keV, Det 1   &  66 &  55 &  44 &  55.0 &  4.40 & 0.111 \\
+1--20\,keV, all 6   & 107 &  83 &  71 &  87.0 &  7.72 & 0.021 \\
+all deposits, Det 1 &  78 &  59 &  52 &  63.0 &  5.75 & 0.057 \\
+\textbf{all deposits, all 6} & \textbf{990} & \textbf{857} & \textbf{827}
+                    & \textbf{891.3} & \textbf{16.89} & \textbf{2.2$\times10^{-4}$} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{callout}{warn}{red!4}{This reverses ``no seed systematic is established''}
+In the highest-statistics channel the seeds are \textbf{not} consistent with
+Poisson: $p = 2.2\times10^{-4}$, an excess dispersion of $\mathbf{9.1\,\%}$ over
+the Poisson floor of $3.4\,\%$. A detector-level seed systematic
+\textbf{does} exist. It is of order $10\,\%$, not the withdrawn $\pm40\,\%$.
+
+The ordering $7 > 13 > 42$ is preserved in \emph{all six} channels, and the
+significance tracks the available statistics exactly as it should if the effect
+is real and roughly multiplicative.
+\end{callout}
+
+\paragraph{Four caveats, all of which weaken the number.}
+\begin{enumerate}[nosep]
+  \item \textbf{The channel was chosen after seeing the data.} The
+        pre-registered sensitivity (\S\ref{sec:seed} revision, 08:00) named the
+        X-IFU band --- $\sim$62 Det-1 counts, $\sim$112 over six --- and called
+        the run \emph{insufficient} for a $\pm5\,\%$ effect. It was: in that
+        band $p = 0.025$. The power came from the all-deposits channel, which
+        was not pre-registered. Six channels examined; the nesting makes a
+        Bonferroni correction conservative, but even $6p = 1.3\times10^{-3}$
+        survives.
+  \item \textbf{Three seeds.} The $9.1\,\%$ is a dispersion estimated from 2
+        d.o.f.; its own 68\,\% interval spans roughly $5$--$18\,\%$. Quote it as
+        ``of order $10\,\%$'', never as $9.1\,\%$.
+  \item \textbf{Nested channels are not independent measurements.} The six rows
+        are subsets of the same events; only the last row carries real power.
+  \item Per-seed jobs share a checkpoint but differ in Geant4 transport seed,
+        which is inside the Poisson null, not additional to it.
+\end{enumerate}
+
+\paragraph{This is most likely the aimed-mix defect, seen downstream.} A
+$10\,\%$ detector-level spread is the right size for the $\pm5\,\%$
+direction-conditional species-mix error already documented at crossing level
+(\S\ref{sec:seed}) and for the coherent $4\,\%$ deposited-energy deficit on
+DM1.2 (\S\ref{sec:dm12}). It is \emph{not} evidence for the withdrawn
+median-$E$-vs-$b$ claim, which remains wrong for the reason given in
+\S\ref{sec:seed}: that estimator measures the species mix on a bimodal source.
+The correct reading is that the defect was real, an order of magnitude smaller
+than first claimed, and in a different channel --- and it propagates to the
+detector.
+
+\subsection{Against the arm-A reference}
+
+\begin{center}
+\begin{tabular}{lrr}
+\toprule
+Seed & MAGI/real & counts \\
+\midrule
+7      & $0.915 \pm 0.168$ & 70 \\
+13     & $0.745 \pm 0.144$ & 57 \\
+42     & $0.641 \pm 0.128$ & 49 \\
+\midrule
+Pooled & $\mathbf{0.767 \pm 0.122}$ & 176 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Reference: 51 counts / \num{1600000} injected real crossings
+$= 3.1875\times10^{-5}$ ($\pm14.0\,\%$). The CR deficit is confirmed at a third
+measurement, consistent with $R = 0.848 \pm 0.125$ (\S\ref{sec:cr}) --- but
+these are \textbf{not independent}: both are capped by the same 51-count
+reference, whose $\pm14\,\%$ dominates the pooled error.
+
+\begin{callout}{blue!40!black}{blue!4}{What this makes actionable}
+The precision on the CR deficit is limited by the \emph{reference}, not by
+MAGI. \num{176} MAGI counts against 51 reference counts: generating more MAGI
+events cannot improve it. Pinning the $15$--$24\,\%$ deficit requires more
+\emph{real-crossing} reference statistics.
 \end{callout}
 
 \section{What may and may not be quoted}
@@ -661,23 +1294,79 @@ effect. ETA $\sim$17\,h.
   \item Geometry marginals reproduced to 5--11\,\% RMS per bin
         ($u_r$ 5.5\,\%, $u_v$ 6.9\,\%, $\phi_r$ 6.0\,\%, $\phi_v$ 11.1\,\%),
         against a 0.44\,\% Poisson floor --- a real, characterized defect.
-  \item $^{40}$K, BuildingModel: $R = 1.118 \pm 0.373$, KS $p = 0.60$.
+  \item $^{40}$K, BuildingModel: $R = 1.118 \pm 0.373$, KS $p = 0.60$ ---
+        \textbf{only} as a closure test of MAGI against its own training
+        population, which is albedo (\S\ref{sec:k40}). Never as a $^{40}$K
+        background result.
+  \item $^{40}$K cost structure, measured twice independently: the true
+        crossing efficiency for the reduced slab, unshielded BuildingModel is
+        $\chi \approx \num{1.49e-4}$ (A/B, 17/08) against measurement 2's
+        \num{1.3992e-4} --- agreeing to $6\,\%$ --- with a decay/crossing cost
+        ratio of $13.39$. That gives a \textbf{$\sim$\num{9e4}$\times$}
+        achievable speed-up for a $^{40}$K surrogate in this geometry.
+        \emph{Achievable, not realised}: the present checkpoint was trained on
+        the albedo population, so realising it needs the September retrain.
   \item Species fractions reproduced to $0.3\,\%$; impact-parameter
         distribution to within $2$--$9\,\%$.
   \item Cost, DM1.2: \textbf{194$\times$} statistical amplification per
         transported particle (ideal 200.13) and \textbf{2.03$\times$} net
         throughput, both measured on the same machine; 52\,\%/48\,\%
         outer/inner cost split; break-even at the 2nd design variant.
+  \item Cost, SRON: \textbf{3.33$\times$} speed-up (3.22$\times$ at the stored
+        $\chi$), 70\,\%/30\,\% outer/inner split, break-even at $N = 1.43$
+        variants; a lower bound, Building\,$\to$\,Dome excluded
+        (\S\ref{sec:cost-sron}).
   \item $^{40}$K: \textbf{287$\times$} amplification of an exhausted sample.
+        The arithmetic is independent of which population was amplified, so the
+        factor stands; phrase it as amplification \emph{of a sample}, not as
+        reproduction of the $^{40}$K background (\S\ref{sec:k40}).
+  \item \textbf{A detector-level seed systematic of order 10\,\%}, measured on
+        three seeds ($p = 2.2\times10^{-4}$, \S\ref{sec:inprogress}), with the
+        post-hoc channel choice disclosed. Quote as ``of order 10\,\%''.
+  \item \textbf{CR ingoing-cut prediction, confirmed out of sample}
+        (\S\ref{sec:retest}): predicted $\times1.268$ per primary from the
+        training sets before either model was injected, measured
+        $\mathbf{1.248 \pm 0.047}$ --- $0.4\sigma$. All four bands agree within
+        $1\sigma$.
+  \item CR against the full simulation, Detector~1, 0--20\,keV:
+        $0.802 \pm 0.078$ on the censored training set,
+        $\mathbf{0.941 \pm 0.088}$ on the corrected one.
+  \item \textbf{MAGI does not memorise} (\S\ref{sec:memorisation}):
+        nearest-neighbour ratio $1.027$ (CR) and $1.536$ (DM1.2), both above
+        unity, with near-duplicate fractions \emph{below} real data's own.
+        Metric validated in both directions --- held-out real reads $0.999$,
+        literal copies read $0.000$ at $100\,\%$ near-duplicates.
+  \item KDSource is $2$--$5\times$ further off the data manifold than MAGI on the
+        same metric (Silverman $2.03$/$4.12$, adaptive kNN $4.00$/$5.30$).
+  \item CR, SRON, three-seed pooled: $R = 0.767 \pm 0.122$ --- not independent
+        of the $0.848 \pm 0.125$ above (shared 51-count reference).
 \end{itemize}
 \end{callout}
 
 \begin{callout}{warn}{red!4}{Not quotable}
 \begin{itemize}[nosep]
-  \item \textbf{Any seed systematic}, in either direction. Not established.
+  \item \textbf{A $\pm40\,\%$ seed systematic.} Still withdrawn. The measured
+        detector-level effect is of order $10\,\%$ (\S\ref{sec:inprogress}) and
+        does not rehabilitate the original claim or its estimator.
+  \item \textbf{$9.1\,\%$ as a precise figure} --- 2 d.o.f., interval
+        $\approx5$--$18\,\%$.
   \item Any aggregate median-E-vs-$b$ number (\S\ref{sec:seed}).
-  \item The $^{40}$K 44-days comparison ($0.049$) as a MAGI result --- the
-        source geometries differ by 57$\times$ (\S4 above).
+  \item The $^{40}$K 44-days comparison ($0.049$) as a MAGI result. The
+        \emph{reason} has changed: not the $57\times$ source-volume story, which
+        is superseded, but the albedo selection of \S\ref{sec:k40}.
+  \item \textbf{Any $^{40}$K, Ra-226 or Th-232 number as a statement about
+        radioactive-background physics.} All three training sets are
+        $100.00\,\%$ ingoing w.r.t.\ the buggy sphere centre and are
+        back-scatter populations (\S\ref{sec:k40}). They support method claims
+        --- fit quality, amplification, detector-level closure --- and nothing
+        about the physics of those isotopes.
+  \item The stored $^{40}$K $\chi$ values \num{1.756e-5} (ingoing) and
+        \num{2.270e-5} (all) as crossing efficiencies. They are albedo-selected
+        rates, low by $\sim$$8\times$; the measured efficiency is
+        $\sim$\num{1.49e-4}.
+  \item The $\sim$\num{9e4}$\times$ $^{40}$K speed-up as an achieved MAGI
+        result --- it is the measured cost structure of the geometry, and the
+        current checkpoint cannot deliver it.
   \item The DM1.2 0.1--30\,keV band as a \emph{spectral} comparison, or as
         an ``X-IFU band'' --- 41 reference events, and DM127 is an
         anti-coincidence detector, not a TES absorber.
@@ -687,19 +1376,54 @@ effect. ETA $\sim$17\,h.
   \item \textbf{A ${\sim}200\times$ speed-up.} 200.13 is the statistical
         amplification, not the compute saving; the measured throughput gain is
         $2.03\times$ (\S\ref{sec:cost}).
-  \item Any numeric cost extrapolation to Athena/X-IFU --- the outer/inner
-        core-hour split has not been measured on a flight mass model.
+  \item \textbf{``2.33$\times$'' for SRON} --- the figure
+        \texttt{run\_speedup.sh} prints. It is $C_{\rm outer}/C_{\rm inner}$;
+        the speed-up is $3.33\times$ (\S\ref{sec:cost-sron}).
+  \item Any numeric cost extrapolation to Athena/X-IFU itself. SRON XFDM is
+        flight-\emph{like} and now measured, but it is not the Athena mass
+        model.
   \item Absolute wall-clock timings as a cross-machine claim.
+  \item \textbf{``The CR discrepancy is resolved.''} The improvement from
+        $0.802$ to $0.941$ is $+0.139 \pm 0.117$, only $1.2\sigma$, on 107 and
+        114 Detector-1 events. What is established is that the prediction held,
+        not that the deficit is gone.
+  \item Per-injected-crossing ratios as a flux claim. That normalisation divides
+        $\chi$ out, and $\chi$ is what the ingoing fix changed
+        (\S\ref{sec:retest}). Reading the wrong column once turned a $0.4\sigma$
+        confirmation into an apparent $4.2\sigma$ refutation.
+  \item Absolute rates from the \texttt{cr\_retest} run as a flux result ---
+        injection used \texttt{Flower\_fixed} while the corrected training set
+        was generated in \texttt{noShields\_withCryoAC}. The mismatch is common
+        to both arms and cancels in the ratio only.
 \end{itemize}
 \end{callout}
 
 \section{Open items}
+\label{sec:open}
 
 \begin{enumerate}[nosep]
-  \item \textbf{The SRON 24\,\% deficit is not fully explained.} $3.6\,\%$ is
-        attributed to the ingoing-cut mismatch (\S\ref{sec:cr}); the remainder
-        is uncharacterized now that the energy$\times$geometry diagnosis is
-        withdrawn.
+  \item \textbf{The SRON conversion deficit --- measured, bounded, mechanism
+        unlocalised.} Arm A (\S\ref{sec:armAB}) gives $R = 0.846 \pm 0.088$ in
+        the X-IFU band on \num{3.6e6} crossings per arm, statistically identical
+        to the old checkpoint's $0.848 \pm 0.125$. Normalisation, aiming and
+        species mix are all excluded by direct measurement. What is left is a
+        few-percent species-dependent distortion of the joint distribution
+        ($e^{-}$ median energy $1.21\times$ high among aimed crossings; the wide
+        forward cone $0.934$). \textbf{This is the one open defect that matters
+        for the paper.} Note that the two architectural fixes already tried in
+        v0.8.3 --- conditioning the energy head on sampled geometry, and widening
+        the latent --- were implemented, tested and \emph{not} adopted
+        (\S\ref{sec:v083}), so there is no evidence yet that this is a cheap fix.
+        The classifier test (\S\ref{sec:classifier}) now gives a metric sharp
+        enough to re-judge them.
+  \item \textbf{Superseded phrasing:} ``the SRON deficit is substantially
+        addressed''.
+        Retraining on the corrected set moves Detector~1 from $0.802 \pm 0.078$
+        to $0.941 \pm 0.088$ (\S\ref{sec:retest}), and the per-primary
+        prediction held at $0.4\sigma$. But the improvement is itself only
+        $1.2\sigma$. Settling it needs the new checkpoint against real recorded
+        crossings in a matched geometry, with more Detector-1 statistics than
+        8.75\,h of injection buys ($\sim$110 events per arm).
   \item \textbf{Ingoing-only filter} on both SRON training sets, with $\chi$
         recomputed, then retrain --- makes SRON consistent with DM1.2.
   \item \textbf{Detector-level seed spread} on CR (\S\ref{sec:inprogress}).
@@ -713,6 +1437,15 @@ effect. ETA $\sim$17\,h.
         unreachable. Silent recycling is exactly what it exists to catch.
   \item \textbf{DM1.2 fluorescence lines} --- the training set supports
         continuum and geometry but is $\sim$9$\times$ short for lines.
+  \item \textbf{Regenerate the $^{40}$K training set --- September.} The
+        existing set, and Ra-226 and Th-232 with it, are back-scatter
+        populations selected by the buggy sphere centre (\S\ref{sec:k40}).
+        A correct campaign needs the fixed \texttt{EventAction} centre
+        ($-507.66$), and would at once make the $\sim$\num{9e4}$\times$ speed-up
+        realisable, restore a radioactivity physics result, and give the
+        low-statistics ladder a case with a 44-day reference to score against.
+        Deferred deliberately: a new training set is expensive and DM1.2 plus CR
+        carry the paper without it.
 \end{enumerate}
 
 
@@ -743,15 +1476,21 @@ Setup & Reference & Result \\
 DM1.2 lab cryostat, $\mu$ & $2\times10^{8}$ muons (iso) & $R = 0.970 \pm 0.032$; MIP $0.999 \pm 0.037$ \\
 SRON XFDM, cosmic rays & real recorded crossings & $R = 0.848 \pm 0.125$ \\
 SRON XFDM, cosmic rays & RUN CRYOAC & mean flux ratio 0.79; KS $p = 0.20$ \\
-$^{40}$K, BuildingModel & real recorded crossings & $R = 1.118 \pm 0.373$; KS $p = 0.60$ \\
+$^{40}$K, BuildingModel$^{\dagger}$ & real recorded crossings & $R = 1.118 \pm 0.373$; KS $p = 0.60$ \\
 \bottomrule
 \end{tabular}
 \end{center}
 
+{\footnotesize $^{\dagger}$ Closure against its own training population, which
+is albedo (\S\ref{sec:k40}). Both arms draw on the same biased set, so this is a
+method result, not a $^{40}$K physics result. Ra-226 and Th-232 share the
+defect. \textbf{DM1.2 and CR carry every physics claim until September.}}
+
 DM1.2 is the cleanest: a 3-seed ensemble, $100\,\%$ crossing coverage after the
 overlap fix, and an efficiency factor of $200 \pm 7$ in the MIP band against an
-ideal $1/\chi = 200$. $^{40}$K passes at matched $N$. CR sits $15$--$24\,\%$ low
-and is the one open discrepancy.
+ideal $1/\chi = 200$. $^{40}$K passes at matched $N$, but against its own albedo training
+population (\S\ref{sec:k40}) --- a method result, not a physics one. CR sits
+$15$--$24\,\%$ low and is the one open discrepancy.
 
 \subsection*{Fidelity of the generated population}
 
@@ -770,14 +1509,23 @@ gain $\mathbf{2.03\times}$. One full run splits $52\,\%$ outer / $48\,\%$ inner;
 MAGI eliminates the outer only, so
 $\text{speed-up} = \chi^{-1}\,c_{\rm primary}/c_{\rm crossing}$.
 
+On SRON, the flight-like model, both arms were re-run locally and the gain is
+larger: outer share $70\,\%$, \textbf{speed-up $3.33\times$}, break-even at
+$N = 1.43$ variants. Note that \texttt{run\_speedup.sh} prints $2.33\times$ for
+this, which is $C_{\rm outer}/C_{\rm inner}$ and not the speed-up
+(\S\ref{sec:cost-sron}); both SRON and DM1.2 figures are lower bounds, since
+Building\,$\to$\,Dome is excluded.
+
 The argument that carries the paper is \textbf{reuse}: the crossing population is
 fixed by the geometry \emph{outside} the sphere, so a design campaign that
 iterates the inner assembly pays the full simulation once. Break-even is the
-\textbf{second design variant}. For a flight model, where the outer share far
-exceeds DM1.2's $52\,\%$, break-even approaches the first redesign. Separately,
+\textbf{second design variant} on both geometries. The prediction that a
+flight-like model would do better than DM1.2 is no longer an assertion --- it is
+measured, $52\,\% \to 70\,\%$ outer share. Separately,
 MAGI amplified an exhausted $^{40}$K sample $287\times$ ---
 $1.87\times10^{6} \to 5.38\times10^{8}$ crossings --- which no amount of compute
-can buy from the original sample.
+can buy from the original sample. State it as amplification \emph{of a sample};
+that sample is albedo (\S\ref{sec:k40}).
 
 \subsection*{Limitations to state in the paper}
 
@@ -791,15 +1539,22 @@ can buy from the original sample.
         pointing at the detector the mix is off by 5--9\,\%. On DM1.2 this
         produces a coherent $4\,\%$ deficit in deposited energy, traced to
         incidence angle (median $\sec\theta$ 0.955 of truth).
-  \item \textbf{No seed systematic is established}, in either direction. The
-        previously reported $\pm40\,\%$ was an artefact of a metric that
-        measures the species mix on a bimodal source; a detector-level
-        three-seed CR test is running (\S\ref{sec:inprogress}).
+  \item \textbf{A detector-level seed systematic of order $10\,\%$}, now
+        measured (\S\ref{sec:inprogress}): three seeds, all-deposits channel,
+        excess dispersion $9.1\,\%$ over a $3.4\,\%$ Poisson floor,
+        $p = 2.2\times10^{-4}$, with the channel chosen post hoc and only 2
+        d.o.f. behind the estimate. The previously reported $\pm40\,\%$ remains
+        withdrawn --- it was an artefact of a metric that measures the species
+        mix on a bimodal source, and this result is an order of magnitude
+        smaller and in a different channel. It is the right size to be the
+        already-documented $\pm5\,\%$ aimed-mix error propagating downstream.
   \item \textbf{SRON and DM1.2 are on different ingoing conventions} --- the
         SRON training sets contain $10.4\,\%$ ($^{40}$K: $22.5\,\%$) outgoing
         crossings, DM1.2 none.
-  \item \textbf{Cost is measured on one geometry only}, and DM1.2 is the
-        pessimistic case.
+  \item \textbf{Cost is now measured on two geometries}, DM1.2 ($2.03\times$,
+        the pessimistic case) and SRON ($3.33\times$). Both exclude the
+        Building\,$\to$\,Dome transport and are therefore lower bounds. Neither
+        is the Athena flight mass model.
 \end{enumerate}
 
 \subsection*{A methodological point worth making}
@@ -877,9 +1632,30 @@ E13& \texttt{MAGI/tools/train\_v083\_cr\_seed.py},
      \texttt{MAGI/tools/compare\_v082\_v083.py},
      \texttt{MAGI/docs/v0.8.3\_seed\_variance.md}. \\
 E14& \texttt{S1GDMLSRON\_CryoSphereEmission/cr\_seed\_run/run\_cr\_seeds.sh},
-     launched 14/08/2026 07:54. \textbf{In progress.} \\
+     launched 14/08/2026 07:54, completed 22:31. \\
+E18& \texttt{S1GDMLSRON\_CryoSphereEmission/speedup\_run/run\_speedup.sh},
+     15/08/2026 00:21, \texttt{speedup.log}. Both arms, 6 jobs, idle machine,
+     \texttt{SRON\_CCNwithXFDM\_NoShield\_FlowerCryoAC\_fixed.gdml}. ARM 1 wall
+     1966\,s, ARM 2 wall 4315\,s. \textbf{The script's printed ``SPEED-UP''
+     line is $C_{\rm outer}/C_{\rm inner}$; add one} (\S\ref{sec:cost-sron}). \\
+E17& Same run, seed-dispersion analysis: counts per seed as tabulated in
+     \S\ref{sec:inprogress}, $\chi^2$ on 2 d.o.f.\ against a Poisson null with
+     variance equal to the mean. Injected totals
+     \num{2400000}/\num{2400000}/\num{2399999}. Reference arm A: 51 counts /
+     \num{1600000} injected real crossings. \\
 E16& \texttt{MAGI/paper\_figures/make\_fig1.py},
      \texttt{make\_fig2.py}, \texttt{table1\_validation.tex}. \\
+E19& \texttt{MAGI/coupling\_test/run\_coupling\_ab.py},
+     \texttt{score\_coupling\_ab.py}, \texttt{coupling\_ab.log},
+     launched 19/08/2026 09:37. Checkpoints
+     \texttt{trained\_models/coupling\_\{baseline,coupled\}}; results
+     \texttt{coupling\_ab.json}, \texttt{coupling\_auc.json}. \\
+E20& \texttt{S1GDMLSRON\_CryoSphereEmission/cr\_arm\_coupled/}
+     (\texttt{run\_cr\_arm\_coupled.sh}, \texttt{report\_cr\_arm\_coupled.py}),
+     armed 19/08/2026 10:35, chained behind E19. Reuses
+     \texttt{cr\_armAB/job\_real\_[0-2]} verbatim as the shared reference. The
+     reader was dry-run against \texttt{cr\_armAB} first and reproduced
+     \num{3583201}/1570/203 and \num{3590382}/1448/172 exactly. \\
 E15& Timings from run-directory timestamps and log headers:
      \texttt{S1GDML\_DM1.2/iso\_run/iso\_run.log} (12/08 12:36:49 $\to$
      13/08 01:19:21, 8 jobs); \texttt{magi\_iso\_run/magi\_iso.log}

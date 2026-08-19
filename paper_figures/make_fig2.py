@@ -22,6 +22,10 @@ INCOMPLETE (weights still on Google Drive), so they cannot be generated from.
 import os
 import sys
 
+# PAPER=1 renders at the size the 4-page proceeding needs: smaller canvas with
+# fonts scaled up so the labels survive being placed at ~0.75\linewidth.
+PAPER = bool(os.environ.get("PAPER"))
+
 import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -30,7 +34,7 @@ from matplotlib.colors import Normalize
 from scipy.ndimage import gaussian_filter
 
 mpl.rcParams.update({
-    "font.family": "serif", "font.size": 8,
+    "font.family": "serif", "font.size": 10 if PAPER else 8,
     "axes.linewidth": 0.7, "xtick.direction": "in", "ytick.direction": "in",
     "xtick.major.width": 0.6, "ytick.major.width": 0.6,
     "legend.frameon": False, "figure.dpi": 200,
@@ -137,10 +141,12 @@ def corner(tag, cfg):
           "  ".join(f"{l.split('$')[1] if '$' in l else l}={d:.3f}"
                     for l, d in zip(["logE", "u_r", "u_v", "phi_r", "phi_v"], devs)))
 
-    fig, axes = plt.subplots(D, D, figsize=(7.1, 7.3))
-    fig.subplots_adjust(hspace=0.07, wspace=0.07, left=0.085, right=0.875,
-                        top=0.925, bottom=0.075)
-    fig.suptitle(cfg["title"], fontsize=10, y=0.972)
+    sz = 5.3 if PAPER else 7.1
+    fig, axes = plt.subplots(D, D, figsize=(sz, sz * 1.03))
+    fig.subplots_adjust(hspace=0.07, wspace=0.07, left=0.095, right=0.865,
+                        top=0.935, bottom=0.085)
+    if not PAPER:
+        fig.suptitle(cfg["title"], fontsize=10, y=0.972)
     norm = Normalize(-1, 1)
     cmap = plt.get_cmap("RdBu_r")
 
@@ -188,13 +194,14 @@ def corner(tag, cfg):
                 ax.add_patch(Polygon([[1, 0], [1, 1], [0, 1]], closed=True,
                                      facecolor=cmap(norm(C_gen[i, j])),
                                      edgecolor="white", lw=0.5))
-                ax.text(0.28, 0.24, f"{C_real[i, j]:+.2f}", fontsize=6.2,
+                ax.text(0.28, 0.24, f"{C_real[i, j]:+.2f}", fontsize=7.4 if PAPER else 6.2,
                         ha="center", va="center", color="0.12")
-                ax.text(0.72, 0.76, f"{C_gen[i, j]:+.2f}", fontsize=6.2,
+                ax.text(0.72, 0.76, f"{C_gen[i, j]:+.2f}", fontsize=7.4 if PAPER else 6.2,
                         ha="center", va="center", color="0.12")
-                ax.text(0.5, 0.5, r"$\Delta$" + f"{resid[i, j]:+.3f}",
-                        fontsize=5.6, ha="center", va="center", color="0.35",
-                        rotation=-45)
+                if not PAPER:
+                    ax.text(0.5, 0.5, r"$\Delta$" + f"{resid[i, j]:+.3f}",
+                            fontsize=5.6, ha="center", va="center",
+                            color="0.35", rotation=-45)
                 ax.set_xlim(0, 1)
                 ax.set_ylim(0, 1)
                 ax.set_xticks([])
@@ -207,24 +214,36 @@ def corner(tag, cfg):
             if j != 0 or i == 0:
                 ax.set_yticklabels([])
             if i == D - 1:
-                ax.set_xlabel(LABELS[j], fontsize=7.5)
+                ax.set_xlabel(LABELS[j], fontsize=9 if PAPER else 7.5)
             if j == 0 and i != 0:
-                ax.set_ylabel(LABELS[i], fontsize=7.5)
-            ax.tick_params(labelsize=6.5)
+                ax.set_ylabel(LABELS[i], fontsize=9 if PAPER else 7.5)
+            ax.tick_params(labelsize=7.5 if PAPER else 6.5)
 
-    axes[0, 0].plot([], [], color=C_REF, lw=1.0, label="real crossings")
-    axes[0, 0].plot([], [], color=C_MAGI, lw=1.0, ls="--", label="MAGI v0.8.2")
-    axes[0, 0].legend(loc="upper left", fontsize=6.8, bbox_to_anchor=(0.0, 1.02))
+    # The legend lives in the figure's top margin, not inside axes[0,0]: that
+    # panel is only ~1/5 of the canvas wide, so an in-axes legend runs past its
+    # own bounding box and the neighbouring correlation cell paints over it,
+    # clipping the labels to "real cro" / "MAGI v".
+    h_ref, = axes[0, 0].plot([], [], color=C_REF, lw=1.0, label="real crossings")
+    h_gen, = axes[0, 0].plot([], [], color=C_MAGI, lw=1.0, ls="--",
+                             label="MAGI v0.8.2")
+    fig.legend(handles=[h_ref, h_gen], loc="upper left",
+               bbox_to_anchor=(0.093, 0.999), ncol=2,
+               fontsize=8 if PAPER else 6.8, frameon=False,
+               handlelength=1.9, columnspacing=1.5, borderaxespad=0.0)
 
-    cax = fig.add_axes([0.905, 0.55, 0.016, 0.30])
+    cax = fig.add_axes([0.895 if PAPER else 0.905, 0.55, 0.018, 0.30])
     cb = fig.colorbar(plt.cm.ScalarMappable(norm=norm, cmap=cmap), cax=cax)
+    # The label is longer than the 0.30-high colourbar it annotates, so it
+    # overhangs at both ends; the mean-residual note below has to start low
+    # enough to clear the overhang.
     cb.set_label(r"Pearson $\rho$   (lower-left: real, upper-right: MAGI)",
-                 fontsize=7)
-    cb.ax.tick_params(labelsize=6.5)
-    fig.text(0.985, 0.505, r"mean $|\Delta\rho|$" + "\n" + f"= {mean_res:.3f}",
-             fontsize=7.5, ha="right", va="top")
+                 fontsize=6.4)
+    cb.ax.tick_params(labelsize=7.5 if PAPER else 6.5)
+    fig.text(0.995, 0.45, r"mean $|\Delta\rho|$" + "\n" + f"= {mean_res:.3f}",
+             fontsize=8.5 if PAPER else 7.5, ha="right", va="top")
 
-    out = f"/Volumes/X10Pro/MAGI/paper_figures/fig2_corner_{tag}.pdf"
+    suffix = "_paper" if PAPER else ""
+    out = f"/Volumes/X10Pro/MAGI/paper_figures/fig2_corner_{tag}{suffix}.pdf"
     fig.savefig(out, bbox_inches="tight")
     fig.savefig(out.replace(".pdf", ".png"), bbox_inches="tight", dpi=200)
     plt.close(fig)

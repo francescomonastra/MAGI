@@ -1,0 +1,21 @@
+{
+  "n_types": 4,
+  "idx_to_type": {
+    "0": "gamma",
+    "1": "mu-",
+    "2": "e-",
+    "3": "e+"
+  },
+  "type_probs": [
+    0.5683108169395917,
+    0.40938622034697836,
+    0.021094085088609552,
+    0.0012088776248203607
+  ],
+  "geometry_transform": "quantile_u_r_u_v_phi_r_phi_v",
+  "epochs_run": 40,
+  "final_val_loss": -13.500609397888184,
+  "val_energy_mixture_nll": -3.382190227508545,
+  "val_kl": 25.9252986907959,
+  "n_line_positions": 1
+}

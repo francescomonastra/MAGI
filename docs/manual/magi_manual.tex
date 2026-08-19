@@ -856,6 +856,9 @@ columns, and the model derives it from \code{line\_positions\_y}.
   (\S\ref{sec:theory}). This is what makes coupling residuals pass. \\
 \code{prior\_zone\_conditioning} & \code{False} & Condition the prior on
   \code{[type, zone]} rather than type alone. Requires \code{zone\_probs}. \\
+\code{energy\_condition\_geometry} & \code{False} & Couple the energy head to
+  sampled geometry instead of leaving the two conditionally independent given
+  $z$. Under evaluation --- see the note below before switching it on. \\
 \code{gate\_focal\_gamma} & 1.0 & Focal weighting on the gate loss.
   Keep at~1; $\gamma \geq 2$ digs the continuum out from between the lines. \\
 \code{w\_gate\_aux} & 0.3 & Weight of the auxiliary gate-routing loss. The
@@ -877,6 +880,37 @@ reconstructs its original architecture --- there is a regression test asserting
 exactly that. What \emph{does} change is any script that constructed the model
 without naming these arguments and relied on the old defaults; every such call
 site in this repository has been pinned to its previous explicit value.
+\end{maginote}
+
+\begin{maginote}[\code{energy\_condition\_geometry}: what it does, and what is known]
+By default the decoder heads are \textbf{conditionally independent given the
+latent}: $p(x \mid z,t) = \prod_i p(x_i \mid z,t)$. Energy and geometry meet only
+through $z$, so a combination that is individually common in both --- a 511\,keV
+photon \emph{and} a horizontal equatorial track --- can fall through the gap
+between them even when each marginal is right.
+
+Setting \code{energy\_condition\_geometry=True} factorises the decoder
+autoregressively instead,
+\[
+  p(\mathrm{geom} \mid z)\; p(E \mid \mathrm{geom}, z),
+\]
+teacher-forced on true geometry during training and re-decoded from
+\emph{sampled} geometry at generation, so both paths apply the same conditional.
+The geometry heads never see the observed geometry, so nothing leaks into their
+own reconstruction term. The ordering is one-way: geometry informs energy, not
+the reverse.
+
+\textbf{Status.} Shipped, off by default, and \emph{not} validated. It was
+introduced as the v0.8.3 feature and not adopted: those runs regressed the two
+lowest energy decades across all three seeds. That verdict is weaker than it
+looks, however --- they also changed \code{latent\_dim} $8 \to 12$, so the flag
+was never isolated, and they were judged on marginals, which cannot see the joint
+mismatch this flag targets. A controlled A/B (identical data, split, transformers
+and seed; only the flag differs) scored by classifier AUC and by a detector-level
+arm was launched 19/08/2026. Until it reports, treat \code{True} as experimental.
+
+Turning it on changes the generative structure, so a checkpoint trained with it
+must be generated from with it --- which the saved config handles automatically.
 \end{maginote}
 
 \begin{magiwarn}[\code{build\_default\_callbacks} is not the task-adaptive scheduler]
@@ -1760,6 +1794,18 @@ in the 511~keV window against 52\,225 real, and its coupling is eight times
 worse. If your use depends on correlations, use v0.8.2. If it depends only on
 the marginal spectrum and you want the most conservative option, v0.7.2 remains
 available.
+
+\subsection{Under evaluation: coupling the energy head to geometry}
+
+The heads are conditionally independent given $z$, and a classifier two-sample
+test on the cosmic-ray source separates real from generated crossings at
+AUC~0.68 with importance spread evenly over all six continuous variables and
+essentially none on species --- the signature of a joint mismatch rather than a
+broken marginal. \code{energy\_condition\_geometry} is the mechanism that
+addresses it directly; see the note in Section~\ref{sec:usage}. Do not read the
+v0.8.3 non-adoption as a settled negative: that test confounded the flag with a
+latent-width change and was scored on marginals. The controlled version is
+running; until it reports, this is an open question, not an established result.
 
 \subsection{Negative results already established}
 

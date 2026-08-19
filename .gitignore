@@ -8,6 +8,13 @@ paper/
 __pycache__/
 *.pyc
 
+# Editor/patch leftovers. Kept on disk, out of the history.
+*.bak
+*.bak[0-9]
+*.orig
+*.rej
+paper_backup_*.tgz
+
 # macOS
 .DS_Store
 *.dat

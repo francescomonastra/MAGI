@@ -84,6 +84,58 @@ def poisson_ratio_ci(n_m, n_r, expo_m, expo_r, sigma=1.0):
     return r, lo, hi
 
 
+def poisson_pull(n_m, n_r, expo_m, expo_r):
+    """Signed-root likelihood-ratio pull for two Poisson counts, in sigma.
+
+    Same conditional-binomial model as poisson_ratio_ci, so the two panels stay
+    internally consistent: given T = n_m + n_r, the null "equal rates" makes
+    n_m ~ Binomial(T, p0) with p0 = expo_m / (expo_m + expo_r). The deviance
+
+        G2 = 2 [ n_m ln(n_m / T p0) + n_r ln(n_r / T(1-p0)) ]
+
+    is chi2_1 under the null, so sign(n_m - T p0) sqrt(G2) is ~N(0,1).
+
+    Preferred over (r-1)/sigma_r: at 3-10 counts per bin the ratio's error is
+    strongly asymmetric and a Gaussian pull misreports the tension by a factor
+    of a few. This form is calibrated down to single counts, with the usual
+    0 ln 0 = 0 convention.
+    """
+    n_m = np.asarray(n_m, float)
+    n_r = np.asarray(n_r, float)
+    T = n_m + n_r
+    p0 = expo_m / (expo_m + expo_r)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        t_m = np.where(n_m > 0, n_m * np.log(n_m / (T * p0)), 0.0)
+        t_r = np.where(n_r > 0, n_r * np.log(n_r / (T * (1 - p0))), 0.0)
+    g2 = 2 * (t_m + t_r)
+    z = np.sign(n_m - T * p0) * np.sqrt(np.clip(g2, 0, None))
+    return np.where(T > 0, z, np.nan)
+
+
+# Residual panels: "sigma" (default) or "ratio". Set RESID=ratio to compare.
+RESID = os.environ.get("RESID", "sigma")
+
+
+def draw_resid(axr, cen, n_m, n_r, expo_m, expo_r, ok, color):
+    """Bottom-panel residuals in whichever convention RESID selects."""
+    if RESID == "ratio":
+        rat, elo, ehi = poisson_ratio_ci(n_m, n_r, expo_m, expo_r)
+        axr.axhline(1.0, color="0.35", lw=0.7, ls="--")
+        axr.errorbar(cen[ok], rat[ok], yerr=[elo[ok], ehi[ok]], fmt="o", ms=2.2,
+                     color=color, lw=0, elinewidth=0.7)
+        axr.set_ylim(0.0, 2.0)
+        axr.set_ylabel("MAGI / full", fontsize=7.5)
+        return
+    z = poisson_pull(n_m, n_r, expo_m, expo_r)
+    axr.axhspan(-2, 2, color="0.90", zorder=0, lw=0)
+    axr.axhspan(-1, 1, color="0.80", zorder=0, lw=0)
+    axr.axhline(0.0, color="0.35", lw=0.7, ls="--")
+    axr.plot(cen[ok], z[ok], "o", ms=2.4, color=color)
+    axr.set_ylim(-4.2, 4.2)
+    axr.set_yticks([-3, 0, 3])
+    axr.set_ylabel(r"pull  [$\sigma$]", fontsize=7.5)
+
+
 # ---------------------------------------------------------------- panel (a)
 COLS_DM12 = ["EventId", "ParticleId", "particleInt", "EPreStep_keV", "Edep_keV",
              "x", "y", "z", "StartE_MeV", "GlobalTime"]
@@ -184,18 +236,14 @@ ax.set_xlim(2.0, 3e3)
 ax.set_ylim(3e-8, 3e-3)
 
 ok = (n_r >= 1) & (n_m >= 1)
-rat, elo, ehi = poisson_ratio_ci(n_m, n_r, NGEN_EFF_MAGI_DM12, N_MU_REF_DM12)
-axr.axhline(1.0, color="0.35", lw=0.7, ls="--")
-axr.errorbar(cen_a[ok], rat[ok], yerr=[elo[ok], ehi[ok]], fmt="o", ms=2.2,
-             color=C_MAGI, lw=0, elinewidth=0.7)
+draw_resid(axr, cen_a, n_m, n_r, NGEN_EFF_MAGI_DM12, N_MU_REF_DM12, ok, C_MAGI)
 axr.set_xscale("log")
-axr.set_ylim(0.0, 2.0)
 axr.set_xlim(2.0, 3e3)
 axr.set_xlabel(r"deposited energy  $E_{\rm dep}$  [keV]")
-axr.set_ylabel("MAGI / full", fontsize=7.5)
 axr.axvspan(100, 300, color="0.92", zorder=0)
 ax.axvspan(100, 300, color="0.92", zorder=0)
-axr.text(173, 1.72, "MIP", fontsize=6.5, ha="center", color="0.45")
+axr.text(173, 3.35 if RESID == "sigma" else 1.72, "MIP",
+         fontsize=6.5, ha="center", color="0.45")
 
 ax.text(0.030, 0.965,
         r"$\varepsilon = 194 \pm 6$  (all)" + "\n"
@@ -225,27 +273,33 @@ ax2.set_title("(b)  SRON XFDM $-$ Detector 1, TES array", fontsize=8.5, loc="lef
 ax2.tick_params(labelbottom=False)
 
 ok2 = (c_r >= 1) & (c_m >= 1) & m
-r2, e2lo, e2hi = poisson_ratio_ci(c_m, c_r, NGEN_EFF_SRON, NgenCryoAC)
-ax2r.axhline(1.0, color="0.35", lw=0.7, ls="--")
-ax2r.errorbar(CEN_S[ok2], r2[ok2], yerr=[e2lo[ok2], e2hi[ok2]], fmt="o", ms=2.2,
-              color=C_MAGI, lw=0, elinewidth=0.7)
-ax2r.set_ylim(0.0, 2.0)
+draw_resid(ax2r, CEN_S, c_m, c_r, NGEN_EFF_SRON, NgenCryoAC, ok2, C_MAGI)
 ax2r.set_xlim(0, 20)
 ax2r.set_xlabel(r"deposited energy  $E_{\rm dep}$  [keV]")
-ax2r.set_ylabel("MAGI / full", fontsize=7.5)
 
 ax2.text(0.972, 0.960,
          r"$\varepsilon = 125 \pm 6$" + "\n" + r"ideal $1/\chi = 164$",
          transform=ax2.transAxes, fontsize=6.6, ha="right", va="top",
          linespacing=1.5)
 
-for a in (axr, ax2r):
-    a.set_yticks([0.0, 0.5, 1.0, 1.5, 2.0])
+if RESID == "ratio":
+    for a in (axr, ax2r):
+        a.set_yticks([0.0, 0.5, 1.0, 1.5, 2.0])
 
 # one legend for the whole figure, outside both panels at the top
 fig.legend(handles=[h_ref, h_magi], labels=["full Geant4", "MAGI v0.8.2"],
            loc="upper center", ncol=2, fontsize=8.5,
            bbox_to_anchor=(0.53, 0.995), handlelength=1.8, columnspacing=2.2)
+
+# Pull diagnostics. A good match scatters about zero with chi2/ndf ~ 1; a
+# coherent offset shows up as <z> far from 0 with most bins one-signed, which
+# is a far stronger statement than any single ratio.
+for tag, zz, okk in (("DM1.2", poisson_pull(n_m, n_r, NGEN_EFF_MAGI_DM12, N_MU_REF_DM12), ok),
+                     ("SRON ", poisson_pull(c_m, c_r, NGEN_EFF_SRON, NgenCryoAC), ok2)):
+    z = zz[okk]
+    print(f"{tag} pulls: n={len(z):3d}  <z>={z.mean():+.2f}  "
+          f"chi2/ndf={np.sum(z**2)/len(z):5.2f}  "
+          f"neg={np.mean(z < 0):.0%}  |z|>2: {np.sum(np.abs(z) > 2):2d}")
 
 out = "/Volumes/X10Pro/MAGI/paper_figures/fig1_spectra.pdf"
 fig.savefig(out, bbox_inches="tight")
