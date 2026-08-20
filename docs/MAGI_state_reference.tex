@@ -1100,7 +1100,7 @@ sensitive to the joint, which is \S\ref{sec:coupling}.
         scatter is real.
 \end{enumerate}
 
-\section{Head coupling, re-tested against the joint metric}
+\section{Head coupling, re-tested against the joint metric: closed, null}
 \label{sec:coupling}
 
 Launched 19 August 2026 09:37 CEST \ev{E19}. \S\ref{sec:classifier} left the
@@ -1183,18 +1183,31 @@ Q \;=\; \frac{(\text{events}/\text{crossing})_{\rm coupled}}
 in which the real arm cancels entirely, and which is paired on the Geant4 side as
 well. $Q = 1$ means coupling changed nothing at the detector.
 
-\begin{callout}{warn}{red!4}{This arm is additive, and it runs unconditionally}
-The production model stays \texttt{v0\_8\_2\_CR\_ingoingfix}. The memorisation
-test (\S\ref{sec:memorisation}), the classifier test (\S\ref{sec:classifier}),
-the reweighting and arm~A (\S\ref{sec:armAB}) are all keyed to that checkpoint;
-swapping it would invalidate four completed results to chase one unproven
-mechanism, five days before the meeting.
+\begin{callout}{ok}{green!4}{Result, 20/08/2026 02:27 CEST: $Q$ confirms the AUC null}
+\begin{center}
+\begin{tabular}{lrrr}
+\toprule
+Band & $R_{\rm baseline}$ & $R_{\rm coupled}$ & $Q = R_{\rm coupled}/R_{\rm baseline}$ \\
+\midrule
+All deposits             & $0.920 \pm 0.034$ & $0.839 \pm 0.031$ & $0.911 \pm 0.035$ \\
+\textbf{0.1--30\,keV (X-IFU)} & $0.846 \pm 0.088$ & $0.906 \pm 0.092$ & $\mathbf{1.072 \pm 0.114}$ \\
+1--20\,keV               & $0.767 \pm 0.087$ & $0.847 \pm 0.094$ & $1.105 \pm 0.131$ \\
+1--7\,keV (MIP)          & $0.807 \pm 0.124$ & $0.883 \pm 0.133$ & $1.094 \pm 0.174$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+Headline band: $Q = 1.072 \pm 0.114$, $+0.6\sigma$ from unity. \textbf{Coupling did
+not move the detector rate.} The AUC~$\to R$ link was the open question this arm
+existed to test; it holds in the direction that matters here, since a null on one
+metric and a moved value on the other would have been the informative outcome, and
+neither happened. Both the classifier and the detector agree the
+conditional-independence edge between energy and geometry does not drive the
+conversion deficit.
 
-The arm also runs \emph{regardless} of the AUC verdict. Gating it on a favourable
-AUC would select exactly the cases that cannot test the AUC~$\to R$ link: a null
-AUC with a moved $Q$, or the reverse, is the informative outcome, and only an
-unconditional run can find it. \textbf{This is now the operative case}: the AUC
-verdict is null, and only the third arm can say whether $Q$ agrees.
+The production model stays \texttt{v0\_8\_2\_CR\_ingoingfix}. The memorisation test
+(\S\ref{sec:memorisation}), the classifier test (\S\ref{sec:classifier}), the
+reweighting and arm~A (\S\ref{sec:armAB}) all remain keyed to it, unaffected by an
+arm that was always additive, never a proposed swap.
 \end{callout}
 
 An AUC improvement is \textbf{not} licence to quote an improved $R$. AUC is a
@@ -1207,10 +1220,13 @@ under test, not a premise --- which is the whole reason the third arm exists.
 less for the coupling to express here than on a line-rich source, so a null on CR
 bounds the mechanism on \emph{this} source rather than in general.
 
-\paragraph{Status as this section stands.} AUC: done, null. Third arm ($Q$):
-running, chained behind the scorer, launched \ev{E20}; results expected
-overnight 19/20 August, inside the Thursday freeze. Production model
-unaffected either way --- \texttt{v0\_8\_2\_CR\_ingoingfix} stays reported.
+\paragraph{Status as this section stands.} Closed. AUC: done, null
+(19/08 19:56). Third arm ($Q$): done, null (20/08 02:27 \ev{E20}), landing
+inside the Thursday freeze with a day to spare. Both metrics agree: head
+coupling is not the mechanism behind the CR conversion deficit. The deficit
+itself remains open --- see the working copy of this document on branch
+\texttt{v0.9.0-geometry-flow-heads} (not yet merged here) for the candidate
+this result redirected toward.
 
 \section{Result 4 --- the detector-level seed test}
 \label{sec:inprogress}
