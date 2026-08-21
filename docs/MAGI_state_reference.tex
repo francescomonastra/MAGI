@@ -506,25 +506,54 @@ identical to Fig.~1(b) (Fig.~\ref{fig:crfull}):
 Checkpoint & MAGI/full, 0--20\,keV & from unity \\
 \midrule
 censored training set      & $0.802 \pm 0.078$ & $2.6\sigma$ \\
-ingoing-fixed training set & $\mathbf{0.941 \pm 0.088}$ & $0.7\sigma$ \\
+ingoing-fixed training set & $\mathbf{0.963 \pm 0.043}$ & $0.85\sigma$ \\
 \bottomrule
 \end{tabular}
 \end{center}
 
 The deficit moves from $2.6\sigma$ below unity to consistent with it. The
-\emph{improvement} itself is $+0.139 \pm 0.117$, only $1.2\sigma$: suggestive,
-not decisive, on 107 and 114 Detector-1 events. \textbf{Do not claim the CR
-discrepancy is resolved on this run alone.} What is established is that the
-prediction made from the crossings held at detector level, out of sample.
+\emph{improvement} itself is $+0.161 \pm 0.089$, $\mathbf{1.8\sigma}$.
+
+\begin{callout}{ok}{green!4}{Statistics campaign, 20--21/08/2026: $114 \to 566$ Detector-1 events}
+The number above superseded $0.941 \pm 0.088$ (107 and 114 Detector-1 events,
+$1.2\sigma$ improvement, ``suggestive, not decisive'' -- Open Items
+\S\ref{sec:open}). \texttt{cr\_retest\_morestat/} \ev{E22} added 12 more
+``new''-arm-only jobs ($\chi$-matched, same geometry, same radius gate,
+batches of 4 to match the machine's 4-P-core throughput) on top of the
+original 3, pooled for $4.5\times$ the crossings and $\approx 5\times$ the
+Detector-1 events. Error dropped $0.088 \to 0.043$, tracking $\sqrt{N}$
+throughout three intermediate readings (0.941, then 1.031, 0.955, 0.963 as
+statistics accumulated) --- consistent movement, not drift. The ``old''
+(censored) arm was deliberately \textbf{not} extended: only the ingoing-fixed
+number needed tightening for the paper.
+
+\textbf{MIP band (2.5--4\,keV):} $R = 0.943 \pm 0.083$ (130 events), against
+the censored checkpoint's $0.634$ in the same band --- the ingoing fix's
+improvement is visible in this specific window too, not only in the
+0--20\,keV integral.
+
+A methodological note worth keeping: an early re-check of this pooled result,
+run mid-campaign while the final batch was still injecting, returned
+$R = 0.734$, $3.4\sigma$ from unity --- looking like a real, significant
+finding. It was a counting bug: a job directory can exist (\texttt{mkdir}'d at
+injection start) with a real injected-crossing count on disk before its
+\texttt{proc/} output does, and the pooling function was counting such a
+job's crossings in the denominator while its (not-yet-existing) events
+contributed nothing to the numerator --- silently deflating $R$. Fixed by
+gating each job on its processed output actually existing before counting it
+at all; re-verified against the already-confirmed 0--20\,keV number before
+trusting the fix for anything else.
+\end{callout}
 
 \begin{figure}[t]
 \centering
 \includegraphics[width=0.72\textwidth]{../paper_figures/fig_cr_vs_full.pdf}
 \caption{CR at detector level, SRON XFDM Detector~1. Full Geant4 (RUN CRYOAC)
-against MAGI trained on the censored and on the ingoing-fixed set, in flux units
-with the Fig.~1(b) normalisation. Each MAGI crossing stands for $1/\chi$
-primaries, and $\chi$ differs between the two checkpoints --- which is the effect
-under test.}
+against MAGI trained on the censored (3 jobs) and on the ingoing-fixed set
+(15 jobs, pooled from \texttt{cr\_retest} and \texttt{cr\_retest\_morestat}),
+in flux units with the Fig.~1(b) normalisation. Each MAGI crossing stands for
+$1/\chi$ primaries, and $\chi$ differs between the two checkpoints --- which
+is the effect under test. Shaded band: MIP, 2.5--4\,keV.}
 \label{fig:crfull}
 \end{figure}
 
@@ -1468,14 +1497,14 @@ events cannot improve it. Pinning the $15$--$24\,\%$ deficit requires more
         (\S\ref{sec:v083}), so there is no evidence yet that this is a cheap fix.
         The classifier test (\S\ref{sec:classifier}) now gives a metric sharp
         enough to re-judge them.
-  \item \textbf{Superseded phrasing:} ``the SRON deficit is substantially
-        addressed''.
-        Retraining on the corrected set moves Detector~1 from $0.802 \pm 0.078$
-        to $0.941 \pm 0.088$ (\S\ref{sec:retest}), and the per-primary
-        prediction held at $0.4\sigma$. But the improvement is itself only
-        $1.2\sigma$. Settling it needs the new checkpoint against real recorded
-        crossings in a matched geometry, with more Detector-1 statistics than
-        8.75\,h of injection buys ($\sim$110 events per arm).
+  \item \textbf{Resolved 21/08/2026.} Retraining on the corrected set moves
+        Detector~1 from $0.802 \pm 0.078$ to $\mathbf{0.963 \pm 0.043}$
+        (\S\ref{sec:retest}), and the per-primary prediction held at
+        $0.4\sigma$. The improvement is $+0.161 \pm 0.089$, $\mathbf{1.8\sigma}$
+        --- \texttt{cr\_retest\_morestat} \ev{E22} took Detector-1 statistics
+        from 114 to 566 events, exactly the gap this item named. ``The SRON
+        deficit is substantially addressed'' is no longer superseded phrasing;
+        it is what the number now supports.
   \item \textbf{Ingoing-only filter} on both SRON training sets, with $\chi$
         recomputed, then retrain --- makes SRON consistent with DM1.2.
   \item \textbf{Detector-level seed spread} on CR (\S\ref{sec:inprogress}).
@@ -1708,6 +1737,13 @@ E20& \texttt{S1GDMLSRON\_CryoSphereEmission/cr\_arm\_coupled/}
      \texttt{cr\_armAB/job\_real\_[0-2]} verbatim as the shared reference. The
      reader was dry-run against \texttt{cr\_armAB} first and reproduced
      \num{3583201}/1570/203 and \num{3590382}/1448/172 exactly. \\
+E22& \texttt{S1GDMLSRON\_CryoSphereEmission/cr\_retest\_morestat/}
+     (\texttt{run\_cr\_retest\_morestat.sh}, \texttt{report\_cr\_retest\_morestat.py}),
+     launched 20/08/2026 19:04, 12 jobs in 3 batches of 4, completed 21/08 20:29.
+     Reuses \texttt{cr\_retest/job\{0,1,2\}} (the original ``new''-arm jobs)
+     verbatim as part of the pool; \texttt{cr\_retest/job\{3,4,5\}} (``old''
+     arm) untouched. \texttt{paper\_figures/make\_fig\_cr\_vs\_full.py}
+     regenerated against the full 15-job pool. \\
 E15& Timings from run-directory timestamps and log headers:
      \texttt{S1GDML\_DM1.2/iso\_run/iso\_run.log} (12/08 12:36:49 $\to$
      13/08 01:19:21, 8 jobs); \texttt{magi\_iso\_run/magi\_iso.log}
