@@ -145,6 +145,7 @@ N_MU_REF_DM12 = 200_000_000                        # muons thrown by the full ru
 CHI_DM12 = N_CROSS_REF_DM12 / N_MU_REF_DM12
 NGEN_EFF_MAGI_DM12 = N_CROSS_MAGI_DM12 / CHI_DM12  # equivalent muons
 RGEN_DM12 = 118.0                                  # cm, gpsMu_iso.mac
+AREA_DM12 = 2.0                                    # cm^2, DM1.2 detector area
 
 
 def dm12_per_event(paths, offset=True):
@@ -186,24 +187,91 @@ FluxScaleFactor = (2 - np.sqrt(2)) / 2
 RenormNgen = 3.563e-3
 FLUXNUM = PhiTotalMu * 4 * np.pi * RBuilding ** 2 * FluxScaleFactor ** 2 * RenormNgen
 NgenCryoAC = 131_129_837_637
-ChiCR = (3_443_885 - 158_538) / (1e6 * 540)
-NGEN_MAGI_SRON = 1.85e7
-NGEN_EFF_SRON = NGEN_MAGI_SRON / ChiCR
 AREA_DET1 = 4e-2
 BIN_W = 0.8
 BINS_S = np.arange(0.0, 100.0 + BIN_W, BIN_W)
 CEN_S = BINS_S[:-1] + BIN_W / 2
+
+# MAGI series: ingoing-fixed ("new") checkpoint, pooled across cr_retest
+# (the original 3 "new"-arm jobs) and cr_retest_morestat (the 12-job
+# statistics-boosting follow-up, 20-21/08, launched because 114 Detector-1
+# events left the improvement over the censored checkpoint at only 1.2sigma
+# -- see docs/MAGI_state_reference.tex sec:retest). Same pooling as
+# paper_figures/make_fig_cr_vs_full.py. chi_new = 6.9210e-3 is the crossing
+# efficiency the ingoing-cut fix produced (pre-fix was 6.0840e-3, the value
+# this panel used to use via the CryoAC RUN reference); both are recorded in
+# make_fig_cr_vs_full.py's own docstring/CHI dict.
+CR_RETEST = f"{SRON}/cr_retest"
+CR_MORESTAT = f"{SRON}/cr_retest_morestat"
+CHI_NEW = 6.9210e-3
+
+
+def _job_ready(jd):
+    det1 = glob.glob(f"{jd}/proc/Detector1_*.dat")
+    return bool(det1) and any(os.path.getsize(f) > 0 for f in det1)
+
+
+def per_event_edep(path):
+    tot = {}
+    if not os.path.exists(path) or os.path.getsize(path) == 0:
+        return np.array([])
+    for line in open(path):
+        p = line.rstrip("\n").split("\t")
+        if len(p) < 4:
+            continue
+        tot[p[0]] = tot.get(p[0], 0.0) + float(p[3])
+    return np.fromiter(tot.values(), dtype=float)
+
+
+def last_event_id(path):
+    if not os.path.exists(path) or os.path.getsize(path) == 0:
+        return -1
+    with open(path, "rb") as fh:
+        fh.seek(max(0, os.path.getsize(path) - 65536))
+        for line in reversed(fh.read().split(b"\n")):
+            if line.strip():
+                return int(line.split(b"\t")[0])
+    return -1
 
 
 def sron_per_event(path):
     return pd.read_table(path, names=COLS_SRON).groupby("EventId")["Edep"].sum().values
 
 
+_new_edep, _n_inj_new, _n_jobs_new = [], 0, 0
+for jd in sorted(glob.glob(f"{CR_RETEST}/job[0-5]")):
+    if open(f"{jd}/arm.txt").read().strip() != "new":
+        continue
+    if not _job_ready(jd):
+        continue
+    n = last_event_id(f"{jd}/outputGDML.dat") + 1
+    if n <= 0:
+        n = int(open(f"{jd}/n_injected.txt").read().strip())
+    _n_inj_new += n
+    _n_jobs_new += 1
+    for f in glob.glob(f"{jd}/proc/Detector1_*.dat"):
+        e = per_event_edep(f)
+        if e.size:
+            _new_edep.append(e)
+for jd in sorted(glob.glob(f"{CR_MORESTAT}/job*")):
+    if not _job_ready(jd):
+        continue
+    n = last_event_id(f"{jd}/outputGDML.dat") + 1
+    if n <= 0:
+        n = int(open(f"{jd}/n_injected.txt").read().strip())
+    _n_inj_new += n
+    _n_jobs_new += 1
+    for f in glob.glob(f"{jd}/proc/Detector1_*.dat"):
+        e = per_event_edep(f)
+        if e.size:
+            _new_edep.append(e)
+e_magi_sr = np.concatenate(_new_edep) if _new_edep else np.array([])
+NGEN_EFF_SRON = _n_inj_new / CHI_NEW
+
 e_ref_sr = sron_per_event(f"{RUN3}/Detector1All.dat")
-e_magi_sr = sron_per_event(
-    f"{SRON}/Analysis/ProcessedDataFromMAGI/CR_v082/Detector1_082.dat")
-print(f"SRON Det1  ref {e_ref_sr.size:,}  MAGI {e_magi_sr.size:,}")
-print(f"ChiCR = {ChiCR:.6e}   1/ChiCR = {1/ChiCR:.2f}")
+print(f"SRON Det1  ref {e_ref_sr.size:,}  MAGI {e_magi_sr.size:,}  "
+      f"({_n_jobs_new} jobs, new-arm injected {_n_inj_new:,})")
+print(f"ChiCR (new) = {CHI_NEW:.6e}   1/ChiCR = {1/CHI_NEW:.2f}")
 
 # ---------------------------------------------------------------- figure
 fig = plt.figure(figsize=(7.1, 3.7))
@@ -218,9 +286,9 @@ cen_a = np.sqrt(bins_a[:-1] * bins_a[1:])
 wa = np.diff(bins_a)
 n_r, _ = np.histogram(e_ref_dm, bins=bins_a)
 n_m, _ = np.histogram(e_magi_dm, bins=bins_a)
-y_r = FLUXNUM_DM12 * n_r / (N_MU_REF_DM12 * wa)
-y_m = FLUXNUM_DM12 * n_m / (NGEN_EFF_MAGI_DM12 * wa)
-ey_m = FLUXNUM_DM12 * np.sqrt(np.maximum(n_m, 1)) / (NGEN_EFF_MAGI_DM12 * wa)
+y_r = FLUXNUM_DM12 * n_r / (N_MU_REF_DM12 * wa * AREA_DM12)
+y_m = FLUXNUM_DM12 * n_m / (NGEN_EFF_MAGI_DM12 * wa * AREA_DM12)
+ey_m = FLUXNUM_DM12 * np.sqrt(np.maximum(n_m, 1)) / (NGEN_EFF_MAGI_DM12 * wa * AREA_DM12)
 
 y_r_plot = np.where(n_r > 0, y_r, np.nan)   # empty bins -> gap, not a spike
 h_ref, = ax.step(bins_a[:-1], y_r_plot, where="post", color=C_REF, lw=1.1,
@@ -229,11 +297,11 @@ h_magi = ax.errorbar(cen_a, y_m, yerr=ey_m, fmt="o", ms=2.2, color=C_MAGI, lw=0,
                      elinewidth=0.7, label="MAGI v0.8.2")
 ax.set_xscale("log")
 ax.set_yscale("log")
-ax.set_ylabel(r"rate  [cts s$^{-1}$keV$^{-1}$]")
+ax.set_ylabel(r"flux  [cts s$^{-1}$cm$^{-2}$keV$^{-1}$]")
 ax.set_title(r"(a)  DM1.2  $\mu$", fontsize=8.5, loc="left")
 ax.tick_params(labelbottom=False)
 ax.set_xlim(2.0, 3e3)
-ax.set_ylim(3e-8, 3e-3)
+ax.set_ylim(3e-8 / AREA_DM12, 3e-3 / AREA_DM12)
 
 ok = (n_r >= 1) & (n_m >= 1)
 draw_resid(axr, cen_a, n_m, n_r, NGEN_EFF_MAGI_DM12, N_MU_REF_DM12, ok, C_MAGI)
@@ -277,8 +345,19 @@ draw_resid(ax2r, CEN_S, c_m, c_r, NGEN_EFF_SRON, NgenCryoAC, ok2, C_MAGI)
 ax2r.set_xlim(0, 20)
 ax2r.set_xlabel(r"deposited energy  $E_{\rm dep}$  [keV]")
 
+# epsilon = R/chi, same relation the DM1.2 panel's static annotation uses
+# (194 = 0.970 x 200.13, 200 = 0.999 x 200.13). R measured over the plotted
+# <=20 keV band from raw counts, not the "mean flux ratio" print at the
+# bottom of this file (that's a per-bin mean, not count-weighted).
+_cm_tot, _cr_tot = c_m[m].sum(), c_r[m].sum()
+R_SRON = (_cm_tot / NGEN_EFF_SRON) / (_cr_tot / NgenCryoAC)
+R_SRON_ERR = R_SRON * np.sqrt(1 / max(_cm_tot, 1) + 1 / max(_cr_tot, 1))
+EPS_SRON, EPS_SRON_ERR = R_SRON / CHI_NEW, R_SRON_ERR / CHI_NEW
+print(f"SRON <=20 keV epsilon = {EPS_SRON:.0f} +/- {EPS_SRON_ERR:.0f}  "
+      f"(R = {R_SRON:.3f} +/- {R_SRON_ERR:.3f})")
 ax2.text(0.972, 0.960,
-         r"$\varepsilon = 125 \pm 6$" + "\n" + r"ideal $1/\chi = 164$",
+         rf"$\varepsilon = {EPS_SRON:.0f} \pm {EPS_SRON_ERR:.0f}$" + "\n" +
+         rf"ideal $1/\chi = {1/CHI_NEW:.0f}$",
          transform=ax2.transAxes, fontsize=6.6, ha="right", va="top",
          linespacing=1.5)
 
