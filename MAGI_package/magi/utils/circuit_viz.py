@@ -357,7 +357,12 @@ def save_routing_circuit(save_dir, model_name, output_html=None):
     n_lines = len(model_config["zone_probs"][0]) - 1
 
     if len(matched) == n_lines:
-        zone_labels = ["continuum"] + [m["label"] for m in matched]
+        # matched_lines is normally a list of the detect_energy_lines() match
+        # dicts, but some ad-hoc training scripts (e.g. tools/train_dm12_500k.py)
+        # persist it as plain label strings instead -- accept both.
+        zone_labels = ["continuum"] + [
+            m["label"] if isinstance(m, dict) else str(m) for m in matched
+        ]
     else:
         # preprocessing_metadata does not (yet) always persist matched_lines
         # (see tools/run_v0_8_real.py), so the transition name (Cu Kα1 vs.

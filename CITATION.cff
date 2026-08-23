@@ -18,8 +18,12 @@ authors:
   - given-names: Francesco
     family-names: Monastra
     email: francesco.monastra@inaf.it
-    affiliation: "Istituto Nazionale di Astrofisica (INAF)"
-    # orcid: "https://orcid.org/0000-0000-0000-0000"   # TODO: add before release
+    affiliation: >-
+      Istituto Nazionale di Astrofisica - Istituto di Astrofisica e
+      Planetologia Spaziali (INAF-IAPS), Osservatorio Astronomico di Roma
+      (INAF-OAR), Agenzia Spaziale Italiana - Space Science Data Center
+      (ASI-SSDC), Università degli Studi di Roma "Tor Vergata"
+    orcid: "https://orcid.org/0009-0007-1675-6223"
 version: 0.8.2
 license: GPL-3.0-only
 repository-code: "https://github.com/francescomonastra/MAGI"
@@ -35,8 +39,7 @@ keywords:
 
 # TODO before tagging the release:
 #   1. add `date-released:` with the actual tag date
-#   2. add the author ORCID
-#   3. replace the preferred-citation stub below with the published paper,
+#   2. replace the preferred-citation stub below with the published paper,
 #      or delete it if the release precedes publication - a stub with
 #      placeholder values is worse than no preferred-citation at all, because
 #      reference managers will happily emit it verbatim.

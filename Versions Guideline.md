@@ -5,21 +5,6 @@ what it achieved, what its drawback was, and where it landed. Model-variant deta
 for the current package are in `CLAUDE.md`; the evidence behind any v0.8+ entry
 below lives in `docs/` (linked inline).
 
-## Pre-package line (GEEANNT, notebook-only, `OldNotebooks/`)
-
-Before the codebase became an installable package. Working name GEEANNT; single
-detector-crossing events (energy + geometry), no task-adaptive training yet.
-
-| Version | Change | Result |
-|---|---|---|
-| 1.3.sv | Direction $u_v=\cos\theta_v$ modeled via $s_v=\mathrm{atanh}(u_v)$, plain Gaussian head | shape too crude, superseded |
-| 1.3.tv | Added a smoothing transform $t_v=\mathrm{sign}(s_v)\log(1+\lvert s_v\rvert)$ on top of $s_v$ | smoother $s_v$, still single-mode |
-| 1.4 | $t_v$ modeled with a mixture of Gaussians ($K{=}3$–$5$) instead of one | first multi-modal fit for $\theta_v$ |
-| 1.4RS / 1.5RS | 3-phase Optuna random search (30 trials → 5 best → Wasserstein-scored refinement); categorical discretized $u_v$ head, split decoder branches, dedicated $\phi_v$ angular loss | best pre-package result — categorical $u_v$ + split decoder + angular-loss weighting |
-
-Refactored into the first installable package structure immediately after 1.5RS
-(`5ab0920`); later renamed GEEANNT → **magi** (repo/paper name **MAGI**, `17b4bec`).
-
 ## v0.6 — `CVAE_CatEnergy_CatUV`
 
 - **Change:** first package-native model. Categorical energy head (binned logE) +
@@ -42,15 +27,15 @@ Refactored into the first installable package structure immediately after 1.5RS
 - **v0.7.1:** quantile transform tested and trained on K-40 (Small) and CR real
   data, first reference plots for this line.
 
-## v0.7.2 — `CVAE_CatEnergy_ContPhi_TaskAdaptive` (current beta fallback)
+## v0.7.2 — `CVAE_CatEnergy_ContPhi_TaskAdaptive` (stable fallback, superseded as default by v0.8.2)
 
 - **Change:** extends the continuous-quantile treatment to the angles
   ($\phi_r$, $\phi_v$ continuous, not just $u_r$/$u_v$) —
   `geometry_transform="quantile_u_r_u_v_phi_r_phi_v"`. Full geometry is now
   continuous; only energy remains categorical.
 - **Achievement:** validated on CR, Geant4 interface script adapted to the new
-  model. Reliable enough to be **the current beta default / fallback** —
-  see [`docs/v0.8_v072_comparison.md`](docs/v0.8_v072_comparison.md).
+  model. Reliable enough to have been **the beta default / fallback** before
+  v0.8.2 — see [`docs/v0.8_v072_comparison.md`](docs/v0.8_v072_comparison.md).
 - **Drawback (the reason v0.8 exists):** the categorical energy head is still a
   boxcar at bin width — ~20 keV wide at 511 keV, ~5000× the 4 eV X-IFU detector
   resolution. Cannot deliver detector-resolution spectral lines, which the
@@ -106,7 +91,27 @@ Refactored into the first installable package structure immediately after 1.5RS
   own variance as much as about the fix. Multi-seed evaluation is now treated
   as a prerequisite for trusting any single-run tuning result on this
   architecture, not just a nice-to-have.
-- **Result:** still open. v0.7.2 remains the beta default; go/no-go for v0.8.1
-  is pending Phase 4 (release hardening) and a clean multi-seed read on both
-  CR and Small. See [`docs/v0.8.2_plan.md`](docs/v0.8.2_plan.md) for the
-  current backlog and sequencing.
+- **Result:** cleared the go/no-go bar in v0.8.2 below; superseded as the
+  in-progress line.
+
+## v0.8.2 — prior zone-conditioning (current, `CVAE_MixEnergy_ContPhi_TaskAdaptive`)
+
+- **Change:** widens the coupling prior's conditioning from `[type]` to
+  `[type, zone]` — zone being the real `[continuum, line_1..line_L]` gate
+  target at train time, sampled from each type's empirical zone frequency
+  (`zone_probs`) at generation time. Everything else inherited from v0.8.1
+  (EADL line positions, resolution-bandwidth gate targets, `gate_focal_gamma=1`)
+  is unchanged.
+- **Achievement:** the one confirmed improvement — on CR, 3 seeds, took Al Kα1
+  recovery from 0.702 ± 0.290 (FAIL) to 0.959 ± 0.025 (PASS), with the coupling
+  residual unaffected (0.0345 ± 0.0048 → 0.0285 ± 0.0101). This is the version
+  shipped in this repo's `trained_models/` and used by `MAGI_v0_8_2.ipynb`.
+- **Drawback / rejected idea:** `build_gate_targets(..., bandwidth_mode="exact")`
+  — labelling gate targets by exact energy match instead of a Gaussian kernel of
+  the detector resolution — measured on CR, did not fix the line it targeted,
+  broke the confirmed Al Kα1 result, and pushed the coupling residual outside
+  its bar. `"resolution"` remains the default.
+- **Result:** current package default. Per-line intensities still do not pass
+  reliably across all lines (0.7×–4.9×, unstable across seeds) — see
+  `MAGI_package/docs/USAGE.md` § Accuracy you can rely on, or
+  `docs/manual/magi_manual.pdf` for the full validity envelope.

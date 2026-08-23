@@ -20,7 +20,11 @@ normalizing-flow continuum and fixed-position line components pinned at measured
 atomic transition energies, with a learned conditional prior that preserves
 energy-geometry correlations through generation.
 
-Built on `keras`/`tensorflow`. Author: Francesco Monastra ([INAF](https://www.inaf.it)).
+Built on `keras`/`tensorflow`. Author: Francesco Monastra
+([ORCID](https://orcid.org/0009-0007-1675-6223)) — Istituto Nazionale di
+Astrofisica - Istituto di Astrofisica e Planetologia Spaziali (INAF-IAPS),
+Osservatorio Astronomico di Roma (INAF-OAR), Agenzia Spaziale Italiana - Space
+Science Data Center (ASI-SSDC), Università degli Studi di Roma "Tor Vergata".
 
 ## Why this is validated the way it is
 
@@ -65,7 +69,7 @@ pay-once-transport / resample-many-times path.
 See [`docs/manual/magi_manual.pdf`](docs/manual/magi_manual.pdf) for the full
 validation writeup, including the honest limitations — most notably a
 few-percent species-dependent distortion in the SRON case whose mechanism is
-bounded but not yet localized.
+bounded but not yet localised.
 
 ## Install
 
