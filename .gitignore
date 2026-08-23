@@ -8,6 +8,11 @@ paper/
 __pycache__/
 *.pyc
 
+# Claude Code session-local state (worktree checkouts, local overrides) --
+# .claude/settings.json (the graphify hook) is intentionally NOT listed here.
+.claude/worktrees/
+.claude/settings.local.json
+
 # Editor/patch leftovers. Kept on disk, out of the history.
 *.bak
 *.bak[0-9]
