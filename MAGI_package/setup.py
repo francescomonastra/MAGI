@@ -34,6 +34,8 @@ setup(
     },
     packages=find_packages(),
     python_requires=">=3.9",
+    license="GPL-3.0-only",
+    license_files=["../LICENSE"],
     install_requires=[
         "numpy",
         "scipy",
@@ -70,6 +72,7 @@ setup(
     classifiers=[
         "Development Status :: 4 - Beta",
         "Intended Audience :: Science/Research",
+        "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
         "Topic :: Scientific/Engineering :: Astronomy",
         "Topic :: Scientific/Engineering :: Physics",
         "Programming Language :: Python :: 3",
