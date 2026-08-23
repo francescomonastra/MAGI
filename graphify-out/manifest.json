@@ -497,12 +497,6 @@
     "ast_hash": "31e7d4f9cfd8adec13aa1090a44a7cb7",
     "semantic_hash": "31e7d4f9cfd8adec13aa1090a44a7cb7"
   },
-  ".claude/settings.local.json": {
-    "mtime": 1787221236.4742985,
-    "seen": 1787516295.686263,
-    "ast_hash": "e7679e2160b3a8f5f072b8eae88638e3",
-    "semantic_hash": "e7679e2160b3a8f5f072b8eae88638e3"
-  },
   ".vscode/settings.json": {
     "mtime": 1785681204.9024534,
     "seen": 1787212975.84675,
@@ -1776,10 +1770,10 @@
     "semantic_hash": "066a4ed700323e1967e49e4766e3f4cb"
   },
   "CLAUDE.md": {
-    "mtime": 1785681204.9033914,
-    "seen": 1787212975.847252,
-    "ast_hash": "5e8451dcad1d4c80564e17a822c42879",
-    "semantic_hash": "5e8451dcad1d4c80564e17a822c42879"
+    "mtime": 1787516352.9178014,
+    "seen": 1787516408.2635741,
+    "ast_hash": "18aad603e170c8cff9505e93ca3781e8",
+    "semantic_hash": ""
   },
   "MAGI_package/README.md": {
     "mtime": 1785681204.9060497,
@@ -1998,9 +1992,9 @@
     "semantic_hash": "fcee2fa04262dc0fdb371e7b7172ccfd"
   },
   "docs/manual/magi_manual.pdf": {
-    "mtime": 1787164737.2053957,
-    "seen": 1787212975.847339,
-    "ast_hash": "21fb1de574affd3b7449bcd59c608e79",
+    "mtime": 1787337047.6980214,
+    "seen": 1787516408.264499,
+    "ast_hash": "9430b39c2c4c0fe559b8540909826f3a",
     "semantic_hash": ""
   },
   "paper_figures/fig1_spectra.pdf": {
@@ -2080,5 +2074,581 @@
     "seen": 1787516295.691765,
     "ast_hash": "19e67440148fcaba2609ba0ab82ede8c",
     "semantic_hash": "19e67440148fcaba2609ba0ab82ede8c"
+  },
+  "branding/MAGI Logo.pdf": {
+    "mtime": 1787507964.2401536,
+    "seen": 1787516408.264471,
+    "ast_hash": "6f38bd659e4360d51fe363d6a3ca3105",
+    "semantic_hash": ""
+  },
+  "Plots/CR_generated_real_v07.png": {
+    "mtime": 1784624343.9088907,
+    "seen": 1787516408.264811,
+    "ast_hash": "3108d5e46bae937bf3572eb462ebdb8a",
+    "semantic_hash": ""
+  },
+  "Plots/energy_distribution_K40_v07.png": {
+    "mtime": 1784624343.9137416,
+    "seen": 1787516408.264813,
+    "ast_hash": "0544882c5098906ab91ccf42839ca3c9",
+    "semantic_hash": ""
+  },
+  "Plots/energy_distribution_cr_v07.png": {
+    "mtime": 1784624343.9146204,
+    "seen": 1787516408.2648141,
+    "ast_hash": "3bf9634cabc796cbce92a82d9bc6b440",
+    "semantic_hash": ""
+  },
+  "Plots/energy_distribution_cr_v072.png": {
+    "mtime": 1784624343.916177,
+    "seen": 1787516408.264815,
+    "ast_hash": "ac73e98334be93b264bb2306a130ebab",
+    "semantic_hash": ""
+  },
+  "Plots/scatterplot_CR_v072.png": {
+    "mtime": 1784624343.9357479,
+    "seen": 1787516408.264816,
+    "ast_hash": "a137bbd6fc7fc29f5b76d2b938401264",
+    "semantic_hash": ""
+  },
+  "Plots/scatterplot_K40_v072.png": {
+    "mtime": 1784624343.954036,
+    "seen": 1787516408.264817,
+    "ast_hash": "9cb357afaf37209524f55a4bec329c5a",
+    "semantic_hash": ""
+  },
+  "Plots/scatterplot_dataraw_cr.png": {
+    "mtime": 1784624343.9712188,
+    "seen": 1787516408.264818,
+    "ast_hash": "09072c86612e4d4398d7daebbb4e52d0",
+    "semantic_hash": ""
+  },
+  "Plots/u_r_K40_v07.png": {
+    "mtime": 1784624343.9752343,
+    "seen": 1787516408.264819,
+    "ast_hash": "31c37efda58b377116b2b2e6f86794d8",
+    "semantic_hash": ""
+  },
+  "Plots/u_r_K40_v072.png": {
+    "mtime": 1784624343.9766057,
+    "seen": 1787516408.2648199,
+    "ast_hash": "ccc94556a42234c33de5533fcb4e0ed3",
+    "semantic_hash": ""
+  },
+  "Plots/u_r_cr_v07.png": {
+    "mtime": 1784624343.9778495,
+    "seen": 1787516408.264822,
+    "ast_hash": "c1f177e8e46facef1dc8bed3943e8347",
+    "semantic_hash": ""
+  },
+  "Plots/u_r_cr_v072.png": {
+    "mtime": 1784624343.9787629,
+    "seen": 1787516408.264823,
+    "ast_hash": "f1718dcdb2c31019fe75ca6330786f92",
+    "semantic_hash": ""
+  },
+  "Plots/u_v_K40_v07.png": {
+    "mtime": 1784624343.9800186,
+    "seen": 1787516408.264825,
+    "ast_hash": "1e8779745f685ab5ff17a25484e1d08b",
+    "semantic_hash": ""
+  },
+  "Plots/u_v_K40_v072.png": {
+    "mtime": 1784624343.9809484,
+    "seen": 1787516408.264826,
+    "ast_hash": "e57d66a7829afcb9830ba30d32e30526",
+    "semantic_hash": ""
+  },
+  "Plots/u_v_cr_v07.png": {
+    "mtime": 1784624343.9822977,
+    "seen": 1787516408.2648268,
+    "ast_hash": "bfe4764b955d298427bcfa7b53b2812d",
+    "semantic_hash": ""
+  },
+  "Plots/u_v_cr_v072.png": {
+    "mtime": 1784624343.983143,
+    "seen": 1787516408.2648268,
+    "ast_hash": "b9b81ef8f8c6ba810a71a8bfb9100b3b",
+    "semantic_hash": ""
+  },
+  "Plots/v0_8_1_cuka2_real_CR_seed13_spectrum.png": {
+    "mtime": 1785310549.8111382,
+    "seen": 1787516408.264829,
+    "ast_hash": "3027f9cf8f902e9cee4fab268a62628a",
+    "semantic_hash": ""
+  },
+  "Plots/v0_8_1_cuka2_real_CR_seed7_spectrum.png": {
+    "mtime": 1785305260.8121285,
+    "seen": 1787516408.2648299,
+    "ast_hash": "6c44ffd59a4bb5de778fec3d391138c8",
+    "semantic_hash": ""
+  },
+  "Plots/v0_8_1_cuka2_real_CR_spectrum.png": {
+    "mtime": 1785234667.6289654,
+    "seen": 1787516408.264831,
+    "ast_hash": "727e24422accbf88e222ad7e2964c738",
+    "semantic_hash": ""
+  },
+  "Plots/v0_8_1_gatew_real_CR_spectrum.png": {
+    "mtime": 1785241888.8502026,
+    "seen": 1787516408.264832,
+    "ast_hash": "674884f7083980a94a3ef2fe03cca85a",
+    "semantic_hash": ""
+  },
+  "Plots/v0_8_1_gatew_real_Small_spectrum.png": {
+    "mtime": 1785240715.2517655,
+    "seen": 1787516408.264832,
+    "ast_hash": "2f45d83b15b13c93ad5a7beb8781014f",
+    "semantic_hash": ""
+  },
+  "Plots/v0_8_1_phase3_bins32_real_CR_spectrum.png": {
+    "mtime": 1785255676.787738,
+    "seen": 1787516408.264833,
+    "ast_hash": "70527c5ca44b90b51e67b0af17faf4d9",
+    "semantic_hash": ""
+  },
+  "Plots/v0_8_1_phase3_boost_real_CR_seed13_spectrum.png": {
+    "mtime": 1785313476.6479807,
+    "seen": 1787516408.2648342,
+    "ast_hash": "f81329317fcc2eca00777fd3fc79aec1",
+    "semantic_hash": ""
+  },
+  "Plots/v0_8_1_phase3_boost_real_CR_seed7_spectrum.png": {
+    "mtime": 1785273092.3988163,
+    "seen": 1787516408.2648351,
+    "ast_hash": "43e438329e888cbf2e74fa759b70bb62",
+    "semantic_hash": ""
+  },
+  "Plots/v0_8_1_phase3_boost_real_CR_spectrum.png": {
+    "mtime": 1785262839.1733792,
+    "seen": 1787516408.264836,
+    "ast_hash": "95da2c611359a9a40c673af623e16e65",
+    "semantic_hash": ""
+  },
+  "Plots/v0_8_1_phase3_real_CR_spectrum.png": {
+    "mtime": 1785247375.1094124,
+    "seen": 1787516408.264837,
+    "ast_hash": "efaa040e6d44cacf6c27272d8617b8ea",
+    "semantic_hash": ""
+  },
+  "Plots/v0_8_1_phase3_real_Small_spectrum.png": {
+    "mtime": 1785249300.4419167,
+    "seen": 1787516408.264839,
+    "ast_hash": "2cd7f0954c66b633daa985050493e26a",
+    "semantic_hash": ""
+  },
+  "Plots/v0_8_1_real_CR_corr.png": {
+    "mtime": 1785158191.582714,
+    "seen": 1787516408.264839,
+    "ast_hash": "31710350a4b839649a23c1eba4f52260",
+    "semantic_hash": ""
+  },
+  "Plots/v0_8_1_real_CR_cov.png": {
+    "mtime": 1785158191.109394,
+    "seen": 1787516408.2648408,
+    "ast_hash": "df7357570ac4bde2ca2b8fa3682c8d6a",
+    "semantic_hash": ""
+  },
+  "Plots/v0_8_1_real_CR_pairgrid.png": {
+    "mtime": 1785158190.6343882,
+    "seen": 1787516408.264842,
+    "ast_hash": "f92a931c9fb77d271ab34237c9b2cf7c",
+    "semantic_hash": ""
+  },
+  "Plots/v0_8_1_real_CR_spectrum.png": {
+    "mtime": 1785158262.5040398,
+    "seen": 1787516408.264843,
+    "ast_hash": "603657a3686ce3c56b38400b785bf0ed",
+    "semantic_hash": ""
+  },
+  "Plots/v0_8_1_real_Small_corr.png": {
+    "mtime": 1785158207.9241085,
+    "seen": 1787516408.264844,
+    "ast_hash": "b5f0995ae5004e90e68da7d2a99d9089",
+    "semantic_hash": ""
+  },
+  "Plots/v0_8_1_real_Small_cov.png": {
+    "mtime": 1785158207.5004733,
+    "seen": 1787516408.2648451,
+    "ast_hash": "f94d9d4c8bff069fc7c0e96127384fab",
+    "semantic_hash": ""
+  },
+  "Plots/v0_8_1_real_Small_pairgrid.png": {
+    "mtime": 1785158207.139645,
+    "seen": 1787516408.264846,
+    "ast_hash": "e97aa97bd8b988a37c3a5945065767a1",
+    "semantic_hash": ""
+  },
+  "Plots/v0_8_1_real_Small_seed13_spectrum.png": {
+    "mtime": 1785317102.9044628,
+    "seen": 1787516408.264847,
+    "ast_hash": "cbf65cc42e955337e92a62e4fe9fa184",
+    "semantic_hash": ""
+  },
+  "Plots/v0_8_1_real_Small_seed7_spectrum.png": {
+    "mtime": 1785315667.640397,
+    "seen": 1787516408.2648478,
+    "ast_hash": "c35e71b2ed4ef0fd4ac08310588e91a1",
+    "semantic_hash": ""
+  },
+  "Plots/v0_8_1_real_Small_spectrum.png": {
+    "mtime": 1785158262.5098202,
+    "seen": 1787516408.264849,
+    "ast_hash": "6bc38be703da7037620a9dbbaacc7b34",
+    "semantic_hash": ""
+  },
+  "Plots/v0_8_2_priorzone_real_CR_seed13_spectrum.png": {
+    "mtime": 1785361323.92946,
+    "seen": 1787516408.26485,
+    "ast_hash": "f3abf46a5864ac645684b0da82c022ee",
+    "semantic_hash": ""
+  },
+  "Plots/v0_8_2_priorzone_real_CR_seed7_spectrum.png": {
+    "mtime": 1785356400.2376592,
+    "seen": 1787516408.2648509,
+    "ast_hash": "75ad356e1264eebf09b422ca1c039ba1",
+    "semantic_hash": ""
+  },
+  "Plots/v0_8_2_priorzone_real_CR_spectrum.png": {
+    "mtime": 1785350967.2679522,
+    "seen": 1787516408.264852,
+    "ast_hash": "b6b6bc4b09ea196513bd334c457a52cb",
+    "semantic_hash": ""
+  },
+  "Plots/v0_8_2_priorzone_real_Small_seed13_spectrum.png": {
+    "mtime": 1785838613.437034,
+    "seen": 1787516408.264853,
+    "ast_hash": "804c8df49f4285173f003522ab8738b7",
+    "semantic_hash": ""
+  },
+  "Plots/v0_8_2_priorzone_real_Small_seed7_spectrum.png": {
+    "mtime": 1785837008.053077,
+    "seen": 1787516408.264854,
+    "ast_hash": "24925877ca223901592cb04279941351",
+    "semantic_hash": ""
+  },
+  "Plots/v0_8_2_priorzone_real_Small_spectrum.png": {
+    "mtime": 1785404793.4505882,
+    "seen": 1787516408.2648551,
+    "ast_hash": "12ca101f1d5c8e843da7bd27e5b8f773",
+    "semantic_hash": ""
+  },
+  "Plots/v0_8_3_correlation_matrices.png": {
+    "mtime": 1786548475.6596844,
+    "seen": 1787516408.264856,
+    "ast_hash": "e50ef24bfc6c4789efacbb391230fae7",
+    "semantic_hash": ""
+  },
+  "Plots/v0_8_3_energy_vs_b.png": {
+    "mtime": 1786548480.0205753,
+    "seen": 1787516408.264857,
+    "ast_hash": "b20ca2e4bf6114e581fd1b719fdaf154",
+    "semantic_hash": ""
+  },
+  "Plots/v0_8_cycles_CR_corr.png": {
+    "mtime": 1784974342.2222092,
+    "seen": 1787516408.264858,
+    "ast_hash": "f2d9512f39fab73e8826c02b727f39dc",
+    "semantic_hash": ""
+  },
+  "Plots/v0_8_cycles_CR_spectrum.png": {
+    "mtime": 1784974341.6887927,
+    "seen": 1787516408.264859,
+    "ast_hash": "8e91bbc58c00ddb38fb0bb1ae9c670f0",
+    "semantic_hash": ""
+  },
+  "Plots/v0_8_cycles_Small_corr.png": {
+    "mtime": 1784974342.5335097,
+    "seen": 1787516408.26486,
+    "ast_hash": "bee9f44bb09a14e7900fc9677fed5f58",
+    "semantic_hash": ""
+  },
+  "Plots/v0_8_cycles_Small_spectrum.png": {
+    "mtime": 1784974341.911324,
+    "seen": 1787516408.2648609,
+    "ast_hash": "bafea7a4aaa537e6e1f093e6c6adfcc1",
+    "semantic_hash": ""
+  },
+  "Plots/v0_8_energy_distribution_Small.png": {
+    "mtime": 1784992536.8335316,
+    "seen": 1787516408.264862,
+    "ast_hash": "ce74776d864782c9f2cbce53818bc177",
+    "semantic_hash": ""
+  },
+  "Plots/v0_8_flow_vs_gaussian_synthetic.png": {
+    "mtime": 1784741569.7885394,
+    "seen": 1787516408.264863,
+    "ast_hash": "361fd9e63d4c38b132d19c54654b6ef3",
+    "semantic_hash": ""
+  },
+  "Plots/v0_8_real_CR DM1.2_corr.png": {
+    "mtime": 1785230717.324994,
+    "seen": 1787516408.264864,
+    "ast_hash": "c2e7a46eeda8fbd52f7c4ecc87534c3c",
+    "semantic_hash": ""
+  },
+  "Plots/v0_8_real_CR DM1.2_cov.png": {
+    "mtime": 1785230717.716484,
+    "seen": 1787516408.264865,
+    "ast_hash": "4cdfe1f5cd54e886f3c81939a5248810",
+    "semantic_hash": ""
+  },
+  "Plots/v0_8_real_CR DM1.2_spectrum.png": {
+    "mtime": 1785230711.2992678,
+    "seen": 1787516408.264866,
+    "ast_hash": "fe28b613def66022f0940b3021a53312",
+    "semantic_hash": ""
+  },
+  "Plots/v0_8_real_CR_corr.png": {
+    "mtime": 1784914071.1495812,
+    "seen": 1787516408.264867,
+    "ast_hash": "30c54be2c0b56dc36146abf6e897741b",
+    "semantic_hash": ""
+  },
+  "Plots/v0_8_real_CR_cov.png": {
+    "mtime": 1784914070.735797,
+    "seen": 1787516408.264868,
+    "ast_hash": "360fbe57e717b31c3696ee978a605ce1",
+    "semantic_hash": ""
+  },
+  "Plots/v0_8_real_CR_pairgrid.png": {
+    "mtime": 1784914070.3669267,
+    "seen": 1787516408.2648692,
+    "ast_hash": "bf1fb4a1b635347973d6f7ad69af425f",
+    "semantic_hash": ""
+  },
+  "Plots/v0_8_real_CR_spectrum.png": {
+    "mtime": 1785505409.3418422,
+    "seen": 1787516408.26487,
+    "ast_hash": "2b33a738d8a5e85b533f331dd25b9c23",
+    "semantic_hash": ""
+  },
+  "Plots/v0_8_real_Small_corr.png": {
+    "mtime": 1785225945.2286372,
+    "seen": 1787516408.264871,
+    "ast_hash": "826dc944be28a992c629538c6038f616",
+    "semantic_hash": ""
+  },
+  "Plots/v0_8_real_Small_cov.png": {
+    "mtime": 1785225945.2302203,
+    "seen": 1787516408.2648718,
+    "ast_hash": "c843d41a5e5abf4714d2819c57e3030b",
+    "semantic_hash": ""
+  },
+  "Plots/v0_8_real_Small_pairgrid.png": {
+    "mtime": 1784914082.2651691,
+    "seen": 1787516408.264874,
+    "ast_hash": "0f10119926648c6763bc202f2b3c40c8",
+    "semantic_hash": ""
+  },
+  "Plots/v0_8_real_Small_spectrum.png": {
+    "mtime": 1785158262.537429,
+    "seen": 1787516408.264875,
+    "ast_hash": "e6b8afc5c99d51b3c1e9da0c38d5d4b2",
+    "semantic_hash": ""
+  },
+  "Plots/v0_8_real_Torio_corr.png": {
+    "mtime": 1785171238.7600656,
+    "seen": 1787516408.2648761,
+    "ast_hash": "6e1e8d2513e0582c23539f908ae38ad8",
+    "semantic_hash": ""
+  },
+  "Plots/v0_8_real_Torio_cov.png": {
+    "mtime": 1785171239.2675958,
+    "seen": 1787516408.264877,
+    "ast_hash": "55e86ce44b1e393947652188e6001c0a",
+    "semantic_hash": ""
+  },
+  "Plots/v0_8_real_Torio_spectrum.png": {
+    "mtime": 1785171004.4999967,
+    "seen": 1787516408.264878,
+    "ast_hash": "3082bdd4e4e040e9416bfef88d540261",
+    "semantic_hash": ""
+  },
+  "Plots/vx_K40_v07.png": {
+    "mtime": 1784624343.9840724,
+    "seen": 1787516408.264879,
+    "ast_hash": "a1f25ed6d2129540f2fd918624bb68ec",
+    "semantic_hash": ""
+  },
+  "Plots/vx_K40_v072.png": {
+    "mtime": 1784624343.9848585,
+    "seen": 1787516408.2648802,
+    "ast_hash": "77151e39cbcc6268ae64b5a923b51461",
+    "semantic_hash": ""
+  },
+  "Plots/vx_cr_v07.png": {
+    "mtime": 1784624343.985649,
+    "seen": 1787516408.264881,
+    "ast_hash": "64bbd1a7a6ea1f9e0141c83a0b504133",
+    "semantic_hash": ""
+  },
+  "Plots/vx_cr_v072.png": {
+    "mtime": 1784624343.9864478,
+    "seen": 1787516408.2648818,
+    "ast_hash": "30360e83b348b94ea6c2bac392114022",
+    "semantic_hash": ""
+  },
+  "Plots/vy_K40_v07.png": {
+    "mtime": 1784624343.9872694,
+    "seen": 1787516408.264883,
+    "ast_hash": "6bbef8a62df5a9174fd3be23f9c99516",
+    "semantic_hash": ""
+  },
+  "Plots/vy_K40_v072.png": {
+    "mtime": 1784624343.9882894,
+    "seen": 1787516408.264884,
+    "ast_hash": "36c84d8c4b93f6ac14f64b80d977aa3c",
+    "semantic_hash": ""
+  },
+  "Plots/vy_cr_v07.png": {
+    "mtime": 1784624343.989114,
+    "seen": 1787516408.264885,
+    "ast_hash": "d7ceeea0409068a2bdc7c35c57effe9e",
+    "semantic_hash": ""
+  },
+  "Plots/vy_cr_v072.png": {
+    "mtime": 1784624343.990216,
+    "seen": 1787516408.264886,
+    "ast_hash": "52f27f877cf48a9d65dbae3ec073d391",
+    "semantic_hash": ""
+  },
+  "Plots/x_K40_v061.png": {
+    "mtime": 1784624343.9911985,
+    "seen": 1787516408.264887,
+    "ast_hash": "91c24dd80e69450c5da1e90891bb2c50",
+    "semantic_hash": ""
+  },
+  "Plots/x_K40_v072.png": {
+    "mtime": 1784624343.9921756,
+    "seen": 1787516408.264888,
+    "ast_hash": "cc4ccb3b18d37e362ce1e8f4c350d17f",
+    "semantic_hash": ""
+  },
+  "Plots/x_cr_v071.png": {
+    "mtime": 1784624343.9934134,
+    "seen": 1787516408.264889,
+    "ast_hash": "a5b68b95b38941617b05bdc3a11ac602",
+    "semantic_hash": ""
+  },
+  "Plots/x_cr_v072.png": {
+    "mtime": 1784624343.9948416,
+    "seen": 1787516408.2648902,
+    "ast_hash": "b98d238a126feae2847992d783c48b9a",
+    "semantic_hash": ""
+  },
+  "Plots/y_K40_v061.png": {
+    "mtime": 1784624343.995811,
+    "seen": 1787516408.264891,
+    "ast_hash": "8d03608d991fda2e6c6bf1a6c27267e9",
+    "semantic_hash": ""
+  },
+  "Plots/y_K40_v072.png": {
+    "mtime": 1784624343.9968636,
+    "seen": 1787516408.2648919,
+    "ast_hash": "b515f1927f06409231debac786de22d8",
+    "semantic_hash": ""
+  },
+  "Plots/y_cr_v071.png": {
+    "mtime": 1784624343.9976306,
+    "seen": 1787516408.2648928,
+    "ast_hash": "b671dd0cb2f9d7d7e507e6b53a1edf07",
+    "semantic_hash": ""
+  },
+  "Plots/y_cr_v072.png": {
+    "mtime": 1784624343.9983826,
+    "seen": 1787516408.264894,
+    "ast_hash": "eee1e90ee204541a5bf3eee65e9e4c9e",
+    "semantic_hash": ""
+  },
+  "branding/MAGI Logo.png": {
+    "mtime": 1787507964.2187722,
+    "seen": 1787516408.264895,
+    "ast_hash": "afa5cea367e4eab6b7caadeaef762af4",
+    "semantic_hash": ""
+  },
+  "docs/manual/figures/full_circuit.png": {
+    "mtime": 1785681205.0758135,
+    "seen": 1787516408.264896,
+    "ast_hash": "8f0d8df8e6364644731d09c1cf1a9f22",
+    "semantic_hash": ""
+  },
+  "docs/manual/figures/routing_circuit.png": {
+    "mtime": 1785681205.0777757,
+    "seen": 1787516408.264897,
+    "ast_hash": "15d77079c3a0944719a0976fcf36c263",
+    "semantic_hash": ""
+  },
+  "docs/v0.8.1_model_schematic.svg": {
+    "mtime": 1785223287.5401347,
+    "seen": 1787516408.264897,
+    "ast_hash": "846038013d73110c809af4de4568b2e4",
+    "semantic_hash": ""
+  },
+  "paper_figures/fig1_spectra.png": {
+    "mtime": 1787342497.9308627,
+    "seen": 1787516408.264898,
+    "ast_hash": "8eb8a60cc3423eae22a1e29398d0eb70",
+    "semantic_hash": ""
+  },
+  "paper_figures/fig2_corner_CR.png": {
+    "mtime": 1786707162.0100994,
+    "seen": 1787516408.264899,
+    "ast_hash": "29f85c488a93acdbf386156a0cc027a7",
+    "semantic_hash": ""
+  },
+  "paper_figures/fig2_corner_DM1_2_iso.png": {
+    "mtime": 1786707213.319091,
+    "seen": 1787516408.2649002,
+    "ast_hash": "672556d9decc78f8caab38c08c4517ab",
+    "semantic_hash": ""
+  },
+  "paper_figures/fig2_corner_DM1_2_iso_paper.png": {
+    "mtime": 1786904847.977809,
+    "seen": 1787516408.2649019,
+    "ast_hash": "18f67e1b7861dd0fb2566b11490ab18b",
+    "semantic_hash": ""
+  },
+  "paper_figures/fig2_corner_Small.png": {
+    "mtime": 1786707192.6089666,
+    "seen": 1787516408.2649028,
+    "ast_hash": "2a635075258bbbccad06cb860379610f",
+    "semantic_hash": ""
+  },
+  "paper_figures/fig_breakeven.png": {
+    "mtime": 1787323082.8393517,
+    "seen": 1787516408.2649028,
+    "ast_hash": "1721bde8dfd9648019ccddb1e422cecf",
+    "semantic_hash": ""
+  },
+  "paper_figures/fig_cr_retest.png": {
+    "mtime": 1787068270.086557,
+    "seen": 1787516408.264904,
+    "ast_hash": "1b3f1d2a1815060f91ab107972b83d68",
+    "semantic_hash": ""
+  },
+  "paper_figures/fig_cr_vs_full.png": {
+    "mtime": 1787337109.335878,
+    "seen": 1787516408.264906,
+    "ast_hash": "f37ae2039aecf73c101a05a9e50afd24",
+    "semantic_hash": ""
+  },
+  "paper_figures/fig_kds_correlations.png": {
+    "mtime": 1786777924.328308,
+    "seen": 1787516408.2649071,
+    "ast_hash": "24a51947a2c84c8194d71f5924bd6327",
+    "semantic_hash": ""
+  },
+  "paper_figures/fig_kds_lines.png": {
+    "mtime": 1786777930.0523725,
+    "seen": 1787516408.264908,
+    "ast_hash": "0ff2da7d5c239f1ee9b075c43c28d748",
+    "semantic_hash": ""
+  },
+  "paper_figures/fig_kds_marginals.png": {
+    "mtime": 1786777914.9672763,
+    "seen": 1787516408.264909,
+    "ast_hash": "d756cef7f8ca44cc0a239bcee2e1c92b",
+    "semantic_hash": ""
   }
 }
