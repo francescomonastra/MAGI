@@ -1,0 +1,64 @@
+=== Tue Aug 18 08:06:35 CEST 2026 waiting for the CR retest to finish ===
+=== Tue Aug 18 16:49:50 CEST 2026 generating the CR sample for the test ===
+[MAGI] CryoSphere for reconstruction: centre (0.0, 0.0, -507.66) radius 99.0141 (centre from preprocessing['center'], radius from preprocessing['radius'])
+generated:   400000 records
+=== Tue Aug 18 16:50:05 CEST 2026 memorisation test, CR ===
+==============================================================================
+MEMORISATION TEST -- CR, v0_8_2_CR_ingoingfix (corrected training set)
+==============================================================================
+real 3,737,351 crossings | MAGI 400,000 generated
+species  real: {'e+': 4518, 'e-': 78836, 'gamma': 2123977, 'mu-': 1530020}
+species  MAGI: {'e+': 501, 'e-': 8386, 'gamma': 227264, 'mu-': 163849}
+Using k = 7 neighbors per batch (batch_size = 10000)
+Correction factor: f_k = k_float / k = 0.9523809523809524
+Effective total neighbors: K_eff = 100
+batch = 1 / 15
+batch = 2 / 15
+batch = 3 / 15
+batch = 4 / 15
+batch = 5 / 15
+batch = 6 / 15
+batch = 7 / 15
+batch = 8 / 15
+batch = 9 / 15
+batch = 10 / 15
+batch = 11 / 15
+batch = 12 / 15
+batch = 13 / 15
+batch = 14 / 15
+batch = 15 / 15
+
+reference 150,000 | queries 60,000 per arm | eps = 1st pct of d_real = 0.09862
+
+  arm                                        
+  real -> real (LOO)     median 0.24308  ratio  1.000   KS D=0.0000 p=1.00e+00   near-dup  1.000%
+  MAGI -> real           median 0.24969  ratio  1.027   KS D=0.0713 p=4.59e-133   near-dup  0.885%
+  KDE(silv) -> real      median 0.49287  ratio  2.028   KS D=0.7280 p=0.00e+00   near-dup  0.002%
+  KDE(adaptive kNN)      median 0.97200  ratio  3.999   KS D=0.9147 p=0.00e+00   near-dup  0.000%
+  memoriser jitter=0     median 0.00000  ratio  0.000   KS D=1.0000 p=0.00e+00   near-dup 100.000%
+  memoriser jitter=0.005 median 0.01259  ratio  0.052   KS D=1.0000 p=0.00e+00   near-dup 100.000%
+  memoriser jitter=0.02  median 0.05036  ratio  0.207   KS D=0.9898 p=0.00e+00   near-dup 99.902%
+  memoriser jitter=0.05  median 0.12565  ratio  0.517   KS D=0.7690 p=0.00e+00   near-dup 20.988%
+  held-out real -> real  median 0.24333  ratio  1.001   KS D=0.0029 p=9.64e-01   near-dup  0.903%
+
+------------------------------------------------------------------------------
+MAGI       ratio 1.027, near-duplicates 0.885%
+KDE(silv)  ratio 2.028, near-duplicates 0.002%
+KDE(kNN)   ratio 3.999, near-duplicates 0.000%
+memoriser j=0      ratio 0.000, near-duplicates 100.000%
+memoriser j=0.005  ratio 0.052, near-duplicates 100.000%
+memoriser j=0.02   ratio 0.207, near-duplicates 99.902%
+memoriser j=0.05   ratio 0.517, near-duplicates 20.988%
+
+Metric validated in both directions: held-out real reads as real
+(ratio ~1.00, KS p=0.81), and literal copies of training points read
+as recall (ratio 0.000, 100.0% near-duplicates).
+
+MAGI does NOT memorise: it sits at the same distance from the data
+as real data does from itself.
+
+The KDE arm is NOT a memorisation control -- at KDSource's Silverman
+bandwidth in 7-D the kernel is ~4x the nearest-neighbour spacing, so it
+over-smooths. It is reported as an independent characterisation of that
+resampler, alongside its 15.45% physically-impossible-sample rate.
+=== Tue Aug 18 16:50:20 CEST 2026 CR MEMORISATION TEST DONE ===

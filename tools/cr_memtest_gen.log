@@ -1,0 +1,23 @@
+/Users/francesco/mambaforge/envs/tf-metal/lib/python3.10/site-packages/sklearn/base.py:442: InconsistentVersionWarning: Trying to unpickle estimator QuantileTransformer from version 1.6.1 when using version 1.7.2. This might lead to breaking code or invalid results. Use at your own risk. For more info please refer to:
+https://scikit-learn.org/stable/model_persistence.html#security-maintainability-limitations
+  warnings.warn(
+2026-08-18 16:49:58.923167: I metal_plugin/src/device/metal_device.cc:1154] Metal device set to: Apple M1
+2026-08-18 16:49:58.923430: I metal_plugin/src/device/metal_device.cc:296] systemMemory: 16.00 GB
+2026-08-18 16:49:58.923442: I metal_plugin/src/device/metal_device.cc:313] maxCacheSize: 5.92 GB
+2026-08-18 16:49:58.923941: I tensorflow/core/common_runtime/pluggable_device/pluggable_device_factory.cc:305] Could not identify NUMA node of platform GPU ID 0, defaulting to 0. Your kernel may not have been built with NUMA support.
+2026-08-18 16:49:58.923961: I tensorflow/core/common_runtime/pluggable_device/pluggable_device_factory.cc:271] Created TensorFlow device (/job:localhost/replica:0/task:0/device:GPU:0 with 0 MB memory) -> physical PluggableDevice (device: 0, name: METAL, pci bus id: <undefined>)
+2026-08-18 16:49:59.999370: I tensorflow/core/grappler/optimizers/custom_graph_optimizer_registry.cc:117] Plugin optimizer for device_type GPU is enabled.
+[MAGI] Loaded quantile transformers: /Volumes/X10Pro/MAGI/trained_models/v0_8_2_CR_ingoingfix/mix_CR_quantile_transformers.joblib
+[MAGI] CryoSphere for reconstruction: centre (0.0, 0.0, -507.66) radius 99.0141 (centre from preprocessing['center'], radius from preprocessing['radius'])
+Loaded task-adaptive model.
+Model class: CVAE_MixEnergy_ContPhi_TaskAdaptive
+Weights: /Volumes/X10Pro/MAGI/trained_models/v0_8_2_CR_ingoingfix/mix_CR.weights.h5
+Task weights: /Volumes/X10Pro/MAGI/trained_models/v0_8_2_CR_ingoingfix/mix_CR_task_weights.json
+Current task weights: {'energy': 1.0, 'ur': 1.0, 'uv': 1.0, 'phi_r': 1.0, 'phi_v': 1.0}
+[MAGI] Generating chunk attempted=0 written=0 / target=400000
+[MAGI] Generating chunk attempted=100000 written=100000 / target=400000
+[MAGI] Generating chunk attempted=200000 written=200000 / target=400000
+[MAGI] Generating chunk attempted=300000 written=300000 / target=400000
+[MAGI] Saved generated detector text file to /Volumes/X10Pro/tmp/magi_cr_memtest.txt
+[MAGI] Raw generated samples attempted: 400000
+[MAGI] Transport particles written: 400000
