@@ -1,0 +1,16 @@
+MAGI trained model summary
+===========================
+
+Model name: mix_DM1_2_500k
+Model class: CVAE_MixEnergy_ContPhi_TaskAdaptive
+Created at unix: 1786524027.0079691
+
+Weights: /path/to/MAGI/trained_models/v0_8_2_DM1_2_500k/mix_DM1_2_500k.weights.h5
+Config: /path/to/MAGI/trained_models/v0_8_2_DM1_2_500k/mix_DM1_2_500k_config.json
+Metadata: /path/to/MAGI/trained_models/v0_8_2_DM1_2_500k/mix_DM1_2_500k_metadata.json
+History: /path/to/MAGI/trained_models/v0_8_2_DM1_2_500k/mix_DM1_2_500k_history.json
+Task weights: /path/to/MAGI/trained_models/v0_8_2_DM1_2_500k/mix_DM1_2_500k_task_weights.json
+Callbacks: saved in metadata
+
+Notes:
+v0.8.2 head trained on the DM1.2 500k CryoSphere set (353,026 crossings from 500,000 muons, neutrino-free, 0.00% outgoing). DM1.2 sphere is centre (0,0,5) mm R=105 mm - NOT the SRON (0,0,-507.6) R=100 sphere - and the crossings file is 13-column with position at 7-9 and direction at 10-12. Candidate lines come from the DM1.2 GDML with escape peaks.
