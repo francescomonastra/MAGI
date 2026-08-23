@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+.DS_Store
+*.dat
+*.root
+*.npy
+*.npz
+*.h5
+*.hdf5
+!trained_models/**/*.h5
