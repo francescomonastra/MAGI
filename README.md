@@ -4,6 +4,7 @@
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue.svg)](MAGI_package/setup.py)
+[![DOI](https://zenodo.org/badge/1343907039.svg)](https://doi.org/10.5281/zenodo.22099175)
 
 A Conditional Variational Autoencoder (CVAE) that learns the joint phase-space
 distribution of particles crossing a surface in a Geant4 Monte Carlo simulation —
