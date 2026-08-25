@@ -139,7 +139,7 @@ Colab GPU runtime.
   (`build_candidate_lines_from_geant4.py`), a reference driver for a full
   training run outside a notebook (`run_v0_8_real.py`), and an interactive
   routing-circuit visualizer (`plot_routing_circuit.py`).
-- **[`docs/manual/magi_manual.pdf`](docs/manual/magi_manual.pdf)** — the full
+- **[`docs/manual/magi_manual.pdf`](docs/manual/MAGI_Reference_Manual.pdf)** — the full
   user manual: code structure, the API and its settings, the tools, a worked
   full run, a worked validation, the theoretical foundation, and the validity
   envelope.
