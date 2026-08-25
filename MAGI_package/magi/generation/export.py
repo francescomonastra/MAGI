@@ -637,7 +637,7 @@ def generate_detector_input_file(
     output_file,
     n_events,
     radius,
-    center=(0.0, 0.0, -507.66),
+    center=(0.0, 0.0, 0.0),
     seed=42,
     chunk_size=100_000,
     energy_mode="uniform",

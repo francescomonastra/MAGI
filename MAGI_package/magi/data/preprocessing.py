@@ -108,7 +108,7 @@ def compute_primary_fraction(df, primary_col="PrimBool", primary_value=1):
 
 def build_physical_features(
     df,
-    center=(0.0, 0.0, -507.66),
+    center=(0.0, 0.0, 0.0),
     radius=100.0,
     eps=1e-6,
     drop_invalid_energy=True,

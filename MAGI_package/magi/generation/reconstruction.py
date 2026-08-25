@@ -381,7 +381,7 @@ def reconstruct_generated_features(
 
 def reconstruct_generated_physics(
     reco_pack,
-    center=(0.0, 0.0, -507.66),
+    center=(0.0, 0.0, 0.0),
     radius=100.0,
     eps=1e-6,
 ):
@@ -399,8 +399,7 @@ def reconstruct_generated_physics(
         Result of reconstruct_generated_features.
 
     center : tuple[float, float, float]
-        Sphere centre in mm. The default is the crossing sphere of the
-        reference X-IFU cryostat mass model.
+        Sphere centre in mm. The default is (0.0, 0.0, 0.0).
 
     radius : float
         Sphere radius in mm.
@@ -468,7 +467,7 @@ def reconstruct_generated_physics(
 def reconstruct_real_test_physics(
     X_cont_test,
     E_test_raw,
-    center=(0.0, 0.0, -507.66),
+    center=(0.0, 0.0, 0.0),
     radius=100.0,
     eps=1e-6,
 
