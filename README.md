@@ -27,6 +27,37 @@ Astrofisica - Istituto di Astrofisica e Planetologia Spaziali (INAF-IAPS),
 Osservatorio Astronomico di Roma (INAF-OAR), Agenzia Spaziale Italiana - Space
 Science Data Center (ASI-SSDC), Università degli Studi di Roma "Tor Vergata".
 
+## State of the project
+
+MAGI is at **v0.8.2-beta**. The production architecture is a gated mixture
+energy head over a normalizing-flow continuum and pinned emission lines, with
+a learned conditional prior (`CVAE_MixEnergy_ContPhi_TaskAdaptive` — see
+[`Versions Guideline.md`](Versions%20Guideline.md) for the full version
+lineage and what changed at each step). It replaces an earlier, simpler
+categorical-energy head (v0.7.2), which is still available for cases that only
+need the marginal spectrum right.
+
+It has been trained and validated end to end — data in, detector counts out —
+on two independent cryogenic-detector mass models: **DM1.2**, an INAF
+laboratory cryostat, and **SRON's X-IFU-like flight model**, across three
+source configurations (cosmic-ray muons on both, plus $^{40}$K on SRON). A
+trained DM1.2 checkpoint ships in this repo
+([`trained_models/v0_8_2_DM1_2_500k/`](trained_models/v0_8_2_DM1_2_500k/)) so
+you can generate from it immediately, alongside the full pipeline to train on
+your own source and geometry.
+
+What's genuinely established: detector-level closure (not just "the training
+distribution looks right"), a memorisation test showing the model generalises
+rather than recalls, and an acceptance/pass-fail harness
+(`tools/acceptance_v0_8.py`) to score any new training run against explicit
+thresholds. What's still open, stated plainly rather than buried: per-line
+intensity recovery for rare fluorescence and annihilation lines is not yet
+reliable, even though line *positions* are; there's a few-percent
+species-dependent distortion in the SRON case whose mechanism is bounded but
+not yet localised; and the crossing surface MAGI learns on is currently
+hard-limited to a sphere. The manual below is the full, unfiltered account of
+both sides.
+
 ## Why this is validated the way it is
 
 Reproducing marginal distributions is table stakes for a generative model. The
@@ -67,10 +98,10 @@ Where the cost actually pays off: cumulative core-hours against the number of
 inner-geometry design variants explored, full transport vs. the MAGI
 pay-once-transport / resample-many-times path.
 
-See [`docs/manual/magi_manual.pdf`](docs/manual/magi_manual.pdf) for the full
-validation writeup, including the honest limitations — most notably a
-few-percent species-dependent distortion in the SRON case whose mechanism is
-bounded but not yet localised.
+See [`docs/manual/MAGI_Reference_Manual.pdf`](docs/manual/MAGI_Reference_Manual.pdf)
+for the full validation writeup, including the honest limitations — most
+notably a few-percent species-dependent distortion in the SRON case whose
+mechanism is bounded but not yet localised.
 
 ## Install
 
@@ -139,7 +170,7 @@ Colab GPU runtime.
   (`build_candidate_lines_from_geant4.py`), a reference driver for a full
   training run outside a notebook (`run_v0_8_real.py`), and an interactive
   routing-circuit visualizer (`plot_routing_circuit.py`).
-- **[`docs/manual/magi_manual.pdf`](docs/manual/MAGI_Reference_Manual.pdf)** — the full
+- **[`docs/manual/MAGI_Reference_Manual.pdf`](docs/manual/MAGI_Reference_Manual.pdf)** — the full
   user manual: code structure, the API and its settings, the tools, a worked
   full run, a worked validation, the theoretical foundation, and the validity
   envelope.
