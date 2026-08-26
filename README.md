@@ -39,23 +39,22 @@ need the marginal spectrum right.
 
 It has been trained and validated end to end — data in, detector counts out —
 on two independent cryogenic-detector mass models: **DM1.2**, an INAF
-laboratory cryostat, and **SRON's X-IFU-like flight model**, across three
+laboratory cryostat, and **SRON's XFDM TES array** laboratory cryostat, across three
 source configurations (cosmic-ray muons on both, plus $^{40}$K on SRON). A
 trained DM1.2 checkpoint ships in this repo
 ([`trained_models/v0_8_2_DM1_2_500k/`](trained_models/v0_8_2_DM1_2_500k/)) so
 you can generate from it immediately, alongside the full pipeline to train on
 your own source and geometry.
 
-What's genuinely established: detector-level closure (not just "the training
-distribution looks right"), a memorisation test showing the model generalises
+What's genuinely established: detector-level closure, a memorisation test showing the model generalises
 rather than recalls, and an acceptance/pass-fail harness
 (`tools/acceptance_v0_8.py`) to score any new training run against explicit
-thresholds. What's still open, stated plainly rather than buried: per-line
-intensity recovery for rare fluorescence and annihilation lines is not yet
+thresholds. What's still open: per-line
+intensity recovery for rare fluorescence and annihilation lines is not yet fully
 reliable, even though line *positions* are; there's a few-percent
 species-dependent distortion in the SRON case whose mechanism is bounded but
-not yet localised; and the crossing surface MAGI learns on is currently
-hard-limited to a sphere. The manual below is the full, unfiltered account of
+not yet localised; and the **crossing surface MAGI learns on is currently
+hard-limited to a sphere**. The manual below is the full, unfiltered account of
 both sides.
 
 ## Why this is validated the way it is
@@ -64,7 +63,7 @@ Reproducing marginal distributions is table stakes for a generative model. The
 claim this repo backs is stronger: MAGI's output is pushed back through the real
 Geant4 mass model, and the resulting **detector-level spectrum** is compared
 against a full, independent Geant4 simulation of the same setup. That
-downstream closure — not just "does the training distribution look right" — is
+downstream closure is
 what the numbers below measure.
 
 <p align="center">
@@ -73,14 +72,14 @@ what the numbers below measure.
 
 **Detector 1, SRON cosmic-ray model: R = 0.963 ± 0.043** — the ratio of
 MAGI-driven to fully-simulated Detector-1 counts, consistent with unity to
-better than 1σ, measured against >40,000 full-simulation Detector-1 events.
+better than 1σ, measured against >500 full-simulation Detector-1 events (low statistic scenario).
 
 <p align="center">
   <img src="figures/fig1_spectra.png" width="700" alt="Deposited energy spectra: full Geant4 vs MAGI, DM1.2 and SRON">
 </p>
 
 Deposited-energy spectra, full Geant4 transport vs. MAGI-driven generation,
-for both validated mass models (DM1.2 laboratory cryostat and the SRON X-IFU
+for both validated mass models (DM1.2 laboratory cryostat and the SRON XFDM
 model), with Poisson-pull residuals.
 
 <p align="center">
