@@ -5,15 +5,19 @@
 
 \title{\vspace{-1.5cm}\textcolor{magiblue}{\Huge\bfseries MAGI}\\[0.2cm]
   {\large\itshape Multivariate Autoencoder for particle Generative Inference}\\[0.35cm]
-  {\Large A CVAE-based generative particle source for Monte Carlo transport}\\[0.5cm]
+  {\Large A cVAE-based generative particle source for Monte Carlo transport acceleration}\\[0.5cm]
   {\large User Manual --- \magiversion}}
-\author{Francesco Monastra\\\small INAF --- \texttt{francesco.monastra@inaf.it}}
+\author{Francesco Monastra\\\small INAF-IAPS --- ASI-SSDC \\ \texttt{francesco.monastra@inaf.it}}
 \date{\today}
 
 \begin{document}
 \maketitle
 \thispagestyle{empty}
-
+\begin{figure}[t!]
+    \centering
+    \includegraphics[width=0.5\linewidth]{figures/MAGI Logo.png}
+    \label{fig:MAGI LOGO}
+\end{figure}
 \begin{magiwarn}[This release is a beta]
 MAGI \magiversion{} reproduces the \emph{joint} phase-space distribution
 (energy--position--direction correlations) and the energy continuum to within
@@ -28,7 +32,7 @@ MAGI-generated source. Do not use this release to estimate a fluorescence or
 annihilation line flux.
 \end{magiwarn}
 
-\vspace{0.4cm}
+\newpage
 \tableofcontents
 \newpage
 
@@ -39,8 +43,8 @@ annihilation line flux.
 \subsection{What MAGI is}
 
 MAGI --- \emph{Multivariate Autoencoder for particle Generative Inference} ---
-is a Conditional Variational Autoencoder
-(CVAE)~\cite{Kingma2014VAE,Sohn2015CVAE}, implemented in Keras/TensorFlow,
+is a conditional Variational Autoencoder
+(cVAE)~\cite{Kingma2014VAE,Sohn2015CVAE}, implemented in Keras/TensorFlow,
 that learns the joint phase-space distribution of particles crossing a surface
 in a Monte Carlo simulation --- their energy, position, direction and particle
 type --- and then samples new, physically consistent events at a small fraction
@@ -81,6 +85,8 @@ it is to cut a long simulation at a surface and resume from there --- a
 decomposition that is useful in any transport problem with the statistics
 bottleneck above, not only the instrument-background case it was built for.
 
+Current available geometry is only spherical but we are working on expanding sampling geometries supported.
+
 \subsection{What it is not for}
 
 \begin{itemize}[nosep]
@@ -113,7 +119,7 @@ it is a runnable, commented walkthrough of the whole pipeline on synthetic
 data, and it finishes in a few minutes.
 
 \begin{maginote}[Conventions]
-Energies are in MeV and positions in mm throughout, matching Geant4's own
+Energies are in MeV and positions in mm throughout, matching our Geant4's
 output convention. Code that must run on the CPU is shown with the
 \code{CUDA\_VISIBLE\_DEVICES=-1} prefix, which must be set \emph{before}
 \code{magi} is imported.
@@ -124,18 +130,16 @@ output convention. Code that must run on the CPU is shown with the
 \label{sec:theory}
 
 This section states what MAGI is built on and where each piece is implemented.
-It is background, not a derivation; the primary sources are cited so a reader
-can go to them directly.
 
-\begin{magiwarn}[Bibliography verification status]
-The entries in \code{docs/manual/magi\_theory.bib} are marked
-\code{\% VERIFY}: their arXiv identifiers and titles are believed correct, but
-no author has yet opened each source to confirm author lists, venue, volume and
-pages. Confirm them on NASA ADS, INSPIRE or DBLP before any of this text is
-reused in a citable document.
-\end{magiwarn}
+%\begin{magiwarn}[Bibliography verification status]
+%The entries in \code{docs/manual/magi\_theory.bib} are marked
+%\code{\% VERIFY}: their arXiv identifiers and titles are believed correct, but
+%no author has yet opened each source to confirm author lists, venue, volume and
+%pages. Confirm them on NASA ADS, INSPIRE or DBLP before any of this text is
+%reused in a citable document.
+%\end{magiwarn}
 
-\subsection{Conditional variational autoencoders}
+\subsection{Conditional Variational Autoencoders}
 
 A variational autoencoder~\cite{Kingma2014VAE} models a density $p(x)$ through
 a latent variable $z$, training an encoder $q(z|x)$ and decoder $p(x|z)$
@@ -168,7 +172,7 @@ density, with the change-of-variables formula supplying an exact likelihood:
 MAGI uses monotonic rational-quadratic spline
 transforms~\cite{Durkan2019NeuralSplineFlows} for the energy continuum. The
 choice matters here for a specific reason: the crossing spectrum of a cosmic-ray
-source spans roughly nine decades and contains sharp non-Gaussian structure --- a
+source (our training scenario) spans roughly nine decades and contains sharp non-Gaussian structure --- a
 Compton edge, a muon peak, a steep low-energy tail --- that a single Gaussian
 cannot represent at all, and that an affine flow represents only poorly. A
 spline flow is flexible enough to follow that structure while remaining exactly
@@ -222,41 +226,6 @@ whole dataset --- happens to coincide with the prior. When it does not, the
 generator samples regions of latent space the decoder was never trained on and
 produces events from an extrapolation~\cite{Tomczak2018VampPrior}.
 
-\begin{maginote}[How to read the reported KL, and how not to]
-The \code{kl}/\code{val\_kl} numbers in the training log are the ELBO's own
-regularization term, $\mathrm{KL}(q(z \mid x) \,\|\, p(z \mid c))$, averaged
-over events. They measure the encoder against the prior in \emph{latent} space
-only, and say nothing directly about the generated energies, positions or
-directions --- that is what Section~\ref{sec:validation} measures.
-
-On the reference sources this sits at 21--28 nats with
-$\texttt{latent\_dim}=8$, i.e. roughly 3 nats per latent dimension. Two things
-are worth reading off it, and one is not:
-
-\begin{itemize}[nosep]
-  \item \textbf{It is not collapse.} The classic VAE failure is
-    $\mathrm{KL} \to 0$: the encoder ignores the input and the decoder ignores
-    $z$. Nothing near that is happening here.
-  \item \textbf{Training and validation KL track each other} (e.g.\ 22.30
-    versus 22.27 at the last epoch of one CR run), so the latent code is
-    encoding structure that generalizes rather than memorizing the training
-    split.
-  \item \textbf{It is not a quality score, and bigger is not worse.} With
-    $\beta = 0.2$ fixed and no annealing, KL rises through training precisely
-    \emph{because} reconstruction keeps improving --- the usual rate--distortion
-    trade-off. A run that ends at a higher KL than another is not thereby a
-    worse run.
-\end{itemize}
-
-What the number does justify is the design decision: a gap of this size between
-$q(z)$ and a fixed $\mathcal{N}(0,I)$ is exactly the regime where the
-train/generate mismatch above bites, which is why the prior is learned rather
-than fixed. Note that once \code{prior="coupling"} is in use the reported KL is
-measured against that \emph{learned} prior, so it is no longer the
-"distance from $\mathcal{N}(0,I)$" quantity the argument started from, and
-should not be compared across runs that used different priors.
-\end{maginote}
-
 MAGI replaces the fixed prior with a learned conditional coupling flow
 $p(z \mid c)$, built from affine coupling layers~\cite{Dinh2017RealNVP} and
 trained with a Monte-Carlo estimate of the KL term. This is what brings the
@@ -278,13 +247,9 @@ Line positions are only as good as the table they are pinned at. MAGI takes
 transition \emph{labels} (K$\alpha_1$, K$\beta$, and so on) from
 Bearden's compilation~\cite{Bearden1967XRayWavelengths}, but transition
 \emph{energies} from the EADL evaluated library~\cite{Perkins1991EADL}, because
-EADL is what the Geant4 physics list actually emitted.
+EADL is what the Geant4 \code{SpacePhysicsList} actually emitted.
 
-This distinction is not pedantic. Pinning to Bearden energies while the
-simulation emits EADL displaces Cu~K$\alpha_1$ by 42~eV and Cu~K$\beta$ by
-40~eV --- around ten times the 4~eV instrument FWHM the generated lines are
-given. The generated and real lines then have essentially no overlap, and no
-amount of gate tuning can recover it. Every pinned position is audited against
+Every pinned position is audited against
 a centroid measured from the real spectrum
 (\code{tools/line\_centroid\_audit.py}).
 
@@ -352,7 +317,7 @@ material that uses it.
 \code{Example\_Usage.ipynb} & Runnable walkthrough on synthetic data. Start
   here. \\
 \code{MAGI\_v0\_*.ipynb} & The experiment notebooks. Highest version number is
-  the current pipeline; \code{OldNotebooks/} holds deprecated ones. \\
+  the current pipeline. \\
 \code{tools/} & Command-line scripts \emph{around} a run rather than inside
   one: full training runs, the acceptance harness, audits, synthetic stress
   tests (Section~\ref{sec:tools}). \\
@@ -362,12 +327,9 @@ material that uses it.
   invokes (Section~\ref{sec:geant4}). \\
 \code{CandidateLines/} & Candidate spectral-line tables built from a GDML mass
   model, in the JSON form \code{magi.load\_candidate\_energy\_lines} reads. \\
-\code{TrainingData/} & Cleaned, whitespace-delimited crossing data. Gitignored
-  --- large binaries stay local. \\
 \code{trained\_models/}, \code{checkpoints/} & Trained-run artifacts. Weights
   are gitignored; the JSON config/metadata is versioned. \\
-\code{docs/} & Development notes, measurement write-ups and plans for the v0.8
-  line, plus this manual under \code{docs/manual/}. \\
+\code{docs/} & Development notes and this manual under \code{docs/manual/}. \\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -506,15 +468,7 @@ Every exported function carries a full NumPy-style docstring, so hovering over
 a name in an editor shows its parameters and return value. This section covers
 the contracts \emph{between} functions, which a per-function docstring cannot.
 
-\begin{magiwarn}[If hover, autocomplete and go-to-definition do nothing in VSCode]
-This is an editor configuration problem, not a missing docstring.
-\code{pip install -e} installs \code{magi} through a PEP 660 editable hook:
-setuptools writes an import \emph{hook}
-(\code{site-packages/\_\_editable\_\_\_magi\_*\_finder.py}) rather than a path
-entry, and Pylance's static analysis cannot follow it. The code runs perfectly;
-the editor simply cannot find the source, so every \code{magi} symbol silently
-resolves to nothing.
-
+\begin{magiwarn}[VSCode hover]
 The repository now ships \code{.vscode/settings.json} pointing the analyzer at
 the source tree directly, which fixes it regardless of how the package was
 installed:
@@ -547,7 +501,7 @@ magi.initialize_environment(seed=42, cpu_only=True, quiet=True)
 magi.print_tf_info()
 \end{lstlisting}
 
-\begin{magiwarn}[cpu\_only must come first]
+\begin{magiwarn}[cpu\_only limitation on tf-metal]
 \code{cpu\_only=True} only takes effect if it runs before TensorFlow
 initializes its devices. In a script that imports \code{magi} at module level
 this is already too late --- set the environment variable instead, before any
@@ -562,7 +516,7 @@ import magi
 Every script in \code{tools/} does exactly this, and for a reason: on this
 workload \code{tensorflow-metal} is slower than the CPU, and importing
 \code{tensorflow\_probability} initializes the Metal device, after which
-\code{set\_visible\_devices} silently stops working.
+\code{set\_visible\_devices} silently stops working. This is only on our testing machine (M1 Apple Silicon Macbook), therefore feel free to adapt to your case.
 \end{magiwarn}
 
 \subsection{Loading data}
@@ -587,10 +541,11 @@ narrower one:
   \code{EventId} \code{ParticleName} \code{Energy} \code{X} \code{Y} \code{Z}
   \code{Vx} \code{Vy} \code{Vz} \\[2pt]
 10 & PrimBool-tagged &
-  \emph{the 9 above}, then \code{PrimBool} \\[2pt]
+  \code{EventId} \code{ParticleName} \code{Energy} \code{PrimBool} \code{X} \code{Y} \code{Z}
+  \code{Vx} \code{Vy} \code{Vz} \\[2pt]
 13 & lineage &
-  \emph{the 10 above}, then \code{ParticleId} \code{ParentParticleId}
-  \code{CreatorProcessName} \\
+  \code{EventId} \code{ParticleName} \code{Energy} \code{PrimBool} \code{ParticleId} \code{ParentParticleId} \code{CreatorProcessName} \code{X} \code{Y} \code{Z}
+  \code{Vx} \code{Vy} \code{Vz} \\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -627,7 +582,7 @@ the question there.
 
 \begin{lstlisting}[language=Python]
 prep = magi.build_physical_features(
-    df, center=(0.0, 0.0, -507.66), radius=100.0,
+    df, center=(0.0, 0.0, 0.0), radius=100.0,
     source_type="cosmic_ray",
 )
 magi.print_physical_summary(prep)
@@ -644,37 +599,12 @@ magi.report_feature_dataframe(feature_pack)
 \end{lstlisting}
 
 \paragraph{\code{source\_type} decides flux normalization.} With
-\code{"cosmic\_ray"} a crossing counts as primary iff \code{PrimBool == 1}.
-With \code{"radioactive"} it counts as primary iff
+\code{"cosmic\_ray"} a crossing counts as primary if \code{PrimBool == 1}.
+With \code{"radioactive"} it counts as primary if
 \code{CreatorProcessName\cbrk == "RadioactiveDecay"}, because for a source embedded
 in bulk material the literal Geant4 primary is the decaying nucleus, which
 never propagates --- \code{PrimBool} is always~0. Choosing wrongly does not
 error; it silently yields a wrong normalization factor.
-
-\begin{maginote}[Why energy is still binned when the model reads it continuously]
-A fair question, since \code{energy\_transform="log10"} means the value the
-network actually sees is $y = \log_{10}(E/\text{MeV})$, a \emph{continuous}
-scalar. Nothing rounds it to a bin. With the v0.8 mixture head the binning has
-stopped being part of the model input at all; what survives is an
-\textbf{analysis grid}, used by three things that genuinely need a histogram:
-
-\begin{itemize}[nosep]
-  \item \textbf{Line detection.} \code{detect\_energy\_lines} finds peaks by
-    prominence, which requires counts in bins. You cannot run a peak finder on
-    an unbinned list of floats.
-  \item \textbf{Gate targets.} \code{build\_gate\_targets} evaluates each
-    line's membership kernel on this grid, and its \code{"bins"} bandwidth mode
-    is expressed as a multiple of the local bin width.
-  \item \textbf{Validation.} \code{compute\_line\_integral\_recovery} counts
-    real and generated events in the same windows, and
-    \code{compare\_hist\_with\_residuals} plots on them.
-\end{itemize}
-
-So in v0.7.2, where the energy head was categorical, the bin width was a hard
-floor on line placement. In v0.8 it is not: line positions are pinned physical
-inputs and the continuum is a continuous density. The binning now limits which
-lines can be \emph{found}, never where a found line can be \emph{put}.
-\end{maginote}
 
 \begin{maginote}[Why \code{log\_fixed\_count} bins, when lines are measured at fixed eV]
 These are two different passes with two different jobs, and they use different
@@ -742,7 +672,7 @@ line_logsigma = magi.line_logsigma_from_resolution(
     [m["candidate_energy_mev"] for m in matched], resolution_ev=4.0, fwhm=True)
 \end{lstlisting}
 
-\begin{magiwarn}[\code{bandwidth\_mode}: a case where the more correct label trained worse]
+\begin{magiwarn}[\code{bandwidth\_mode} still under validation]
 \code{bandwidth\_mode} controls how \code{build\_gate\_targets} decides which
 \emph{real} events count as line events when building the gate's training
 target. It does not affect the generated line width, which is pinned separately
@@ -758,22 +688,10 @@ doublets closer than a few resolution widths --- and
 \code{bandwidth\_mode="exact"} was added to match the simulation's own ground
 truth.
 
-\textbf{Measured on the cosmic-ray source, it made things worse.} It did not
-fix the Cu~K$\alpha_1$ overshoot it was built for (2.011 versus 2.052, inside
-the noise), it regressed the previously passing Al~K$\alpha_1$ from
-$0.959 \pm 0.025$ to 0.578, it regressed Cu~K$\beta$ from $1.034 \pm 0.050$ to
-0.753, and it pushed the coupling residual from $0.0285 \pm 0.0101$ to 0.054,
-outside its bar. The tight tolerance also drove Cu~K$\alpha_2$'s zone
-probability to zero, effectively deleting it as a modelled component.
-
+However, during testing, the results for line generation were worse.
 \code{"resolution"} is therefore the default and is what every confirmed result
 in Section~\ref{sec:envelope} was produced with. \code{"exact"} remains
 available and tested, but it is a research option, not a recommendation.
-
-The lesson is worth stating plainly: a training \emph{label} that is more
-faithful to the simulation is not automatically a label that trains better. The
-resolution kernel appears to be doing useful work as a soft target, and
-replacing it with a hard one removed that.
 \end{magiwarn}
 
 \code{confirm\_unresolved\_candidate\_lines} exists because a doublet closer
@@ -867,22 +785,7 @@ columns, and the model derives it from \code{line\_positions\_y}.
 \end{tabular}
 \end{center}
 
-\begin{maginote}[Defaults changed in v0.8.2, and what that means for old checkpoints]
-\code{continuum\_mode}, \code{prior} and \code{gate\_focal\_gamma} previously
-defaulted to \code{"gaussian"}, \code{"gaussian"} and \code{0.0} --- the v0.7.2-era
-behaviour. They now default to the validated v0.8 configuration, so a bare
-constructor call builds the recommended model rather than the legacy one.
-
-Checkpoints are unaffected. The loader requires every architecture key
-explicitly (Section~\ref{sec:usage}, checkpointing) and a saved config always
-records the values the run actually used, so a pre-flip checkpoint still
-reconstructs its original architecture --- there is a regression test asserting
-exactly that. What \emph{does} change is any script that constructed the model
-without naming these arguments and relied on the old defaults; every such call
-site in this repository has been pinned to its previous explicit value.
-\end{maginote}
-
-\begin{maginote}[\code{energy\_condition\_geometry}: what it does, and what is known]
+\begin{maginote}[\code{energy\_condition\_geometry}: goal and current status]
 By default the decoder heads are \textbf{conditionally independent given the
 latent}: $p(x \mid z,t) = \prod_i p(x_i \mid z,t)$. Energy and geometry meet only
 through $z$, so a combination that is individually common in both --- a 511\,keV
@@ -900,17 +803,9 @@ The geometry heads never see the observed geometry, so nothing leaks into their
 own reconstruction term. The ordering is one-way: geometry informs energy, not
 the reverse.
 
-\textbf{Status.} Shipped, off by default, and \emph{not} validated. It was
-introduced as the v0.8.3 feature and not adopted: those runs regressed the two
-lowest energy decades across all three seeds. That verdict is weaker than it
-looks, however --- they also changed \code{latent\_dim} $8 \to 12$, so the flag
-was never isolated, and they were judged on marginals, which cannot see the joint
-mismatch this flag targets. A controlled A/B (identical data, split, transformers
-and seed; only the flag differs) scored by classifier AUC and by a detector-level
-arm was launched 19/08/2026. Until it reports, treat \code{True} as experimental.
+\textbf{Status.} Shipped, off by default, and \emph{not} validated. It was introduced as the v0.8.3 feature and not adopted for lack of time. Treat \code{True} as experimental.
 
-Turning it on changes the generative structure, so a checkpoint trained with it
-must be generated from with it --- which the saved config handles automatically.
+Turning it on changes the generative structure, so a checkpoint trained with it must be generated from with it --- which the saved config handles automatically.
 \end{maginote}
 
 \begin{magiwarn}[\code{build\_default\_callbacks} is not the task-adaptive scheduler]
@@ -950,19 +845,6 @@ metadata as much as the weights, because they carry the transforms that invert
 the preprocessing. Copy or move them together.
 \end{magiwarn}
 
-Always pass \code{model.to\_generation\_config()} rather than a hand-written
-dict. For v0.8 heads the loader \emph{requires} every key it emits and raises
-on a missing one. This guard exists because the old behaviour was
-\code{model\_config.get(key, default)} everywhere, and the defaults
-(\code{continuum\_mode="gaussian"}, \code{prior="gaussian"},
-\code{continuum\_flow\_warp="affine"}) select a \emph{code path} rather than a
-layer shape --- so a renamed key produced a silently different architecture
-that loaded without complaint and generated wrong output.
-
-Checkpoints from v0.8.2 carry \code{config\_version: 2}. Older
-\code{config\_version: 1} checkpoints load unchanged:
-\code{prior\_zone\_conditioning} defaults to \code{False}, reconstructing the
-exact pre-existing architecture.
 
 \subsection{Generation}
 
@@ -984,11 +866,9 @@ gen = magi.reconstruct_generated_physics(
     reco, center=(0.0, 0.0, -507.66), radius=100.0)
 \end{lstlisting}
 
-\begin{magiwarn}[Generate as many events as you have real ones]
+\begin{magiwarn}[Generation and validation data should be the same number]
 The line-recovery metrics compare raw counts. Generating fewer events than the
-real sample deflates every ratio by exactly the shortfall --- a $3.44\times$
-error on the reference cosmic-ray source. Set \code{n\_samples} to the real
-event count when validating.
+real sample deflates every ratio by exactly the shortfall. Set \code{n\_samples} to the real event count when validating.
 \end{magiwarn}
 
 For a Geant4-ready file, use the one-call entry point, which loads the
@@ -1002,7 +882,7 @@ magi.generate_detector_input_file(
     idx_to_type=idx_to_type, geometry_metadata=geometry_metadata,
     energy_head_mode="mixture", energy_metadata=energy_metadata,
     output_file="generated/source.dat", n_events=10_000_000,
-    radius=100.0, center=(0.0, 0.0, -507.66),
+    radius=100.0, center=(0.0, 0.0, 0.0),
     output_format="binary", seed=42)
 \end{lstlisting}
 
@@ -1036,7 +916,7 @@ model, so it runs in under a second. Requires
 1} checkpoint (or any run with zone-conditioning off) has no \code{zone\_probs}
 to plot and raises \code{KeyError}.
 
-\begin{figure}[htbp]
+\begin{figure}[h!]
 \centering
 \includegraphics[width=0.86\textwidth]{figures/routing_circuit.png}
 \caption{\code{save\_routing\_circuit} on the reference CR run. Selecting a
@@ -1081,7 +961,7 @@ magi.save_full_circuit(
     n_events_per_type=128, n_baselines=16, n_steps=32)
 \end{lstlisting}
 
-\begin{figure}[htbp]
+\begin{figure}[h!]
 \centering
 \includegraphics[width=\textwidth]{figures/full_circuit.png}
 \caption{\code{save\_full\_circuit} on the reference CR run, with
@@ -1095,19 +975,7 @@ that is the grouping Table~\ref{tab:absusage} reports.}
 \label{fig:fullcircuit}
 \end{figure}
 
-\subsubsection*{Reading it: what the colors do and do not say}
-
-\begin{magiwarn}[The node colors are percentile ranks, not magnitudes]
-Usage is heavy-tailed --- most units contribute almost nothing and a few
-dominate --- so a linear or even log color scale leaves roughly three quarters
-of every layer in the colormap's near-black lower third and the whole diagram
-reads as uniformly dark. The colors are therefore \emph{percentile ranks},
-pooled over all types so the buttons stay comparable with each other.
-
-The consequence matters: \textbf{by construction some units always look dark},
-whatever the true distribution is. A dark unit is low-ranked, not unused. Do
-not read the colors as evidence of spare capacity.
-\end{magiwarn}
+\subsubsection*{Reading it}
 
 For that question, open the \textbf{per-layer absolute usage} panel below the
 diagram (Table~\ref{tab:absusage}), which reports the unnormalized magnitudes.
@@ -1171,11 +1039,6 @@ the raw detector table you point it at, rebuilds the same train/test split
 \code{tools/run\_v0\_8\_real.py}), loads the model, and only then runs the
 attribution itself. Budget several minutes per source --- 4 to 8 for the
 3.4\,M-event CR file on CPU, longer for a bigger one.
-
-A practical note if you call this from a notebook: Python caches imported
-modules, so a kernel that imported \code{magi} before the package was last
-changed will keep regenerating the \emph{old} widget, silently overwriting a
-newer file. Restart the kernel if the output does not match what you expect.
 \end{magiwarn}
 
 The stage layout (how many encoder/trunk/branch columns are drawn, and where
@@ -1241,14 +1104,6 @@ $N_{\text{real}}/N_{\text{gen}}$); near-line continuum ratio, i.e. whether the
 gate dug a hole beside each line; the energy-marginal Wasserstein distance,
 global and per decade band; and the coupling residuals.
 
-\begin{magiwarn}[Never trust a single seed on the cosmic-ray source]
-The per-band Wasserstein distance on the CR source has a seed-to-seed
-$\sigma/\mu$ of 40--50\,\%, larger than most effects worth chasing. Two changes
-were adopted on single-seed evidence during development and both evaporated
-under a three-seed grid. Use \code{--seeds 42 7 13} and report mean $\pm$ std.
-The Small source is tighter, around 14\,\%.
-\end{magiwarn}
-
 \paragraph{\code{score\_v0\_7\_2.py}} Scores a v0.7.2 categorical-head run on
 the same axes, so the two heads can be compared like with like. It reads each
 checkpoint's own \code{preprocessing\_metadata} rather than re-deriving it.
@@ -1265,8 +1120,7 @@ line cannot be fixed by any amount of training.
 candidate-line table from a GDML mass model and Geant4's fluorescence data. It
 takes transition \emph{labels} from the Bearden table (only that directory
 carries them) and transition \emph{energies} from the EADL table, because EADL
-is what the simulation actually emitted. Getting this backwards puts every
-instrumental line tens of eV off --- up to 10~FWHM.
+is the emission for the \code{SpacePhysicsList} setup.
 
 \paragraph{\code{gate\_posterior\_prior\_audit.py}} Localizes a per-line
 intensity failure to \emph{where in the pipeline} it happens: the gate itself,
@@ -1298,7 +1152,7 @@ gamma     Al K-alpha1       5.7883e-03  1.7573e-03        0.304
 mu-       Cu K-alpha1       1.5495e-11  1.1889e-08      767.271
 \end{lstlisting}
 
-Read the ratio column, not the absolute fractions:
+Read the ratio column:
 
 \begin{itemize}[nosep]
   \item $\approx 1$ --- the gate behaves the same whether it is fed encoder
@@ -1318,9 +1172,43 @@ Read the ratio column, not the absolute fractions:
 
 A widespread departure from~1 is evidence that the \emph{prior} is the thing to
 change --- which is what motivated \code{prior\_zone\_conditioning}
-(\S\ref{sec:theory}) --- rather than another round of gate reweighting, an
-experiment already run and recorded as a negative result in
-Section~\ref{sec:envelope}.
+(\S\ref{sec:theory})
+
+\paragraph{\code{memorisation\_test.py}}
+\label{sec:memorisation-tool}
+Does MAGI generate, or does it recall its training data? A large amplification
+factor (\S\ref{sec:memorisation-results}) does not by itself distinguish a
+generative model from a kernel-density resampler, which turns the same
+crossings into an unlimited sample by construction without learning anything.
+This tool is the check.
+
+For each generated sample it measures the nearest-neighbour distance to a
+held-out reference set of real crossings, in the model's own feature space
+(azimuths carried as $(\cos,\sin)$ pairs, so the metric respects
+periodicity). A model that memorises places generated samples closer to
+training points than real data lies from itself; a model that generalises
+places them at the same distance real data sits from itself.
+
+\begin{lstlisting}[language=shell]
+python tools/memorisation_test.py cr      # or: dm12
+\end{lstlisting}
+
+The metric is calibrated in both directions before it is trusted: a held-out
+real split must read as real (ratio $\approx 1$), and a battery of synthetic
+``memorisers'' --- literal training points at increasing jitter --- must read
+as recall (ratio $\to 0$, near-duplicate fraction $\to 100\,\%$). The script
+refuses to print a verdict if either control fails. Read the reported ratio as
+$\approx 1$ generalises, $\ll 1$ memorises, $\gg 1$ generates off the data
+manifold --- see \S\ref{sec:memorisation-results} for the CR and DM1.2
+results.
+
+\begin{magiwarn}[The dataset paths are placeholders]
+\code{DATASETS} at the top of the script hardcodes a real and a
+generated-sample path per source (\code{"cr"}, \code{"dm12"}). Point them at
+your own training file and a text/binary file of MAGI output (the
+\code{generate\_detector\_table\_to\_file} output, \S\ref{sec:usage}) before
+running it.
+\end{magiwarn}
 
 \subsection{Synthetic stress tests}
 
@@ -1497,8 +1385,7 @@ Energy in MeV, position in mm, direction a normalized Cartesian unit vector.
 classes in the application: a \code{PrimaryGeneratorAction} that can read the
 file and emit one primary per event instead of using
 \code{G4GeneralParticleSource}, and a \code{PrimaryGeneratorMessenger} exposing
-that as macro commands. In the companion project
-(\code{S1GDMLSRON\_CryoSphereEmission}) the messenger declares thirteen
+that as macro commands. You can find examples in the \code{Geant4}\_\code{src} folder with a specific \code{README} file. In the companion project the messenger declares thirteen
 commands in the \code{/generator/} directory:
 
 \begin{center}
@@ -1582,8 +1469,6 @@ $10^8$ in text form is heavy.
 \section{Example: a validation}
 \label{sec:validation}
 
-Training finishing is not evidence that it worked. This is how a run gets
-graded.
 
 \subsection{The short path}
 
@@ -1685,68 +1570,217 @@ magi.compare_hist_with_residuals(real["E"], gen["E"], "Energy [MeV]",
 \section{Accuracy: what has actually been measured}
 \label{sec:envelope}
 
-All numbers are produced by \code{tools/acceptance\_v0\_8.py}.
+Two different questions get answered here, at two different costs. The
+\textbf{crossing-level} numbers (\S\ref{sec:crossing-validated},
+\S\ref{sec:crossing-not-validated}) come from \code{tools/acceptance\_v0\_8.py}:
+a trained checkpoint graded against a held-out real sample in MAGI's own
+feature space, in minutes. The \textbf{detector-level} numbers
+(\S\ref{sec:detector-validation}) are the expensive, decisive check: MAGI
+crossings are injected back into the real Geant4 mass model and the resulting
+detector spectrum is compared against a full simulation or a matched sample of
+real recorded crossings. Crossing-level agreement does not guarantee
+detector-level agreement --- a joint distortion invisible to any marginal can
+still move a downstream rate --- so trust the detector-level numbers first.
 
-\begin{magiwarn}[Small's 511~keV line is only marginally stable across seeds]
-\textbf{Both sources are now measured over three seeds (42/7/13).} Small's
-per-line recovery is noisier than CR's: $e^+e^-$ 511~keV lands at
-$1.056$, $0.904$ and $1.364$ --- two of three seeds inside $[0.8, 1.2]$, one
-outside, giving a mean that looks acceptable ($1.108 \pm 0.191$) but hides a
-real per-seed failure. Al~K$\alpha_2$ is the opposite pattern: consistently
-over-generated on every seed ($2.765$--$3.696$), so that failure is a property
-of the model, not of sampling noise. The continuum immediately beside the
-511~keV line is also over-filled on every seed
-($2.000 \pm 0.148\times$ real) --- the gate is over-populating the whole
-511~keV region, not only the line itself.
-\end{magiwarn}
+\subsection{Detector-level validation: DM1.2 and SRON}
+\label{sec:detector-validation}
 
-\subsection{Validated}
+Two independent mass models have been closed this way, on three source
+configurations. The comparison used throughout is the normalization-free ratio
+\[
+R \;=\;
+\frac{N^{\mathrm{MAGI}}_{\mathrm{events}} / N^{\mathrm{MAGI}}_{\mathrm{crossings}}}
+     {N^{\mathrm{real}}_{\mathrm{events}} / N^{\mathrm{real}}_{\mathrm{crossings}}},
+\]
+counted per injected crossing on both sides, through the identical mass model,
+binary, physics list and scoring code. $R$ needs no exposure, no detector
+area and no crossing efficiency $\chi$ --- it cancels every quantity that has
+historically caused bookkeeping mismatches between the MAGI side and the
+Geant4 side. $R=1$ is a perfect surrogate.
+
+\paragraph{DM1.2 --- INAF laboratory cryostat, cosmic-ray muons.} The cleanest
+result available: a 3-seed ensemble ($1.2\times10^6$ crossings generated in
+total) against $2\times10^8$ muons thrown isotropically through the full mass
+model.
 
 \begin{center}
-\begin{tabular}{@{}lccc@{}}
+\begin{tabular}{@{}lrrc@{}}
 \toprule
-\textbf{Quantity} & \textbf{CR} (3 seeds) & \textbf{Small} (3 seeds) & \textbf{Bar} \\
+\textbf{Band} & \textbf{Reference} & \textbf{MAGI} & \textbf{$R$} \\
 \midrule
-Coupling, $\max|\Delta\mathrm{corr}|$ & $0.0285 \pm 0.0101$ & $0.039 \pm 0.011$  & $\leq 0.05$ \\
-Wasserstein on $\log_{10}E$           & $0.0241 \pm 0.0046$ & $0.0065 \pm 0.0017$ & $\leq 0.05$ \\
+all deposits                 & 1,733 & 2,019 & $0.970 \pm 0.032$ \\
+\textbf{100--300\,keV (MIP)} & 1,325 & 1,589 & $\mathbf{0.999 \pm 0.037}$ \\
+300--1000\,keV               & 310   & 323   & $0.868 \pm 0.069$ \\
+30--100\,keV                 & 42    & 46    & $0.912 \pm 0.195$ \\
+0.1--30\,keV                 & 41    & 43    & $0.873 \pm 0.191$ \\
+$>$1000\,keV                 & 13    & 17    & $1.089 \pm 0.401$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Crossing coverage is $100\,\%$ and species fractions are correct to $0.3\,\%$.
+The MIP band carries the best statistics and lands almost exactly on the ideal
+value; the 0.1--30\,keV row is reference-limited (41 events) rather than
+MAGI-limited, and more MAGI generation cannot tighten it --- nor should it be
+read as an X-IFU-band result, since DM1.2 is an anti-coincidence detector, not
+a TES absorber. DM1.2 has a single sensitive detector, so its uncertainties are
+pure Poisson: there is no across-detector spread to quote.
+
+A real, disclosed defect remains: a coherent $\sim$4\,\% \emph{downward} shift
+in deposited energy (Kolmogorov--Smirnov $D=0.056$, $p=0.006$), traced to
+incidence angle --- MAGI's detector-aimed tracks sit slightly too close to
+normal incidence (median $\sec\theta$ 0.955 of the reference) --- which in turn
+comes from a direction-conditional species-mix error: at small impact
+parameter MAGI runs $+9\,\%$ muons and $-14\,\%$ electrons against a global
+species mix correct to $0.3\,\%$. Per-species energies are unaffected.
+
+\paragraph{SRON --- X-IFU-like flight model, cosmic rays.} Measured two ways.
+Against real recorded crossings, injected back to back with MAGI-generated
+ones through the identical geometry ($\sim$3.6\,M crossings per arm, production
+checkpoint \code{v0\_8\_2\_CR\_ingoingfix}):
+
+\begin{center}
+\begin{tabular}{@{}lc@{}}
+\toprule
+\textbf{Band} & \textbf{$R$} \\
+\midrule
+all deposits                       & $0.920 \pm 0.034$ \\
+\textbf{0.1--30\,keV (X-IFU band)} & $\mathbf{0.846 \pm 0.088}$ \\
+1--20\,keV                         & $0.767 \pm 0.087$ \\
+1--7\,keV (MIP)                    & $0.807 \pm 0.124$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The same checkpoint, scored per detector against a full six-detector
+simulation, gives a mean flux ratio of \textbf{0.79} ($0.57$--$0.90$ across the
+six) with a spectral shape \emph{indistinguishable} from the reference
+(Kolmogorov--Smirnov $p=0.20$). Normalizing the same per-detector data by the
+crossing efficiency $\chi$ gives $R=0.76$ --- consistent with the table above
+by three independent code paths.
+
+The residual $\sim$15--24\,\% deficit is only partly explained. $3.6\,\%$ of it
+traces to an inconsistent ingoing-particle cut: the SRON training sets were
+recorded before the simulation started excluding outgoing crossings, so they
+--- and MAGI's output with them --- contain $\sim$10--14\,\%~outgoing particles
+that a corrected training set does not. Correcting it and retraining moved
+Detector~1's 0--20\,keV ratio from $0.802 \pm 0.078$ to $0.941 \pm 0.088$. The
+remainder is not a broken marginal: a classifier trained to separate real from
+generated crossings reaches AUC~0.68 (0.5 would be indistinguishable) with the
+separating signal spread evenly across every continuous feature --- a diffuse
+joint mismatch, not one wrong variable --- and reweighting the generated
+sample to match the real joint by likelihood ratio does not repair it (the
+reweighted sample stays separable, with effective sample size collapsing under
+the attempt). See \S\ref{sec:coupling-closed} for the one architectural fix
+tried against this so far.
+
+\paragraph{SRON --- $^{40}$K.}
+
+\begin{magiwarn}[This validates fidelity to the training set, not $^{40}$K background physics]
+The $^{40}$K training set was recorded with a sphere-centre bug that kept only
+photons which had already Compton-backscattered off the structure above the
+detector before reaching the sphere --- confirmed independently by the median
+crossing energy ($211$\,keV, against the $217.5$\,keV backscatter energy of the
+$1461$\,keV line) and by the near-total absence of the unscattered line itself.
+Both the reference and MAGI draw on this same biased, back-scatter population,
+so the comparison below is a valid \emph{closure} test of MAGI against what it
+was trained on, and \textbf{not} a statement about $^{40}$K background flux.
+Ra-226 and Th-232, trained the same way, carry the identical caveat. A
+corrected retrain is planned; until it lands, DM1.2 and the CR source above
+carry every physics claim.
+\end{magiwarn}
+
+$R = 1.118 \pm 0.373$, Kolmogorov--Smirnov $p=0.60$: $2\times10^8$ crossings
+injected on both sides (19 MAGI counts, 17 real) into the same mass model.
+$^{40}$K closes at the detector at matched statistics. Separately, and
+independent of the training-population caveat above, MAGI turned the
+$1{,}873{,}609$ real recorded crossings that set could ever supply into
+$538{,}205{,}667$ generated ones --- a $287\times$ amplification of an
+otherwise statistically exhausted sample --- and the amplified population
+still closes at the detector at the ratio above.
+
+\subsection{Memorisation test: does MAGI generate, or recall?}
+\label{sec:memorisation-results}
+
+A large amplification factor does not by itself distinguish a generative model
+from a kernel-density resampler, which turns the same crossings into an
+unlimited sample by construction without learning anything.
+\code{memorisation\_test.py} (\S\ref{sec:memorisation-tool}) is the check: for
+each generated sample, the nearest-neighbour distance to a held-out reference
+set of real crossings, in the model's own feature space. A model that
+memorises places generated samples closer to training points than real data
+lies from itself; a model that generalises places them at the same distance
+real data sits from itself. The metric is calibrated in both directions before
+it is trusted --- a held-out real split must read as real, and a battery of
+synthetic memorisers must read as recall --- and the script refuses to report
+a verdict if either control fails.
+
+\begin{center}
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+ & \multicolumn{2}{c}{\textbf{CR (ingoing-fixed)}} & \multicolumn{2}{c}{\textbf{DM1.2}} \\
+\textbf{Arm} & ratio & near-dup & ratio & near-dup \\
+\midrule
+real $\to$ real (LOO)         & 1.000 & $1.00\,\%$ & 1.000 & $1.00\,\%$ \\
+held-out real (control)       & 1.001 & $0.90\,\%$ & 0.999 & $1.07\,\%$ \\
+\textbf{MAGI}                 & \textbf{1.027} & $\mathbf{0.89\,\%}$ & \textbf{1.536} & $\mathbf{0.34\,\%}$ \\
+KDE, Silverman bandwidth      & 2.028 & $0.00\,\%$ & 4.123 & $0.00\,\%$ \\
+memoriser, jitter 0 (control) & 0.000 & $100\,\%$  & 0.000 & $100\,\%$  \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{MAGI does not memorise, on either source.} Both ratios exceed 1, and
+both near-duplicate fractions sit \emph{below} real data's own rate of
+coinciding with itself. CR lands almost exactly at the real-data value
+($1.027$); DM1.2 shows the opposite failure instead, sitting $\sim$$54\,\%$ too
+far from the training manifold, consistent with its larger marginal defects
+above --- generation off the manifold, not memorisation of it. A kernel-density
+resampler (KDSource's approach) sits $2$--$5\times$ further off the manifold
+than MAGI on the same metric in both sources tested, which is the trade behind
+its own correlation performance and its rate of physically-impossible samples.
+
+\subsection{Crossing-level: validated}
+\label{sec:crossing-validated}
+
+All numbers below are produced by \code{tools/acceptance\_v0\_8.py} on the
+cosmic-ray source.
+
+\begin{center}
+\begin{tabular}{@{}lcc@{}}
+\toprule
+\textbf{Quantity} & \textbf{CR} (3 seeds) & \textbf{Bar} \\
+\midrule
+Coupling, $\max|\Delta\mathrm{corr}|$ & $0.0285 \pm 0.0101$ & $\leq 0.05$ \\
+Wasserstein on $\log_{10}E$           & $0.0241 \pm 0.0046$ & $\leq 0.05$ \\
 \bottomrule
 \end{tabular}
 \end{center}
 
 The joint distribution holds up with error bars: every real cross-correlation
-over $(\log E, u_r, u_v, \phi_r, \phi_v)$ is reproduced inside the bar, on both
-sources, across seeds. The v0.7.2 categorical head does not achieve this --- its
-coupling residual is 0.226, eight times worse.
+over $(\log E, u_r, u_v, \phi_r, \phi_v)$ is reproduced inside the bar, on the
+cosmic-ray source, across seeds. The v0.7.2 categorical head does not achieve
+this --- its coupling residual is 0.226, eight times worse.
 
-\subsection{Not validated}
+\subsection{Crossing-level: not validated}
+\label{sec:crossing-not-validated}
 
-Per-line \emph{intensities} range from in-band to a factor of $3.4\times$ too
-high, and the worst offender is unstable across seeds. Every figure below is
-traceable to \code{docs/\_data/} output of the acceptance harness.
+Per-line \emph{intensities} range from in-band to a factor of $2\times$ too
+high. Every figure below is traceable to \code{docs/\_data/} output of the
+acceptance harness.
 
 \begin{center}
 \begin{tabular}{@{}llc@{}}
 \toprule
 \textbf{Line} & \textbf{Recovery} & \textbf{Status} \\
 \midrule
-CR Al K$\alpha_1$      & $0.959 \pm 0.025$ & in band \\
-CR Cu K$\beta$         & $1.034 \pm 0.050$ & in band \\
-Small $e^+e^-$ 511 keV & $1.108 \pm 0.191$\textsuperscript{$*$} & marginal --- 2/3 seeds in band \\
-CR $e^+e^-$ 511 keV    & $1.825 \pm 0.324$ & over-generated, unstable \\
-CR Cu K$\alpha_1$      & $2.052 \pm 0.034$\textsuperscript{$\dagger$} & over-generated \\
-Small Al K$\alpha_2$   & $3.252 \pm 0.381$ & far over, stable across seeds \\
-Small Cu K$\alpha_1$   & ---\textsuperscript{$\ddagger$} & below detection floor \\
+CR Al K$\alpha_1$   & $0.959 \pm 0.025$ & in band \\
+CR Cu K$\beta$      & $1.034 \pm 0.050$ & in band \\
+CR $e^+e^-$ 511 keV & $1.825 \pm 0.324$ & over-generated, unstable \\
+CR Cu K$\alpha_1$   & $2.052 \pm 0.034$\textsuperscript{$\dagger$} & over-generated \\
 \bottomrule
 \end{tabular}
 \end{center}
-
-\textsuperscript{$*$}\,\textbf{The mean hides a per-seed failure.} The three
-seeds are $1.056$, $0.904$ and $1.364$ --- only two of three land inside
-$[0.8, 1.2]$. Do not read $1.108 \pm 0.191$ as "in band"; read it as "close to
-in band on average, but not reliably so on any given training run." The
-continuum immediately beside this line is also over-filled on all three seeds
-($2.000 \pm 0.148\times$ real), so the gate is over-populating the region
-around 511~keV, not cleanly mis-sizing the line alone.
 
 \textsuperscript{$\dagger$}\,\textbf{A routing fraction, not a window
 recovery.} Cu~K$\alpha_1$ and Cu~K$\alpha_2$ are 21~eV apart, so each sits
@@ -1759,24 +1793,12 @@ the only figure available for this line, but it is not the same quantity as the
 other rows and should not be compared against the $[0.8, 1.2]$ window bar
 directly.
 
-\textsuperscript{$\ddagger$}\,\textbf{Small's Cu~K$\alpha_1$ is not a
-failure --- it is below the detection floor.} It reaches only
-$4.5\sigma$ against the $\geq 5\sigma$ bar on all three seeds, on the same 62
-real events every time (the real sample does not change with the training
-seed). By the bar's own rule a below-floor line is \emph{not modelled} and its
-absence is a correct result, so quoting a recovery ratio for it would be
-reporting noise. The gate-routing fraction (\code{comp\_rec}, not a window
-recovery --- same caveat as CR Cu~K$\alpha_1$ above) is at least stable:
-$5.484 \pm 0.251$ across the three seeds. Earlier drafts of this table listed
-this line as a $4.9\times$ over-generation; that figure could not be
-reproduced from any surviving artifact and has been withdrawn.
-
 Practical consequences:
 
 \begin{itemize}[nosep]
   \item Line \emph{positions} are reliable --- pinned physical inputs, audited
-    to $\leq 0.5$~eV against the measured spectrum on all sources. It is the
-    number of events in each line that is wrong.
+    to $\leq 0.5$~eV against the measured spectrum. It is the number of events
+    in each line that is wrong.
   \item Do not use generated output to estimate a fluorescence or annihilation
     line flux, or any quantity dominated by one.
   \item The continuum between lines, and the total energy marginal, are within
@@ -1795,26 +1817,33 @@ worse. If your use depends on correlations, use v0.8.2. If it depends only on
 the marginal spectrum and you want the most conservative option, v0.7.2 remains
 available.
 
-\subsection{Under evaluation: coupling the energy head to geometry}
+\subsection{Closed: energy--geometry coupling does not explain the conversion deficit}
+\label{sec:coupling-closed}
 
-The heads are conditionally independent given $z$, and a classifier two-sample
-test on the cosmic-ray source separates real from generated crossings at
-AUC~0.68 with importance spread evenly over all six continuous variables and
-essentially none on species --- the signature of a joint mismatch rather than a
-broken marginal. \code{energy\_condition\_geometry} is the mechanism that
-addresses it directly; see the note in Section~\ref{sec:usage}. Do not read the
-v0.8.3 non-adoption as a settled negative: that test confounded the flag with a
-latent-width change and was scored on marginals.
+The heads are conditionally independent given $z$, and the classifier
+two-sample test of \S\ref{sec:detector-validation} is sensitive to exactly this
+kind of joint mismatch. \code{energy\_condition\_geometry} conditions the
+energy head directly on the sampled geometry instead of only on $z$, which is
+the mechanism this defect calls for; see the note in Section~\ref{sec:usage}.
+It shipped as the untested v0.8.3 feature and was not adopted on marginal
+grounds alone, which was too weak a verdict to trust on its own --- those runs
+also changed \code{latent\_dim} and used a contaminated training set, so the
+flag was never isolated.
 
-\textbf{Result, 19/08/2026: null.} $\Delta\mathrm{AUC} = -0.0062$, inside the
-$|d| \geq 0.03$ threshold set before scoring. The conditional-independence edge
-between energy and geometry is not what the classifier reads, and the coverage
-hole persists at closely the same size and composition in the reference,
-baseline and coupled arms alike --- a property of the architecture family, not
-of one training run. A third, detector-level arm
-(\code{docs/MAGI\_state\_reference.tex}, \S\,\textit{Head coupling}) is running
-regardless of the AUC verdict, to test whether AUC and the detector-level $R$
-move together at all.
+A controlled A/B --- identical data, split, transformers and seed, differing
+only in the flag --- was scored two ways: by classifier AUC against $400{,}000$
+real crossings, and by injecting both checkpoints through the same detector
+chain.
+
+\textbf{Result: null, on both metrics.} $\Delta\mathrm{AUC} = -0.0062$, inside
+the pre-registered no-effect threshold. At the detector,
+$Q = R_{\text{coupled}}/R_{\text{baseline}} = 1.072 \pm 0.114$ in the X-IFU
+band --- consistent with no change. The conditional-independence edge between
+the energy and geometry heads is not what drives the conversion deficit.
+\code{energy\_condition\_geometry} remains available (off by default) but is
+not recommended. The deficit itself is still open --- characterized as a
+diffuse, joint, coverage-flavoured mismatch (\S\ref{sec:detector-validation}),
+not yet mechanistically explained.
 
 \subsection{Negative results already established}
 
@@ -1908,6 +1937,13 @@ MAGI a surface to learn on, and leave the mass model itself alone.
   needed. \\
 \code{docs/v0.8\_v072\_comparison.md} & Head-to-head history. Note its absolute
   numbers predate the metric fix. \\
+\code{docs/MAGI\_state\_reference.tex} & The full, provenance-tagged record
+  behind the DM1.2/SRON/memorisation numbers in
+  Section~\ref{sec:detector-validation}: every superseded and withdrawn
+  result, and what may and may not be quoted from each. \\
+\code{docs/\_data/memorisation\_cr.txt},\newline
+  \code{docs/\_data/memorisation\_dm12.txt} & Raw \code{memorisation\_test.py}
+  output behind \S\ref{sec:memorisation-results}. \\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -1918,6 +1954,41 @@ Include the run directory's \code{*\_config.json} and \code{*\_metadata.json},
 the acceptance-harness JSON if you have it, and the seed. Most surprising
 results trace back to a preprocessing contract mismatch that those files make
 visible immediately.
+\end{maginote}
+
+% =====================================================================
+\section{Citing MAGI, and its license}
+\label{sec:citation}
+
+\subsection{License}
+
+MAGI is released under the \textbf{GNU General Public License v3.0}
+(GPL-3.0-only) --- the same license used by KDSource, the closest published
+analogue to this tool. The full text is in \code{LICENSE} at the repository
+root. In short: you may use, modify and redistribute MAGI freely, including
+commercially, but any distributed derivative work must also be licensed under
+the GPL with its source made available, and MAGI is provided with no warranty.
+
+\subsection{Citation}
+
+If MAGI contributed to a publication, please cite it. The canonical,
+up-to-date citation metadata lives in \code{CITATION.cff} at the repository
+root --- readable directly by GitHub's ``Cite this repository'' button and by
+tools such as \code{cffconvert} --- and takes precedence over the text below if
+the two ever disagree. At the time of writing it resolves to:
+
+\begin{lstlisting}[language=shell]
+Monastra, F. (2026). MAGI: Multivariate Autoencoder for particle
+Generative Inference (Version 0.8.2) [Computer software].
+https://github.com/francescomonastra/MAGI
+\end{lstlisting}
+
+\begin{maginote}[No archival DOI yet]
+MAGI does not yet have a version-of-record deposited with an archiving service
+such as Zenodo. Cite the repository and version above until one exists;
+\code{CITATION.cff} will gain a \code{date-released} field at the first
+tagged release, and a \code{preferred-citation} entry once a paper describing
+MAGI is published.
 \end{maginote}
 
 % =====================================================================

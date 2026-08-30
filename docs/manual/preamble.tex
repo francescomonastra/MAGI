@@ -30,8 +30,10 @@
 \definecolor{codestr}{HTML}{50A14F}
 \definecolor{codecom}{HTML}{9CA0A4}
 \definecolor{warnbg}{HTML}{FFF4E5}
-\definecolor{warnrule}{HTML}{C77700}
+\definecolor{warnrule}{HTML}{C77000}
+\definecolor{warntitle}{HTML}{000000}
 \definecolor{notebg}{HTML}{EEF4FB}
+\definecolor{notetitle}{HTML}{FFFFFF}
 
 \hypersetup{
   colorlinks=true,
@@ -88,12 +90,12 @@
 \newtcolorbox{magiwarn}[1][]{
   breakable, enhanced, colback=warnbg, colframe=warnrule,
   boxrule=0pt, leftrule=3pt, arc=1pt,
-  fonttitle=\bfseries, coltitle=warnrule, title={#1},
+  fonttitle=\bfseries, coltitle=notetitle, title={#1},
   left=7pt, right=7pt, top=5pt, bottom=5pt,
 }
 \newtcolorbox{maginote}[1][]{
   breakable, enhanced, colback=notebg, colframe=magiblue,
   boxrule=0pt, leftrule=3pt, arc=1pt,
-  fonttitle=\bfseries, coltitle=magiblue, title={#1},
+  fonttitle=\bfseries, coltitle=notetitle, title={#1},
   left=7pt, right=7pt, top=5pt, bottom=5pt,
 }
