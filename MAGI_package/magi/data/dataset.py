@@ -29,7 +29,7 @@ import numpy as np
 import tensorflow as tf
 import matplotlib.pyplot as plt
 
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import GroupShuffleSplit, train_test_split
 from sklearn.preprocessing import StandardScaler
 
 
@@ -396,6 +396,92 @@ def report_continuous_geometry_features(dataset_pack):
 # Shared split / scaling / conditioning utilities
 # =============================================================================
 
+def build_primary_conditioning(dataset_pack, primary_pdgs=None, n_quantiles=10000,
+                               random_state=42):
+    """
+    Add HENABICS primary-truth conditioning to a continuous-geometry pack.
+
+    Needs a feature frame that kept EventId, PrimaryPDG and PrimaryEnergy
+    (load_detector_table on a 16-column primary-truth table, through
+    build_physical_features and build_feature_dataframe). Builds, per
+    crossing:
+
+        primary_cond = [onehot(primary type), qt(log10 PrimaryEnergy)]
+
+    which build_conditioning_and_weights appends to the crossing-type
+    one-hot, and a group id tying together the crossings of one primary,
+    which split_feature_data uses to keep a whole shower in one split.
+
+    The group key is (PrimaryPDG, EventId): EventId is unique within one
+    species' merged file (per-job offset), but species are simulated and
+    merged separately, so it can repeat across them.
+
+    Parameters
+    ----------
+    dataset_pack : dict
+        Result of filter_particle_types_continuous_geometry.
+
+    primary_pdgs : list[int] or None
+        Primary PDG codes in one-hot order. None (default) takes the sorted
+        codes present. Pass it explicitly to pin the order across runs.
+
+    n_quantiles, random_state :
+        Passed to the QuantileTransformer fitted on log10(PrimaryEnergy).
+
+    Returns
+    -------
+    dict
+        `dataset_pack` extended with "primary_cond" (float32, n x
+        (n_primary_types + 1)), "group_id" (int64, dense 0..n_groups-1),
+        "y_primary_type", "primary_type_to_idx" / "idx_to_primary_type"
+        (keyed by PDG int), "n_primary_types" and "qt_primary_energy".
+    """
+    from .preprocessing import _fit_quantile_column
+
+    feat = dataset_pack["feat"]
+    missing = [c for c in ("EventId", "PrimaryPDG", "PrimaryEnergy") if c not in feat.columns]
+    if missing:
+        raise ValueError(
+            f"Primary conditioning needs {missing} in the feature frame: load a "
+            "primary-truth table (16 columns) and keep EventId."
+        )
+
+    pdg = feat["PrimaryPDG"].to_numpy(dtype=np.int64)
+    if primary_pdgs is None:
+        primary_pdgs = sorted(int(p) for p in np.unique(pdg))
+    primary_type_to_idx = {int(p): i for i, p in enumerate(primary_pdgs)}
+    unknown = set(np.unique(pdg).tolist()) - set(primary_type_to_idx)
+    if unknown:
+        raise ValueError(f"PrimaryPDG values {sorted(unknown)} not in primary_pdgs")
+    y_primary_type = np.array([primary_type_to_idx[int(p)] for p in pdg], dtype=np.int32)
+    n_primary_types = len(primary_pdgs)
+
+    log10_e = np.log10(feat["PrimaryEnergy"].to_numpy(dtype=np.float64))
+    qt_e, qt_primary_energy = _fit_quantile_column(
+        log10_e, n_quantiles=n_quantiles, random_state=random_state,
+    )
+
+    primary_cond = np.concatenate([
+        np.eye(n_primary_types, dtype=np.float32)[y_primary_type],
+        qt_e.reshape(-1, 1).astype(np.float32),
+    ], axis=1)
+
+    # Dense ids for (PrimaryPDG, EventId) pairs.
+    pair = pdg * (np.int64(1) << 40) + feat["EventId"].to_numpy(dtype=np.int64)
+    _, group_id = np.unique(pair, return_inverse=True)
+
+    return {
+        **dataset_pack,
+        "primary_cond": primary_cond,
+        "group_id": group_id.astype(np.int64),
+        "y_primary_type": y_primary_type,
+        "primary_type_to_idx": primary_type_to_idx,
+        "idx_to_primary_type": {i: p for p, i in primary_type_to_idx.items()},
+        "n_primary_types": n_primary_types,
+        "qt_primary_energy": qt_primary_energy,
+    }
+
+
 def split_feature_data(
     dataset_pack,
     test_size_total=0.30,
@@ -412,6 +498,11 @@ def split_feature_data(
     The split is stratified on particle type, so every species keeps its
     population fraction in all three splits - the conditioning is a type
     one-hot, and a species missing from validation cannot be monitored.
+
+    When the pack carries a "group_id" (build_primary_conditioning), the
+    split is grouped instead: all crossings of one primary land in the same
+    split, so a shower never leaks between train and test. It is then not
+    stratified, which with many groups keeps the type fractions close anyway.
 
     Parameters
     ----------
@@ -450,21 +541,32 @@ def split_feature_data(
 
     idx_all = np.arange(len(X_cont_raw))
 
-    idx_train, idx_temp, y_train, y_temp = train_test_split(
-        idx_all,
-        y_type,
-        test_size=test_size_total,
-        random_state=random_state,
-        stratify=y_type,
-    )
+    group_id = dataset_pack.get("group_id")
+    if group_id is not None:
+        gss = GroupShuffleSplit(n_splits=1, test_size=test_size_total,
+                                random_state=random_state)
+        idx_train, idx_temp = next(gss.split(idx_all, groups=group_id))
+        gss = GroupShuffleSplit(n_splits=1, test_size=val_size_from_temp,
+                                random_state=random_state)
+        rel_val, rel_test = next(gss.split(idx_temp, groups=group_id[idx_temp]))
+        idx_val, idx_test = idx_temp[rel_val], idx_temp[rel_test]
+        y_train, y_val, y_test = y_type[idx_train], y_type[idx_val], y_type[idx_test]
+    else:
+        idx_train, idx_temp, y_train, y_temp = train_test_split(
+            idx_all,
+            y_type,
+            test_size=test_size_total,
+            random_state=random_state,
+            stratify=y_type,
+        )
 
-    idx_val, idx_test, y_val, y_test = train_test_split(
-        idx_temp,
-        y_temp,
-        test_size=val_size_from_temp,
-        random_state=random_state,
-        stratify=y_temp,
-    )
+        idx_val, idx_test, y_val, y_test = train_test_split(
+            idx_temp,
+            y_temp,
+            test_size=val_size_from_temp,
+            random_state=random_state,
+            stratify=y_temp,
+        )
 
     split_pack = {
         **dataset_pack,
@@ -497,6 +599,11 @@ def split_feature_data(
                 "u_v_val_raw": u_v_raw[idx_val],
                 "u_v_test_raw": u_v_raw[idx_test],
             })
+
+    if "primary_cond" in dataset_pack:
+        for name, idx in (("train", idx_train), ("val", idx_val), ("test", idx_test)):
+            split_pack[f"primary_cond_{name}"] = dataset_pack["primary_cond"][idx]
+            split_pack[f"group_id_{name}"] = group_id[idx]
 
     if "Energy" in feat.columns:
         E_raw = feat["Energy"].to_numpy()
@@ -711,7 +818,10 @@ def build_conditioning_and_weights(
 
     The conditioning vector `cond` is the type one-hot; the model is conditioned
     on it at both encode and decode time, so generation can be steered to a
-    chosen type mix.
+    chosen type mix. When the pack carries primary truth
+    (build_primary_conditioning), cond becomes
+    [onehot(crossing type), onehot(primary type), qt(log10 E_prim)] and
+    "cond_dim" gives its width for the model's cond_dim argument.
 
     Type weights counteract the strongly uneven particle-type populations:
 
@@ -751,6 +861,11 @@ def build_conditioning_and_weights(
     cond_val = to_one_hot(scaled_pack["y_val"], n_types)
     cond_test = to_one_hot(scaled_pack["y_test"], n_types)
 
+    if "primary_cond_train" in scaled_pack:
+        cond_train = tf.concat([cond_train, scaled_pack["primary_cond_train"]], axis=1)
+        cond_val = tf.concat([cond_val, scaled_pack["primary_cond_val"]], axis=1)
+        cond_test = tf.concat([cond_test, scaled_pack["primary_cond_test"]], axis=1)
+
     counts_train = np.bincount(
         scaled_pack["y_train"],
         minlength=n_types,
@@ -766,6 +881,7 @@ def build_conditioning_and_weights(
         "cond_train": cond_train,
         "cond_val": cond_val,
         "cond_test": cond_test,
+        "cond_dim": int(cond_train.shape[1]),
         "type_weights": tf.constant(w.astype(np.float32)),
         "counts_train": counts_train,
         "freq_train": freq_train,

@@ -76,6 +76,12 @@ def gaussian_logpdf(y, mu, log_sigma):
     return -0.5 * (tf.square(y - mu) / sigma2 + _LOG_2PI) - log_sigma
 
 
+def _line_mu_2d(line_mu):
+    """Line positions as (1, n_lines) for constants or (batch, n_lines) as given
+    (per-event positions, e.g. the uncollided-primary atom at log10 E_prim)."""
+    return line_mu[None, :] if len(line_mu.shape) == 1 else line_mu
+
+
 def flow_line_mixture_nll(
     y, gate_logits, flow_log_prob, line_mu, line_logsigma
 ):
@@ -103,7 +109,8 @@ def flow_line_mixture_nll(
     flow_log_prob : tf.Tensor
         The continuum flow's log density at y, shape (batch,).
     line_mu : tf.Tensor
-        Fixed line positions in y-space, shape (n_lines,).
+        Line positions in y-space, shape (n_lines,), or (batch, n_lines) when
+        a position is per event (the uncollided-primary atom).
     line_logsigma : tf.Tensor
         Per-line log std, shape (n_lines,) (a scalar 0-D tensor is also
         accepted and broadcasts to every line).
@@ -116,13 +123,62 @@ def flow_line_mixture_nll(
     log_pi = tf.nn.log_softmax(gate_logits, axis=-1)
 
     line_logdens = gaussian_logpdf(
-        y[:, None], line_mu[None, :], tf.reshape(line_logsigma, (1, -1))
+        y[:, None], _line_mu_2d(line_mu), tf.reshape(line_logsigma, (1, -1))
     )  # (batch, n_lines)
     comp_logdens = tf.concat(
         [flow_log_prob[:, None], line_logdens], axis=-1
     )  # (batch, 1 + n_lines)
 
     return -tf.reduce_logsumexp(log_pi + comp_logdens, axis=-1)
+
+
+def flow_line_routed_nll(
+    y, gate_logits, flow_log_prob, line_mu, line_logsigma, route
+):
+    """
+    Complete-data NLL of the same flow + fixed-line mixture as
+    flow_line_mixture_nll, with each event's component given by `route`
+    instead of marginalized over:
+
+        -sum_k route_k * (log pi_k + log p_k(y))
+
+    Why: in the marginal mixture the component responsibilities are
+    unsupervised, so the likelihood rewards a flow that also explains line
+    events with a spike at the line centre. The simulation's line membership
+    is known exactly (build_gate_targets, bandwidth_mode="exact"), so there
+    is nothing to marginalize: routing each event to its own component means
+    the flow never sees a line photon.
+
+    On its own this does not remove a spike already present. On CryoSphere-CR
+    (v0_8_2_CR_ingoingfix) the 511 keV spike came from the flow's CDF warp
+    (see magi.fit_cdf_warp_knots, exclude_y), not from the loss, and it
+    survived a routed fine-tune unchanged. Use both fixes together.
+
+    Parameters
+    ----------
+    y, gate_logits, flow_log_prob, line_mu, line_logsigma
+        As in flow_line_mixture_nll.
+    route : tf.Tensor
+        Per-event component assignment over (1 + n_lines) slots, shape
+        (batch, 1 + n_lines) - normally one_hot(argmax(gate_target)).
+
+    Returns
+    -------
+    tf.Tensor
+        Per-sample NLL, shape (batch,).
+    """
+    log_pi = tf.nn.log_softmax(gate_logits, axis=-1)
+
+    line_logdens = gaussian_logpdf(
+        y[:, None], _line_mu_2d(line_mu), tf.reshape(line_logsigma, (1, -1))
+    )
+    comp_logdens = tf.concat([flow_log_prob[:, None], line_logdens], axis=-1)
+
+    # Zero-weight components are masked rather than multiplied, so a line
+    # density of -inf far from its centre cannot turn 0 * -inf into NaN.
+    route = tf.cast(route, comp_logdens.dtype)
+    terms = tf.where(route > 0.0, route * (log_pi + comp_logdens), 0.0)
+    return -tf.reduce_sum(terms, axis=-1)
 
 
 def normalize_2d_pair(pair, eps=1e-12):

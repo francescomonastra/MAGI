@@ -971,8 +971,11 @@ def load_task_adaptive_model_for_generation(
         line_positions_y = np.asarray(
             model_config["line_positions_y"], dtype=np.float32
         )
-        n_lines = int(line_positions_y.shape[0])
+        n_lines = int(line_positions_y.shape[0]) + int(
+            bool(model_config.get("uncollided_atom", False))
+        )
         y_cont_dim = 4 + 1 + (n_lines + 1)
+        pk = model_config.get("primary_energy_knots")
 
         model = CVAE_MixEnergy_ContPhi_TaskAdaptive(
             n_types=int(n_types),
@@ -1021,11 +1024,29 @@ def load_task_adaptive_model_for_generation(
             # default; see the comment on _V08_MIXTURE_REQUIRED_KEYS above.
             prior_zone_conditioning=model_config.get("prior_zone_conditioning", False),
             zone_probs=model_config.get("zone_probs"),
+            zone_primary_energy_edges=model_config.get("zone_primary_energy_edges"),
+            # HENABICS primary truth. Absent on every earlier checkpoint, where
+            # cond is exactly the crossing-type one-hot - None rebuilds that.
+            cond_dim=model_config.get("cond_dim"),
+            # v1.0.0 uncollided-primary atom; absent (False) on earlier checkpoints.
+            uncollided_atom=model_config.get("uncollided_atom", False),
+            uncollided_sigma_y=model_config.get("uncollided_sigma_y", 1e-4),
+            primary_energy_knots=None if pk is None else (pk["u"], pk["y"]),
+            primary_to_crossing_type=model_config.get("primary_to_crossing_type"),
+            # v1.0.0 loss flow of the primary's own crossing; absent (False) before.
+            energy_loss_flow=model_config.get("energy_loss_flow", False),
+            loss_flow_variable=model_config.get("loss_flow_variable", "loglog"),
+            loss_flow_warp_y_knots=model_config.get("loss_flow_warp_y_knots"),
+            loss_flow_warp_z_knots=model_config.get("loss_flow_warp_z_knots"),
 
             line_logsigma_trainable=model_config.get("line_logsigma_trainable", True),
             energy_sampling_temperature=model_config.get(
                 "energy_sampling_temperature", 1.0
             ),
+            # v0.9.4. Absent on earlier checkpoints, which all trained and
+            # sampled the marginal mixture with Gaussian lines.
+            energy_line_routing=model_config.get("energy_line_routing", "mixture"),
+            line_sampling=model_config.get("line_sampling", "gaussian"),
             stem_width=model_config.get("stem_width", 64),
             deep_decoder_hidden=tuple(
                 model_config.get("deep_decoder_hidden", (128, 128, 64))
@@ -1039,7 +1060,7 @@ def load_task_adaptive_model_for_generation(
         )
 
         dummy_y_cont = tf.zeros((1, y_cont_dim), dtype=tf.float32)
-        dummy_cond = tf.zeros((1, int(n_types)), dtype=tf.float32)
+        dummy_cond = tf.zeros((1, model.cond_dim), dtype=tf.float32)
 
         # This head's encoder takes [y_cont, cond] (no one-hot energy column).
         dummy_encoder_input = tf.concat([dummy_y_cont, dummy_cond], axis=1)

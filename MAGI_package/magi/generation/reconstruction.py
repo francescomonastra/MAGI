@@ -4,6 +4,8 @@ Reconstruction utilities for generated and real physical variables.
 
 import numpy as np
 
+from ..core.geometry import local_to_direction
+
 
 def renorm_cos_sin(c, s, eps=1e-12):
     """Project a predicted (cos, sin) pair back onto the unit circle.
@@ -53,6 +55,31 @@ def _inverse_quantile(transformer, x):
     return transformer.inverse_transform(x).reshape(-1)
 
 
+def _local_geometry_from_quantiles(y, qt_u_r, qt_mu, qt_phi_r, qt_psi):
+    """
+    Invert the v1.0 local-frame layout [u_r_q, mu_q, phi_r_q, psi_q].
+
+    Returns the global u_r, u_v, phi_r, phi_v, the quantile columns, and the
+    exact unit direction v. The direction is rebuilt from (mu, psi) at the
+    crossing point; v is returned as well because recomputing it from the
+    clipped u_v loses the sign of mu for a grazing crossing near a pole.
+    """
+    if qt_u_r is None or qt_mu is None or qt_phi_r is None or qt_psi is None:
+        raise ValueError(
+            "qt_u_r, qt_mu, qt_phi_r and qt_psi are required "
+            "for local-frame geometry reconstruction."
+        )
+    q = [y[:, i] for i in range(4)]
+    u_r = np.clip(_inverse_quantile(qt_u_r, q[0]), -1.0 + 1e-6, 1.0 - 1e-6)
+    mu = _inverse_quantile(qt_mu, q[1])
+    phi_r = (_inverse_quantile(qt_phi_r, q[2]) + np.pi) % (2.0 * np.pi) - np.pi
+    psi = (_inverse_quantile(qt_psi, q[3]) + np.pi) % (2.0 * np.pi) - np.pi
+    v = local_to_direction(u_r, phi_r, mu, psi)
+    u_v = np.clip(v[:, 2], -1.0 + 1e-6, 1.0 - 1e-6)
+    phi_v = np.arctan2(v[:, 1], v[:, 0])
+    return u_r, u_v, phi_r, phi_v, q, v
+
+
 def reconstruct_generated_features(
     gen_pack,
     energy_bins=None,
@@ -94,6 +121,11 @@ def reconstruct_generated_features(
           y_cont = [u_r_q, u_v_q, phi_r_q, phi_v_q]
           u_r/u_v recovered through QuantileTransformer inverse_transform
           phi_r/phi_v recovered through QuantileTransformer inverse_transform
+
+      - v1.0 local direction frame:
+          y_cont = [u_r_q, mu_q, phi_r_q, psi_q]
+          (mu, psi) inverted, then turned into the global direction at the
+          crossing point; the exact direction is returned as "v_dir_gen"
 
     Energy reconstruction is an independent axis from geometry
     (energy_head_mode, alongside geometry_mode):
@@ -138,7 +170,7 @@ def reconstruct_generated_features(
 
     geometry_mode : str or None
         One of "arctanh_uv_discrete", "quantile_u_r_u_v",
-        "quantile_u_r_u_v_phi_r_phi_v". If None it is inferred from which
+        "quantile_u_r_u_v_phi_r_phi_v", "quantile_u_r_mu_phi_r_psi". If None it is inferred from which
         transformers were supplied, but passing it explicitly (or via
         metadata) is safer - a mismatch here silently produces wrong angles
         rather than an error.
@@ -185,9 +217,15 @@ def reconstruct_generated_features(
         qt_u_v = geometry_metadata.get("qt_u_v", qt_u_v)
         qt_phi_r = geometry_metadata.get("qt_phi_r", qt_phi_r)
         qt_phi_v = geometry_metadata.get("qt_phi_v", qt_phi_v)
+        qt_mu = geometry_metadata.get("qt_mu", None)
+        qt_psi = geometry_metadata.get("qt_psi", None)
+    else:
+        qt_mu = qt_psi = None
 
     if geometry_mode is None:
-        if (
+        if qt_mu is not None and qt_psi is not None:
+            geometry_mode = "quantile_u_r_mu_phi_r_psi"
+        elif (
             qt_u_r is not None
             and qt_u_v is not None
             and qt_phi_r is not None
@@ -232,11 +270,28 @@ def reconstruct_generated_features(
         raise ValueError(f"Unknown energy_head_mode: {energy_head_mode}")
 
     logE_gen = np.log10(E_gen)
+    v_dir_gen = None
+
+    # ======================================================
+    # v1.0 local direction frame (A3)
+    # ======================================================
+    if geometry_mode == "quantile_u_r_mu_phi_r_psi":
+        u_r_gen, u_v_gen, phi_r_gen, phi_v_gen, q, v_dir_gen = (
+            _local_geometry_from_quantiles(y_cont_gen, qt_u_r, qt_mu, qt_phi_r, qt_psi)
+        )
+        u_r_q_gen, u_v_q_gen, phi_r_q_gen, phi_v_q_gen = q
+
+        cphi_r_gen = np.cos(phi_r_gen)
+        sphi_r_gen = np.sin(phi_r_gen)
+        cphi_v_gen = np.cos(phi_v_gen)
+        sphi_v_gen = np.sin(phi_v_gen)
+
+        s_r_gen = np.arctanh(u_r_gen)
 
     # ======================================================
     # v0.7.2 quantile geometry + quantile phi
     # ======================================================
-    if geometry_mode in [
+    elif geometry_mode in [
         "quantile_u_r_u_v_phi_r_phi_v",
         "continuous_phi",
         "quantile_phi",
@@ -376,12 +431,13 @@ def reconstruct_generated_features(
         "E_gen": E_gen,
         "logE_gen": logE_gen,
         "ParticleName": particle_names_gen,
+        "v_dir_gen": v_dir_gen,
     }
 
 
 def reconstruct_generated_physics(
     reco_pack,
-    center=(0.0, 0.0, 0.0),
+    center=(0.0, 0.0, -507.66),
     radius=100.0,
     eps=1e-6,
 ):
@@ -399,7 +455,8 @@ def reconstruct_generated_physics(
         Result of reconstruct_generated_features.
 
     center : tuple[float, float, float]
-        Sphere centre in mm. The default is (0.0, 0.0, 0.0).
+        Sphere centre in mm. The default is the crossing sphere of the
+        reference X-IFU cryostat mass model.
 
     radius : float
         Sphere radius in mm.
@@ -447,6 +504,11 @@ def reconstruct_generated_physics(
     vy_gen /= vnorm
     vz_gen /= vnorm
 
+    # Local-frame models carry the exact direction, inward by construction.
+    if reco_pack.get("v_dir_gen") is not None:
+        v_dir = np.asarray(reco_pack["v_dir_gen"], dtype=np.float64)
+        vx_gen, vy_gen, vz_gen = v_dir[:, 0].copy(), v_dir[:, 1].copy(), v_dir[:, 2].copy()
+
     rvec_gen = np.vstack([x_gen, y_gen, z_gen]).T - C[None, :]
     r_gen = np.linalg.norm(rvec_gen, axis=1)
 
@@ -467,7 +529,7 @@ def reconstruct_generated_physics(
 def reconstruct_real_test_physics(
     X_cont_test,
     E_test_raw,
-    center=(0.0, 0.0, 0.0),
+    center=(0.0, 0.0, -507.66),
     radius=100.0,
     eps=1e-6,
 
@@ -484,6 +546,10 @@ def reconstruct_real_test_physics(
     qt_phi_r=None,
     qt_phi_v=None,
     geometry_metadata=None,
+
+    # v1.0 local direction frame
+    qt_mu=None,
+    qt_psi=None,
 ):
     """
     Reconstruct physical quantities from real test-set features.
@@ -497,6 +563,9 @@ def reconstruct_real_test_physics(
     
       - v0.7.2:
           X_cont_test = [u_r_q, u_v_q, phi_r_q, phi_v_q]
+
+      - v1.0 local direction frame:
+          X_cont_test = [u_r_q, mu_q, phi_r_q, psi_q]
 
     This is the real-data counterpart of reconstruct_generated_physics: it
     runs the held-out test split back through the same inverse transforms, so
@@ -527,7 +596,7 @@ def reconstruct_real_test_physics(
     u_v_bins : array-like or None
         v0.6 only. Edges of the categorical u_v binning.
 
-    qt_u_r, qt_u_v, qt_phi_r, qt_phi_v : sklearn QuantileTransformer or None
+    qt_u_r, qt_u_v, qt_phi_r, qt_phi_v, qt_mu, qt_psi : QuantileTransformer or None
         The same fitted transforms used at training time, inverted here.
         Entries in `geometry_metadata` take precedence.
 
@@ -549,8 +618,19 @@ def reconstruct_real_test_physics(
     C = np.asarray(center, dtype=np.float64)
     R = float(radius)
 
+    if geometry_metadata is not None:
+        geometry_mode = geometry_metadata.get("geometry_transform", geometry_mode)
+        qt_u_r = geometry_metadata.get("qt_u_r", qt_u_r)
+        qt_u_v = geometry_metadata.get("qt_u_v", qt_u_v)
+        qt_phi_r = geometry_metadata.get("qt_phi_r", qt_phi_r)
+        qt_phi_v = geometry_metadata.get("qt_phi_v", qt_phi_v)
+        qt_mu = geometry_metadata.get("qt_mu", qt_mu)
+        qt_psi = geometry_metadata.get("qt_psi", qt_psi)
+
     if geometry_mode is None:
-        if (
+        if qt_mu is not None and qt_psi is not None:
+            geometry_mode = "quantile_u_r_mu_phi_r_psi"
+        elif (
             qt_u_r is not None
             and qt_u_v is not None
             and qt_phi_r is not None
@@ -564,11 +644,28 @@ def reconstruct_real_test_physics(
 
     E_real = E_test_raw.copy()
     logE_real = np.log10(E_real)
+    v_dir_real = None
+
+    # ======================================================
+    # v1.0 local direction frame (A3)
+    # ======================================================
+    if geometry_mode == "quantile_u_r_mu_phi_r_psi":
+        u_r_real, u_v_real, phi_r_real, phi_v_real, q, v_dir_real = (
+            _local_geometry_from_quantiles(X_cont_test, qt_u_r, qt_mu, qt_phi_r, qt_psi)
+        )
+        u_r_q_real, u_v_q_real, phi_r_q_real, phi_v_q_real = q
+
+        s_r_real = np.arctanh(u_r_real)
+
+        cphi_r_real = np.cos(phi_r_real)
+        sphi_r_real = np.sin(phi_r_real)
+        cphi_v_real = np.cos(phi_v_real)
+        sphi_v_real = np.sin(phi_v_real)
 
     # ======================================================
     # v0.7.2 quantile geometry + quantile phi
     # ======================================================
-    if geometry_mode in [
+    elif geometry_mode in [
         "quantile_u_r_u_v_phi_r_phi_v",
         "continuous_phi",
         "quantile_phi",
@@ -692,6 +789,9 @@ def reconstruct_real_test_physics(
     vx_real /= vnorm
     vy_real /= vnorm
     vz_real /= vnorm
+
+    if v_dir_real is not None:
+        vx_real, vy_real, vz_real = v_dir_real[:, 0], v_dir_real[:, 1], v_dir_real[:, 2]
 
     return {
         "geometry_mode": geometry_mode,

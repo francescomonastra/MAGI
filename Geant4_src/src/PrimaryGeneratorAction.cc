@@ -1,5 +1,7 @@
 #include "PrimaryGeneratorAction.hh"
 #include "PrimaryGeneratorMessenger.hh"
+#include "PrimaryTruthInfo.hh"
+#include "G4RunManager.hh"
 
 #include "G4SingleParticleSource.hh"
 #include "G4SPSEneDistribution.hh"
@@ -49,6 +51,19 @@ struct BinaryParticleRecord {
   float vz;
 };
 
+// Version 2 record (52 bytes, packed): primary truth first, then the v1 fields.
+// The truth travels inside the record, so a record skipped for an unknown PDG or
+// a null direction cannot shift it onto another particle.
+#pragma pack(push, 1)
+struct BinaryParticleRecordV2 {
+  int64_t groupKey;
+  int32_t primTrackId;
+  int32_t primPDG;
+  float primEnergy;
+  BinaryParticleRecord particle;
+};
+#pragma pack(pop)
+
 PrimaryGeneratorAction::PrimaryGeneratorAction()
 : particleGun(nullptr),
   fMessenger(nullptr),
@@ -61,6 +76,9 @@ PrimaryGeneratorAction::PrimaryGeneratorAction()
   fBinaryDataStart(0),
   fBinaryBufferIndex(0),
   fBinaryBufferSize(100000),
+  fBinaryVersion(1),
+  fGroupMode(false),
+  fGeneratedExhausted(false),
   fAutoGenerateMLInput(false),
   fMLPython("python"),
   fMLScript(""),
@@ -164,6 +182,8 @@ void PrimaryGeneratorAction::LoadGeneratedParticleFile(const G4String& filename)
 
   fGeneratedParticles.clear();
   fCurrentGeneratedIndex = 0;
+  fGroupMode = false;
+  fGeneratedExhausted = false;
 
   std::string line;
   std::size_t lineNumber = 0;
@@ -198,6 +218,17 @@ void PrimaryGeneratorAction::LoadGeneratedParticleFile(const G4String& filename)
     p.energy = E * MeV;
     p.position = G4ThreeVector(x * mm, y * mm, z * mm);
     p.direction = dir.unit();
+
+    // Optional primary-truth columns: GroupKey PrimaryTrackId PrimaryPDG PrimaryEnergy[MeV]
+    long long groupKey;
+    G4int primTrackId, primPDG;
+    G4double primE;
+    if (iss >> groupKey >> primTrackId >> primPDG >> primE) {
+      p.groupKey = static_cast<G4long>(groupKey);
+      p.primTrackId = primTrackId;
+      p.primPDG = primPDG;
+      p.primEnergy = primE * MeV;
+    }
 
     fGeneratedParticles.push_back(p);
   }
@@ -238,6 +269,8 @@ void PrimaryGeneratorAction::OpenGeneratedParticleBinaryFile(const G4String& fil
   fBinaryBuffer.clear();
   fBinaryBufferIndex = 0;
   fBinaryParticlesRead = 0;
+  fGroupMode = false;
+  fGeneratedExhausted = false;
 
   char magic[8];
   int32_t version;
@@ -265,7 +298,8 @@ void PrimaryGeneratorAction::OpenGeneratedParticleBinaryFile(const G4String& fil
     );
   }
 
-  if (version != 1) {
+  // v1: 32-byte particle records. v2: 52-byte records with primary truth.
+  if (version != 1 && version != 2) {
     G4Exception(
       "PrimaryGeneratorAction::OpenGeneratedParticleBinaryFile",
       "UnsupportedBinaryVersion",
@@ -274,6 +308,7 @@ void PrimaryGeneratorAction::OpenGeneratedParticleBinaryFile(const G4String& fil
     );
   }
 
+  fBinaryVersion = version;
   fBinaryTotalParticles = nParticles;
   fBinaryDataStart = fBinaryInputStream.tellg();
 
@@ -289,6 +324,7 @@ void PrimaryGeneratorAction::OpenGeneratedParticleBinaryFile(const G4String& fil
   }
 
   G4cout << "Opened binary generated particle file: " << filename << G4endl;
+  G4cout << "Binary file version: " << fBinaryVersion << G4endl;
   G4cout << "Total binary particles: " << fBinaryTotalParticles << G4endl;
   G4cout << "Binary buffer size: " << fBinaryBufferSize << G4endl;
 }
@@ -338,11 +374,20 @@ void PrimaryGeneratorAction::FillBinaryBuffer()
 
   for (std::size_t i = 0; i < nToRead; ++i) {
     BinaryParticleRecord rec;
+    BinaryParticleRecordV2 recV2;
 
-    fBinaryInputStream.read(
-      reinterpret_cast<char*>(&rec),
-      sizeof(BinaryParticleRecord)
-    );
+    if (fBinaryVersion == 2) {
+      fBinaryInputStream.read(
+        reinterpret_cast<char*>(&recV2),
+        sizeof(BinaryParticleRecordV2)
+      );
+      rec = recV2.particle;
+    } else {
+      fBinaryInputStream.read(
+        reinterpret_cast<char*>(&rec),
+        sizeof(BinaryParticleRecord)
+      );
+    }
 
     if (!fBinaryInputStream.good()) {
       break;
@@ -370,6 +415,13 @@ void PrimaryGeneratorAction::FillBinaryBuffer()
     p.energy = rec.energy * MeV;
     p.position = G4ThreeVector(rec.x * mm, rec.y * mm, rec.z * mm);
     p.direction = dir.unit();
+
+    if (fBinaryVersion == 2) {
+      p.groupKey = static_cast<G4long>(recV2.groupKey);
+      p.primTrackId = recV2.primTrackId;
+      p.primPDG = recV2.primPDG;
+      p.primEnergy = recV2.primEnergy * MeV;
+    }
 
     fBinaryBuffer.push_back(p);
   }
@@ -438,39 +490,96 @@ GeneratedParticle PrimaryGeneratorAction::GetNextGeneratedParticle()
   return p;
 }
 
+G4bool PrimaryGeneratorAction::PeekNextGeneratedParticle(GeneratedParticle& p)
+{
+  if (fGeneratedInputFormat == kGeneratedBinary) {
+    if (fBinaryBufferIndex >= fBinaryBuffer.size()) {
+      if (fBinaryParticlesRead >= fBinaryTotalParticles) return false;
+      FillBinaryBuffer();
+    }
+    p = fBinaryBuffer[fBinaryBufferIndex];
+    return true;
+  }
+
+  if (fCurrentGeneratedIndex >= fGeneratedParticles.size()) return false;
+  p = fGeneratedParticles[fCurrentGeneratedIndex];
+  return true;
+}
+
+void PrimaryGeneratorAction::AddGeneratedVertex(G4Event* anEvent,
+                                                const GeneratedParticle& p)
+{
+  G4ParticleDefinition* particle =
+    G4ParticleTable::GetParticleTable()->FindParticle(p.particleName);
+
+  if (!particle) {
+    G4Exception(
+      "PrimaryGeneratorAction::GeneratePrimaries",
+      "UnknownGeneratedParticle",
+      FatalException,
+      ("Unknown particle name: " + p.particleName).c_str()
+    );
+  }
+
+  particleGun->SetParticleDefinition(particle);
+
+  particleGun->GetCurrentSource()->GetEneDist()
+    ->SetMonoEnergy(p.energy);
+
+  particleGun->GetCurrentSource()->GetPosDist()
+    ->SetCentreCoords(p.position);
+
+  particleGun->GetCurrentSource()->GetAngDist()
+    ->SetParticleMomentumDirection(p.direction);
+
+  particleGun->GeneratePrimaryVertex(anEvent);
+}
+
 void PrimaryGeneratorAction::GeneratePrimaries(G4Event* anEvent)
 {
-  if (fUseGeneratedFile) {
+  if (!fUseGeneratedFile) {
+    particleGun->GeneratePrimaryVertex(anEvent);
+    return;
+  }
 
-    GeneratedParticle p = GetNextGeneratedParticle();
+  GeneratedParticle next;
+  G4bool hasNext = !fGeneratedExhausted && PeekNextGeneratedParticle(next);
+  if (hasNext && next.groupKey >= 0) fGroupMode = true;
 
-    G4ParticleDefinition* particle =
-      G4ParticleTable::GetParticleTable()->FindParticle(p.particleName);
+  if (!fGroupMode) {
+    // Legacy file: one generated particle per event, rewound at the end.
+    AddGeneratedVertex(anEvent, GetNextGeneratedParticle());
+    return;
+  }
 
-    if (!particle) {
+  if (!hasNext) {
+    // Every group has been injected. Rewinding would replay group keys and
+    // double count their primaries, so end the run here; this event keeps no
+    // vertices and EventAction records nothing for it.
+    if (!fGeneratedExhausted) {
+      fGeneratedExhausted = true;
       G4Exception(
         "PrimaryGeneratorAction::GeneratePrimaries",
-        "UnknownGeneratedParticle",
-        FatalException,
-        ("Unknown particle name: " + p.particleName).c_str()
+        "GeneratedGroupsExhausted",
+        JustWarning,
+        "All groups of the generated file have been injected; aborting the "
+        "rest of the run. Normalize with the sampled-primary count in the "
+        "generation sidecar, not with beamOn."
       );
     }
-
-    particleGun->SetParticleDefinition(particle);
-
-    particleGun->GetCurrentSource()->GetEneDist()
-      ->SetMonoEnergy(p.energy);
-
-    particleGun->GetCurrentSource()->GetPosDist()
-      ->SetCentreCoords(p.position);
-
-    particleGun->GetCurrentSource()->GetAngDist()
-      ->SetParticleMomentumDirection(p.direction);
-
-    particleGun->GeneratePrimaryVertex(anEvent);
+    G4RunManager::GetRunManager()->AbortRun(true);
+    return;
   }
-  else {
-    particleGun->GeneratePrimaryVertex(anEvent);
+
+  // Group mode: every consecutive record sharing the group key is one crossing
+  // of the same primary, injected as one vertex of this event.
+  const G4long key = next.groupKey;
+  anEvent->SetUserInformation(
+    new PrimaryTruthInfo(key, next.primTrackId, next.primPDG, next.primEnergy));
+
+  while (hasNext && next.groupKey == key) {
+    AddGeneratedVertex(anEvent, GetNextGeneratedParticle());
+    hasNext = PeekNextGeneratedParticle(next);
   }
 }
 

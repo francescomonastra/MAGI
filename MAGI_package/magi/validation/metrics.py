@@ -530,3 +530,75 @@ def energy_vs_impact_parameter(
             print(f"  worst median_E_ratio = {worst['median_E_ratio']:.3f} at {lab}"
                   f"   (v0.8.2 CR reference: 0.225 at b<1mm)")
     return rows
+
+
+def marginal_bin_rms(real, gen, n_bins=50, edges=None, exclude_windows=None):
+    """
+    Poisson-weighted RMS deviation per bin between a real and a generated marginal.
+
+    The bins are quantile bins of the real sample (equal counts), so every bin
+    carries the same statistical weight and the tails are not dominated by
+    sparse bins. For each bin the two-sample deviation
+
+        z_b = (r_b / n_r - g_b / n_g) / sqrt(r_b / n_r**2 + g_b / n_g**2)
+
+    is formed from the real and generated counts, and the metric is
+    sqrt(mean(z_b**2)). It is close to 1 when both samples come from the same
+    distribution, whatever their sizes, and grows with the deviation measured
+    in units of its own Poisson noise. The plain relative RMS, rms of
+    (g_b/n_g) / (r_b/n_r) - 1, is returned as well for plots in the style of
+    `compare_hist_with_residuals`.
+
+    Exact atoms (pinned lines, E = E_prim) need care: a bin edge that falls on
+    an atom splits the generated, slightly smeared copy of it between two bins
+    while the real atom sits entirely in one, which gives a spurious deviation
+    of tens of sigma. Pass the windows around the atoms as `exclude_windows`
+    and score the lines separately (for example with
+    `compute_line_integral_recovery`).
+
+    Parameters
+    ----------
+    real, gen : array-like, shape (n,)
+        The real and the generated values of one variable.
+
+    n_bins : int
+        Number of equal-count bins of the real sample. Ignored when `edges` is
+        given.
+
+    edges : array-like or None
+        Explicit bin edges (for example a narrow window around a line). The
+        outer bins are open, so no generated value is dropped.
+
+    exclude_windows : list of (lo, hi) or None
+        Intervals removed from both samples before binning.
+
+    Returns
+    -------
+    dict
+        `rms_z` (Poisson-weighted, about 1 for a perfect model), `rms_rel`
+        (relative), `n_bins`, and `worst_bin` with its edges and z.
+    """
+    real = np.asarray(real, dtype=np.float64).reshape(-1)
+    gen = np.asarray(gen, dtype=np.float64).reshape(-1)
+    for lo, hi in (exclude_windows or ()):
+        real = real[(real < lo) | (real > hi)]
+        gen = gen[(gen < lo) | (gen > hi)]
+    if edges is None:
+        edges = np.unique(np.quantile(real, np.linspace(0.0, 1.0, int(n_bins) + 1)))
+    edges = np.asarray(edges, dtype=np.float64)
+    inner = edges[1:-1]
+    r = np.bincount(np.searchsorted(inner, real, side="right"), minlength=len(edges) - 1)
+    g = np.bincount(np.searchsorted(inner, gen, side="right"), minlength=len(edges) - 1)
+    nr, ng = float(r.sum()), float(g.sum())
+    keep = (r + g) > 0
+    var = r / nr ** 2 + g / ng ** 2
+    z = np.where(keep, (r / nr - g / ng) / np.sqrt(np.where(var > 0, var, 1.0)), 0.0)[keep]
+    rel = ((g / ng) / np.maximum(r / nr, 1e-300) - 1.0)[keep & (r > 0)]
+    k = int(np.argmax(np.abs(z)))
+    ek = np.flatnonzero(keep)[k]
+    return {
+        "rms_z": float(np.sqrt(np.mean(z ** 2))),
+        "rms_rel": float(np.sqrt(np.mean(rel ** 2))) if rel.size else float("nan"),
+        "n_bins": int(keep.sum()),
+        "worst_bin": {"lo": float(edges[ek]), "hi": float(edges[ek + 1]), "z": float(z[k])},
+    }

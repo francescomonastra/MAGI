@@ -111,6 +111,8 @@ def generate_latent_outputs(
     n_types,
     idx_to_type=None,
     rng=None,
+    gen_type_idx=None,
+    extra_cond=None,
 ):
     """
     Sample particle types, build conditioning vectors,
@@ -150,6 +152,16 @@ def generate_latent_outputs(
         Generator for the type draw. Note this does not seed the model's own
         sampling - use magi.initialize_environment for that.
 
+    gen_type_idx : array-like of int or None
+        Crossing types already drawn elsewhere (grouped primary-truth
+        generation draws them per shower). Skips the draw from `type_probs`;
+        `n_samples` must equal its length.
+
+    extra_cond : array-like or None
+        Columns appended to the type one-hot, for models trained with a
+        wider cond (cond_dim > n_types), e.g. [onehot(primary type),
+        qt(log10 E_prim)] per row.
+
     Returns
     -------
     dict
@@ -171,8 +183,17 @@ def generate_latent_outputs(
             uv_idx_gen
             uv_value_gen
     """
-    gen_type_idx = sample_types(n_samples, type_probs, rng=rng)
+    if gen_type_idx is None:
+        gen_type_idx = sample_types(n_samples, type_probs, rng=rng)
+    else:
+        gen_type_idx = np.asarray(gen_type_idx, dtype=np.int32)
+        if len(gen_type_idx) != n_samples:
+            raise ValueError("gen_type_idx length must equal n_samples")
     gen_cond = one_hot_from_idx(gen_type_idx, n_types)
+    if extra_cond is not None:
+        gen_cond = tf.concat(
+            [gen_cond, tf.convert_to_tensor(extra_cond, dtype=tf.float32)], axis=1
+        )
 
     gen_out = model.generate(gen_cond, n_samples)
 

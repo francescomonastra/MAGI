@@ -29,6 +29,7 @@ from .losses import (
     gaussian_logpdf,
     gaussian_mixture_nll,
     flow_line_mixture_nll,
+    flow_line_routed_nll,
     normalize_2d_pair,
     angular_loss_2d,
     smoothed_categorical_ce,
@@ -3024,6 +3025,7 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
 
         lambda_sigma=1e-3,
         sigma_target=-2.0,
+        sigma_floor_target=-4.0,
 
         w_energy=1.0,
         w_ur=1.0,
@@ -3036,6 +3038,7 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
         w_continuum_repulsion=0.3,
         continuum_repulsion_margin=0.05,
         w_flow_line_repulsion=0.0,
+        energy_line_routing="mixture",
         n_continuum_components=1,
         w_continuum_balance=1.0,
         continuum_mu_init=None,
@@ -3081,6 +3084,7 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
         zone_probs=None,
 
         energy_sampling_temperature=1.0,
+        line_sampling="gaussian",
         line_logsigma_init=-2.0,
         line_logsigma_trainable=True,
 
@@ -3088,14 +3092,127 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
         deep_decoder_hidden=(128,128,64),
         energy_branch_hidden=(48,48),
         energy_cont_head_hidden=(64,32),
+
+        # HENABICS primary truth: width of the conditioning vector. The first
+        # n_types columns are always the crossing-type one-hot (the type
+        # weights and zone_probs are indexed from them); anything after is
+        # extra conditioning, e.g. [onehot(primary type), qt(primary energy)].
+        # None -> n_types, the architecture every earlier checkpoint has.
+        cond_dim=None,
+
+        # Uncollided-primary atom (v1.0.0, docs/CVAE_vs_AutoRegFlow.md): one
+        # extra gate slot, appended after the fixed lines, whose position is not
+        # a constant but the primary energy of the event, y = log10(E_prim). A
+        # primary that reaches the surface unscattered carries exactly E_prim,
+        # which a smooth continuum density cannot represent (the same failure
+        # as the 511 keV line). Needs cond = [onehot(crossing type),
+        # onehot(primary type), qt(log10 E_prim)] and flow mode. The slot is
+        # masked unless the crossing type is the primary's own type
+        # (primary_to_crossing_type). primary_energy_knots = (u, y): the
+        # `references_` and `quantiles_` of the QuantileTransformer fitted on
+        # log10(E_prim), from which the last cond column is inverted exactly
+        # (u = Phi(q), then piecewise-linear y(u)); the atom is a delta, so an
+        # approximate inverse would put it away from the data.
+        uncollided_atom=False,
+        primary_energy_knots=None,
+        primary_to_crossing_type=None,
+        uncollided_sigma_y=1e-4,
+
+        # Energy of the primary's own crossing as a loss (v1.0.0). A continuum crossing
+        # of the primary's own species always has E < E_prim (none of the 178 154 muon
+        # and 112 906 photon crossings of the DM1.2 training set violates it), but a
+        # flow on log10 E conditioned on qt(E_prim) smears the ridge just below E_prim
+        # and generated E > E_prim for 27 % of the muon crossings. With this option
+        # those events are modelled by a second flow on v = log10(w), w = log10(E_prim/E)
+        # > 0, so a sampled E is below E_prim by construction; the other events keep
+        # the continuum flow. Needs uncollided_atom (for E_prim and the species map).
+        # loss_flow_warp_*_knots: CDF warp of v (magi.fit_cdf_warp_knots), or None for
+        # an affine warp.
+        energy_loss_flow=False,
+        # Variable of the loss flow. "loglog": v = log10(log10(E_prim/E)), resolves small losses
+        # (through-going muons) but squeezes the stopping regime E -> 0 into its upper tail, and
+        # over-produced muons below 30 MeV at E_prim < 100 MeV. "logit": v = ln(E / (E_prim - E)),
+        # f = E/E_prim = sigmoid(v), resolves both ends.
+        loss_flow_variable="loglog",
+        loss_flow_warp_y_knots=None,
+        loss_flow_warp_z_knots=None,
+
+        # Zone table conditioned on the primary (v1.0.0). With the per-type table
+        # alone, the zone drawn at generation for a gamma crossing has the same
+        # probability whatever the primary, so the uncollided zone of a gamma
+        # primary (55 % of its gamma crossings) is averaged with the gamma
+        # crossings of muon primaries (none) and generates 36 %. Giving the edges
+        # (interior, in the standard-normal space of the last cond column) of the
+        # primary-energy bins turns zone_probs into a table with one row per
+        # (crossing type, primary type, energy bin), indexed row-major in that
+        # order (see magi.build_zone_probs_table). Needs prior_zone_conditioning
+        # and cond = [onehot(type), onehot(primary type), qt(E_prim)].
+        zone_primary_energy_edges=None,
     ):
         super().__init__()
 
         self.n_types = int(n_types)
+        self.cond_dim = self.n_types if cond_dim is None else int(cond_dim)
+        if self.cond_dim < self.n_types:
+            raise ValueError(
+                f"cond_dim ({self.cond_dim}) must be >= n_types ({self.n_types}): "
+                "the crossing-type one-hot is always its first n_types columns."
+            )
 
         line_positions_y = np.asarray(line_positions_y, dtype=np.float32)
+        self.n_fixed_lines = int(line_positions_y.shape[0])
+        self.uncollided_atom = bool(uncollided_atom)
+        self.uncollided_sigma_y = float(uncollided_sigma_y)
+        if self.uncollided_atom:
+            if continuum_mode != "flow":
+                raise ValueError("uncollided_atom=True requires continuum_mode='flow'.")
+            if primary_energy_knots is None or primary_to_crossing_type is None:
+                raise ValueError(
+                    "uncollided_atom=True needs primary_energy_knots=(q, y) and "
+                    "primary_to_crossing_type."
+                )
+            pu = np.asarray(primary_energy_knots[0], dtype=np.float64).reshape(-1)
+            py = np.asarray(primary_energy_knots[1], dtype=np.float64).reshape(-1)
+            if (pu.shape != py.shape or pu.shape[0] < 2
+                    or not np.allclose(pu, np.linspace(0.0, 1.0, pu.shape[0]))):
+                raise ValueError(
+                    "primary_energy_knots must be (references_, quantiles_) of a "
+                    "QuantileTransformer: two equal-length arrays, the first a "
+                    "uniform grid on [0, 1]."
+                )
+            self.primary_energy_knots = (pu, py)
+            self._pe_y = tf.constant(py, dtype=tf.float64)
+            self.primary_to_crossing_type = np.asarray(primary_to_crossing_type, dtype=np.int32).reshape(-1)
+            self.n_primary_types = int(self.primary_to_crossing_type.shape[0])
+            self._p2c = tf.constant(self.primary_to_crossing_type, dtype=tf.int32)
+            if int(n_types) + self.n_primary_types + 1 != (int(n_types) if cond_dim is None else int(cond_dim)):
+                raise ValueError(
+                    "uncollided_atom=True needs cond_dim = n_types + n_primary_types + 1 "
+                    "(crossing one-hot, primary-type one-hot, qt(E_prim))."
+                )
+            # The atom is the last line slot; its position is per event, so the
+            # constant stored for it is a placeholder (see _line_positions).
+            line_positions_y = np.concatenate([line_positions_y, np.zeros(1, np.float32)])
+        else:
+            self.primary_energy_knots = None
+            self.primary_to_crossing_type = None
+            self.n_primary_types = 0
         self.n_lines = int(line_positions_y.shape[0])
         self.line_positions_y = tf.constant(line_positions_y, dtype=tf.float32)
+
+        self.energy_loss_flow = bool(energy_loss_flow)
+        if loss_flow_variable not in ("loglog", "logit"):
+            raise ValueError(f"loss_flow_variable must be 'loglog' or 'logit', got {loss_flow_variable!r}.")
+        self.loss_flow_variable = loss_flow_variable
+        if self.energy_loss_flow and not self.uncollided_atom:
+            raise ValueError("energy_loss_flow=True requires uncollided_atom=True "
+                             "(E_prim and the species map come from it).")
+        self.loss_flow_warp_y_knots = (
+            None if loss_flow_warp_y_knots is None
+            else np.asarray(loss_flow_warp_y_knots, dtype=np.float32))
+        self.loss_flow_warp_z_knots = (
+            None if loss_flow_warp_z_knots is None
+            else np.asarray(loss_flow_warp_z_knots, dtype=np.float32))
 
         if continuum_mode not in ("gaussian", "flow"):
             raise ValueError(
@@ -3147,6 +3264,26 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
         self.w_continuum_repulsion = float(w_continuum_repulsion)
         self.continuum_repulsion_margin = float(continuum_repulsion_margin)
         self.w_flow_line_repulsion = float(w_flow_line_repulsion)
+        # "mixture" (default, every checkpoint before v0.9.4): marginal
+        # flow+line mixture NLL, component responsibilities unsupervised.
+        # "supervised": each event trains only its own component, chosen by
+        # argmax(gate_target) - the flow never sees a line photon, so it cannot
+        # grow a spike at a line centre (core.losses.flow_line_routed_nll).
+        if energy_line_routing not in ("mixture", "supervised"):
+            raise ValueError(
+                "energy_line_routing must be 'mixture' or 'supervised', "
+                f"got {energy_line_routing!r}."
+            )
+        if energy_line_routing == "supervised" and continuum_mode != "flow":
+            raise ValueError("energy_line_routing='supervised' requires continuum_mode='flow'.")
+        self.energy_line_routing = energy_line_routing
+        # Generation only. "gaussian": a line-routed event draws from
+        # N(line_mu, sigma_l), what the likelihood was fitted with. "delta":
+        # emit exactly line_mu - Geant4 writes catalogued line energies with
+        # zero spread, so on raw simulation output the delta is the truth.
+        if line_sampling not in ("gaussian", "delta"):
+            raise ValueError(f"line_sampling must be 'gaussian' or 'delta', got {line_sampling!r}.")
+        self.line_sampling = line_sampling
         self.w_continuum_balance = float(w_continuum_balance)
 
         if continuum_mu_init is None:
@@ -3206,6 +3343,7 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
         # conditioning with the per-event zone (real at train time, sampled
         # at generation) without touching what the encoder/decoder/gate see.
         self.prior_zone_conditioning = bool(prior_zone_conditioning)
+        self.zone_primary_energy_edges = None
         if self.prior_zone_conditioning:
             if zone_probs is None:
                 raise ValueError(
@@ -3216,7 +3354,21 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
                     "it from then)."
                 )
             zp = np.asarray(zone_probs, dtype=np.float32)
-            expected_shape = (self.n_types, self.n_lines + 1)
+            if zone_primary_energy_edges is not None:
+                self.zone_n_primary = self.cond_dim - self.n_types - 1
+                if self.zone_n_primary < 1:
+                    raise ValueError(
+                        "zone_primary_energy_edges needs cond_dim = n_types + "
+                        "n_primary_types + 1."
+                    )
+                self.zone_primary_energy_edges = np.asarray(
+                    zone_primary_energy_edges, dtype=np.float32
+                ).reshape(-1)
+                n_rows = (self.n_types * self.zone_n_primary
+                          * (len(self.zone_primary_energy_edges) + 1))
+            else:
+                n_rows = self.n_types
+            expected_shape = (n_rows, self.n_lines + 1)
             if zp.shape != expected_shape:
                 raise ValueError(
                     f"zone_probs must have shape {expected_shape} "
@@ -3241,7 +3393,7 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
         self.beta = beta
 
         if self.prior_mode == "coupling":
-            prior_cond_dim = self.n_types + (
+            prior_cond_dim = self.cond_dim + (
                 (self.n_lines + 1) if self.prior_zone_conditioning else 0
             )
             self.prior = ConditionalCouplingPrior(
@@ -3262,6 +3414,7 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
 
         self.lambda_sigma = lambda_sigma
         self.sigma_target = sigma_target
+        self.sigma_floor_target = sigma_floor_target
 
 
         self.energy_sampling_temperature = energy_sampling_temperature
@@ -3281,7 +3434,7 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
         enc_in = layers.Input(
             shape=(
                 self.y_cont_dim
-                + self.n_types,
+                + self.cond_dim,
             )
         )
 
@@ -3305,7 +3458,7 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
         # =====================================================
 
         dec_in = layers.Input(
-            shape=(latent_dim + self.n_types,)
+            shape=(latent_dim + self.cond_dim,)
         )
 
         stem = layers.Dense(stem_width)(dec_in)
@@ -3428,7 +3581,7 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
             #       never the legitimate coupling - it cannot validate
             #       "z_cond" on its own.)
             if self.energy_flow_condition == "cond":
-                flow_feat_dim = self.n_types
+                flow_feat_dim = self.cond_dim
                 self.energy_cont_head = None
             else:
                 flow_feat_dim = energy_cont_head_hidden[-1]
@@ -3453,6 +3606,22 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
                 warp_z_knots=self.continuum_flow_warp_z_knots,
                 name="continuum_flow",
             )
+            self.loss_flow = None
+            if self.energy_loss_flow:
+                cdf = self.loss_flow_warp_y_knots is not None
+                self.loss_flow = ConditionalRQSFlow(
+                    feat_dim=flow_feat_dim,
+                    y_mean=-1.5 if self.loss_flow_variable == "loglog" else 2.0,  # affine fallback
+                    y_scale=1.0 if self.loss_flow_variable == "loglog" else 2.0,
+                    n_bins=self.continuum_flow_bins,
+                    n_transforms=self.continuum_flow_transforms,
+                    interval_half_width=self.continuum_flow_interval,
+                    conditioner_hidden=self.continuum_flow_conditioner_hidden,
+                    warp_mode="cdf" if cdf else "affine",
+                    warp_y_knots=self.loss_flow_warp_y_knots,
+                    warp_z_knots=self.loss_flow_warp_z_knots,
+                    name="loss_flow",
+                )
             self.energy_cont_mu_head = None
             self.energy_cont_logsigma_head = None
         else:
@@ -3464,6 +3633,7 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
                 layers.LeakyReLU(0.05),
             ], name="energy_cont_head")
             self.continuum_flow = None
+            self.loss_flow = None
             self.energy_cont_mu_head = layers.Dense(
                 self.n_continuum_components,
                 name="energy_cont_mu",
@@ -3486,9 +3656,16 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
         # which varies with each line's energy E, so different lines get
         # different widths (see magi.line_logsigma_from_resolution). When pinned
         # (line_logsigma_trainable=False) each line keeps exactly its width.
-        line_logsigma_init_arr = np.broadcast_to(
-            np.asarray(line_logsigma_init, dtype=np.float32), (self.n_lines,)
-        ).astype(np.float32)
+        _ls = np.asarray(line_logsigma_init, dtype=np.float32)
+        if self.uncollided_atom:
+            # The caller sizes the init for the fixed lines; the atom gets its
+            # own pinned width (a delta in the data, see uncollided_sigma_y).
+            _ls = np.concatenate([
+                np.broadcast_to(_ls, (self.n_fixed_lines,))
+                if _ls.shape[0:1] != (self.n_lines,) else _ls[: self.n_fixed_lines],
+                np.array([np.log(self.uncollided_sigma_y)], dtype=np.float32),
+            ])
+        line_logsigma_init_arr = np.broadcast_to(_ls, (self.n_lines,)).astype(np.float32)
         self.line_logsigma = self.add_weight(
             name="line_logsigma",
             shape=(self.n_lines,),
@@ -3688,6 +3865,21 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
                     )
                 )
             )
+            # Symmetric floor-side hinge: nothing above previously discouraged
+            # log_sigma from collapsing toward min_log_sigma, where sigma^2 is
+            # tiny enough that a single mismatched residual on the *next*
+            # batch (e.g. validation) blows the NLL up by several units --
+            # observed as sporadic single-head val-loss spikes in the v0.9.2
+            # long-run experiment (docs/v0.9.2_cr_longrun_90ep.md). This
+            # leaves a penalty-free band between sigma_floor_target and
+            # sigma_target, matching the free band above sigma_target.
+            regs.append(
+                tf.reduce_mean(
+                    tf.square(
+                        tf.nn.relu(self.sigma_floor_target - params[key])
+                    )
+                )
+            )
 
         regs.append(
             tf.reduce_mean(
@@ -3809,6 +4001,14 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
             self.max_log_sigma,
         )
 
+        if self.uncollided_atom:
+            allowed = self._atom_allowed(cond)
+            penalty = tf.where(allowed, 0.0, -1e4)
+            energy_gate_logits = tf.concat(
+                [energy_gate_logits[:, :-1], energy_gate_logits[:, -1:] + penalty[:, None]],
+                axis=1,
+            )
+
         out = {
             "energy_gate_logits": energy_gate_logits,
 
@@ -3825,6 +4025,12 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
             "phi_v_logsigma": phi_v_logsigma,
         }
 
+        if self.uncollided_atom:
+            out["line_positions"] = self._line_positions(cond)
+        if self.energy_loss_flow:
+            out["primary_y"] = self._primary_y(cond)
+            out["own_species"] = self._atom_allowed(cond)
+
         if self.continuum_mode == "flow":
             out["flow_cond"] = flow_cond
         else:
@@ -3836,6 +4042,43 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
             )
 
         return out
+
+    def _primary_y(self, cond):
+        """log10(E_prim) of every event, from the last cond column.
+
+        Inverts the quantile transform of the primary energy exactly: the
+        normal CDF gives the uniform reference u, and y(u) is the transformer's
+        own piecewise-linear map between its quantiles. Evaluated in float64,
+        since in the tails a float32 u is coarser than the width of the atom."""
+        q = tf.cast(cond[:, -1], tf.float64)
+        u = 0.5 * (1.0 + tf.math.erf(q / np.sqrt(2.0)))
+        k = int(self._pe_y.shape[0])
+        pos = tf.clip_by_value(u * (k - 1), 0.0, float(k - 1) - 1e-9)
+        i = tf.cast(tf.floor(pos), tf.int32)
+        frac = pos - tf.cast(i, tf.float64)
+        y0, y1 = tf.gather(self._pe_y, i), tf.gather(self._pe_y, i + 1)
+        return tf.cast(y0 + frac * (y1 - y0), tf.float32)
+
+    def _line_positions(self, cond):
+        """Line positions in y-space, shape (batch, n_lines): the fixed lines,
+        then (with uncollided_atom) the primary energy of the event."""
+        batch = tf.shape(cond)[0]
+        fixed = tf.broadcast_to(
+            self.line_positions_y[None, : self.n_fixed_lines], (batch, self.n_fixed_lines)
+        )
+        if not self.uncollided_atom:
+            return fixed
+        return tf.concat([fixed, self._primary_y(cond)[:, None]], axis=1)
+
+    def _atom_allowed(self, cond):
+        """True where the crossing is of the primary's own type, the only case in
+        which an unscattered primary can be the crossing."""
+        c_type = tf.argmax(cond[:, : self.n_types], axis=1, output_type=tf.int32)
+        p_type = tf.argmax(
+            cond[:, self.n_types : self.n_types + self.n_primary_types],
+            axis=1, output_type=tf.int32,
+        )
+        return tf.equal(tf.gather(self._p2c, p_type), c_type)
 
     def _mixture_components(self, params):
         """Assemble (comp_mu, comp_logsigma), shape (batch, n_continuum_components
@@ -3898,14 +4141,14 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
         owns the peak and the gate routes line events to line slots.
 
         No-op unless in flow mode with w_flow_line_repulsion > 0 and >=1 line."""
-        if (self.continuum_mode != "flow" or self.n_lines == 0
+        if (self.continuum_mode != "flow" or self.n_fixed_lines == 0
                 or self.w_flow_line_repulsion <= 0.0):
             return tf.constant(0.0, dtype=tf.float32)
 
         flow_cond = params["flow_cond"]
         batch = tf.shape(flow_cond)[0]
         per_line = []
-        for l in range(self.n_lines):
+        for l in range(self.n_fixed_lines):
             y_l = tf.fill((batch,), self.line_positions_y[l])
             per_line.append(self.continuum_flow.log_prob(y_l, flow_cond))
         flow_lp_at_lines = tf.stack(per_line, axis=1)  # (batch, n_lines)
@@ -3933,7 +4176,30 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
             # prior_zone_conditioning/zone_probs, v0.8.2 Phase C).
             "config_version": 2,
             "n_types": int(self.n_types),
-            "line_positions_y": [float(v) for v in self.line_positions_y.numpy()],
+            # Read back with .get("cond_dim") -> n_types for older checkpoints.
+            "cond_dim": int(self.cond_dim),
+            "line_positions_y": [
+                float(v) for v in self.line_positions_y.numpy()[: self.n_fixed_lines]
+            ],
+            "uncollided_atom": bool(self.uncollided_atom),
+            "uncollided_sigma_y": float(self.uncollided_sigma_y),
+            "energy_loss_flow": bool(self.energy_loss_flow),
+            "loss_flow_variable": self.loss_flow_variable,
+            "loss_flow_warp_y_knots": (
+                None if self.loss_flow_warp_y_knots is None
+                else [float(v) for v in self.loss_flow_warp_y_knots]),
+            "loss_flow_warp_z_knots": (
+                None if self.loss_flow_warp_z_knots is None
+                else [float(v) for v in self.loss_flow_warp_z_knots]),
+            "primary_energy_knots": (
+                None if not self.uncollided_atom else
+                {"u": [float(v) for v in self.primary_energy_knots[0]],
+                 "y": [float(v) for v in self.primary_energy_knots[1]]}
+            ),
+            "primary_to_crossing_type": (
+                None if not self.uncollided_atom
+                else [int(v) for v in self.primary_to_crossing_type]
+            ),
             "latent_dim": int(self.latent_dim),
             "hidden": list(self.hidden),
             "beta": float(self.beta),
@@ -3970,11 +4236,17 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
             "prior_hidden": list(self.prior_hidden),
             "prior_log_scale_clamp": float(self.prior_log_scale_clamp),
             "prior_zone_conditioning": bool(self.prior_zone_conditioning),
+            "zone_primary_energy_edges": (
+                None if self.zone_primary_energy_edges is None
+                else [float(v) for v in self.zone_primary_energy_edges]
+            ),
             "zone_probs": (
                 None if self.zone_probs is None else self.zone_probs.numpy().tolist()
             ),
             "line_logsigma_trainable": bool(self.line_logsigma_trainable),
             "energy_sampling_temperature": float(self.energy_sampling_temperature),
+            "energy_line_routing": self.energy_line_routing,
+            "line_sampling": self.line_sampling,
             "stem_width": int(self.stem_width),
             "deep_decoder_hidden": list(self.deep_decoder_hidden),
             "energy_branch_hidden": list(self.energy_branch_hidden),
@@ -4013,6 +4285,24 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
         zone_true = y_cont_true[:, 5:5 + self.n_lines + 1]
         return tf.concat([cond, zone_true], axis=1)
 
+    def _zone_probs_rows(self, cond):
+        """Zone probabilities of every event, shape (batch, n_lines + 1): the row of
+        the crossing type, or of the (type, primary type, primary-energy bin) group
+        when zone_primary_energy_edges is set."""
+        type_idx = tf.argmax(cond[:, :self.n_types], axis=1, output_type=tf.int32)
+        if self.zone_primary_energy_edges is None:
+            return tf.gather(self.zone_probs, type_idx)
+        p_idx = tf.argmax(
+            cond[:, self.n_types:self.n_types + self.zone_n_primary],
+            axis=1, output_type=tf.int32,
+        )
+        b_idx = tf.searchsorted(
+            tf.constant(self.zone_primary_energy_edges), cond[:, -1], side="right"
+        )
+        b_idx = tf.cast(b_idx, tf.int32)
+        n_b = int(self.zone_primary_energy_edges.shape[0]) + 1
+        return tf.gather(self.zone_probs, (type_idx * self.zone_n_primary + p_idx) * n_b + b_idx)
+
     def _kl_per(self, z, z_mean, z_logvar, cond, prior_cond=None):
         """Per-event KL(q(z|x) || p(z)).
 
@@ -4044,18 +4334,50 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
         phi_v_true = y_cont_true[:, 3:4]
         energy_y_true = y_cont_true[:, 4]
         gate_target = y_cont_true[:, 5:5 + self.n_lines + 1]
+        # (n_lines,) constants, or per-event (batch, n_lines) with the atom.
+        line_mu = params["line_positions"] if self.uncollided_atom else self.line_positions_y
 
         if self.continuum_mode == "flow":
             flow_log_prob = self.continuum_flow.log_prob(
                 energy_y_true, params["flow_cond"]
             )
-            energy_mixture_nll = flow_line_mixture_nll(
-                energy_y_true,
-                params["energy_gate_logits"],
-                flow_log_prob,
-                self.line_positions_y,
-                self._line_logsigma_clipped(),
-            )
+            if self.energy_loss_flow:
+                # v = log10(w), w = log10(E_prim) - log10(E) > 0; the density is brought
+                # back to y = log10 E with |dv/dy| = 1 / (w ln 10), so the NLL stays
+                # comparable with the continuum flow. w is floored only to keep the
+                # branch that tf.where discards finite (own-species line events).
+                w = tf.maximum(params["primary_y"] - energy_y_true, 1e-7)
+                if self.loss_flow_variable == "loglog":
+                    v = tf.math.log(w) / np.log(10.0)
+                    log_dvdy = -tf.math.log(w) - np.log(np.log(10.0))
+                else:
+                    # f = E/E_prim = 10^(-w); v = ln f - ln(1 - f); |dv/dy| = ln10 / (1 - f)
+                    ln_f = -w * np.log(10.0)
+                    ln_1mf = tf.math.log(-tf.math.expm1(ln_f))
+                    v = ln_f - ln_1mf
+                    log_dvdy = np.log(np.log(10.0)) - ln_1mf
+                loss_lp = self.loss_flow.log_prob(v, params["flow_cond"]) + log_dvdy
+                flow_log_prob = tf.where(params["own_species"], loss_lp, flow_log_prob)
+            if self.energy_line_routing == "supervised":
+                route = tf.one_hot(
+                    tf.argmax(gate_target, axis=-1), self.n_lines + 1
+                )
+                energy_mixture_nll = flow_line_routed_nll(
+                    energy_y_true,
+                    params["energy_gate_logits"],
+                    flow_log_prob,
+                    line_mu,
+                    self._line_logsigma_clipped(),
+                    route,
+                )
+            else:
+                energy_mixture_nll = flow_line_mixture_nll(
+                    energy_y_true,
+                    params["energy_gate_logits"],
+                    flow_log_prob,
+                    line_mu,
+                    self._line_logsigma_clipped(),
+                )
         else:
             comp_mu, comp_logsigma = self._mixture_components(params)
             energy_mixture_nll = gaussian_mixture_nll(
@@ -4181,7 +4503,7 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
             )
 
             if self.type_weights is not None:
-                t_idx = tf.argmax(cond, axis=1, output_type=tf.int32)
+                t_idx = tf.argmax(cond[:, :self.n_types], axis=1, output_type=tf.int32)
                 w = tf.gather(self.type_weights, t_idx)
                 rec_per_weighted = rec_per * w
             else:
@@ -4266,7 +4588,7 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
         )
 
         if self.type_weights is not None:
-            t_idx = tf.argmax(cond, axis=1, output_type=tf.int32)
+            t_idx = tf.argmax(cond[:, :self.n_types], axis=1, output_type=tf.int32)
             w = tf.gather(self.type_weights, t_idx)
             rec_per_weighted = rec_per * w
         else:
@@ -4322,7 +4644,10 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
         """Sample `n_samples` events from the prior, conditioned on `cond`.
 
         Draws z from the learned p(z|cond) when prior="coupling", otherwise from
-        N(0, I), then decodes and samples each head. Alongside the geometry
+        N(0, I), then decodes and samples each head. With a LatentBank attached
+        as `self.latent_bank` (magi.generation.latent_bank), z comes from the
+        bank instead, and only rows with no bank entry fall back to the prior
+        above. Alongside the geometry
         outputs this returns the raw `energy_y` sample and
         `energy_component_idx` - which mixture slot each event was routed to,
         0..K-1 for the continuum and K+l for line l - which is what lets
@@ -4341,8 +4666,8 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
                 # instead (see class docstring). decode() below still only
                 # sees `cond`, so this only changes which region of z-space
                 # gets sampled, not the decoder's own inputs.
-                type_idx = tf.argmax(cond, axis=1, output_type=tf.int32)
-                zone_p = tf.gather(self.zone_probs, type_idx)
+                type_idx = tf.argmax(cond[:, :self.n_types], axis=1, output_type=tf.int32)
+                zone_p = self._zone_probs_rows(cond)
                 zone_idx = tf.random.categorical(tf.math.log(zone_p + 1e-12), num_samples=1)
                 zone_idx = tf.cast(tf.squeeze(zone_idx, axis=1), tf.int32)
                 zone_onehot = tf.one_hot(zone_idx, depth=self.n_lines + 1, dtype=tf.float32)
@@ -4352,6 +4677,10 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
             z = self.prior.sample(prior_cond)
         else:
             z = tf.random.normal((n_samples, self.latent_dim))
+        bank = getattr(self, "latent_bank", None)
+        if bank is not None:
+            z_bank, missing = bank.sample(np.asarray(cond))
+            z = tf.where(tf.constant(missing[:, None]), z, tf.constant(z_bank))
         params = self.decode(z, cond)
 
         # --- geometry first (v0.8.3) ---------------------------------
@@ -4402,17 +4731,45 @@ class CVAE_MixEnergy_ContPhi_TaskAdaptive(keras.Model):
             # (idx 1..n_lines) from their fixed Gaussian. Both are computed
             # for every row and selected by comp_idx.
             flow_sample = self.continuum_flow.sample(params["flow_cond"])
+            if self.energy_loss_flow:
+                # E = E_prim * 10^(-w), w = 10^v > 0: below E_prim by construction
+                v = self.loss_flow.sample(params["flow_cond"])
+                if self.loss_flow_variable == "loglog":
+                    y_loss = params["primary_y"] - tf.pow(10.0, v)
+                else:
+                    # log10 f = -softplus(-v)/ln10 < 0
+                    y_loss = params["primary_y"] - tf.nn.softplus(-v) / np.log(10.0)
+                flow_sample = tf.where(params["own_species"], y_loss, flow_sample)
 
-            line_mu_b = tf.broadcast_to(
-                self.line_positions_y[None, :], (batch, self.n_lines)
-            )
+            if self.n_lines == 0:
+                # No line passed the count cut: the continuum is the only
+                # component, and the gathers below would index an empty axis.
+                return {
+                    "energy_y": flow_sample,
+                    "energy_component_idx": comp_idx,
+                    "y_cont": y_cont,
+                    "params": params,
+                }
+
+            if self.uncollided_atom:
+                line_mu_b = params["line_positions"]
+            else:
+                line_mu_b = tf.broadcast_to(
+                    self.line_positions_y[None, :], (batch, self.n_lines)
+                )
             line_idx = tf.clip_by_value(comp_idx - 1, 0, self.n_lines - 1)
             chosen_line_mu = tf.gather_nd(
                 line_mu_b, tf.stack([tf.range(batch), line_idx], axis=1)
             )
             chosen_line_logsigma = tf.gather(self._line_logsigma_clipped(), line_idx)
-            energy_eps = tf.random.normal((batch,))
-            line_sample = chosen_line_mu + tf.exp(chosen_line_logsigma) * energy_eps
+            if self.line_sampling == "delta":
+                line_sample = chosen_line_mu
+            else:
+                energy_eps = tf.random.normal((batch,))
+                line_sample = chosen_line_mu + tf.exp(chosen_line_logsigma) * energy_eps
+                if self.uncollided_atom:
+                    # An unscattered primary carries exactly E_prim.
+                    line_sample = tf.where(comp_idx == self.n_lines, chosen_line_mu, line_sample)
 
             energy_y = tf.where(comp_idx == 0, flow_sample, line_sample)
         else:

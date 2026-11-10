@@ -12,6 +12,8 @@ train_step, so compiling and fitting looks the same for every version.
 
 from tensorflow import keras
 
+from .resume import ResumeCheckpoint
+
 
 def build_default_callbacks(
     monitor="val_loss",
@@ -138,6 +140,9 @@ def fit_model(
     epochs=60,
     callbacks=None,
     verbose=1,
+    checkpoint_dir=None,
+    resume=False,
+    reset_early_stopping=False,
 ):
     """
     Fit the model and return the Keras history object.
@@ -165,19 +170,72 @@ def fit_model(
     verbose : int
         Keras verbosity. Use 2 for one line per epoch in a log file.
 
+    checkpoint_dir : str or None
+        If set, a resumable checkpoint (weights, optimizer, callback state,
+        history) is written there after every epoch; see magi.training.resume.
+
+    resume : bool
+        Continue from the checkpoint in `checkpoint_dir` if there is one, and
+        start from scratch if there is none, so the same call can be repeated
+        after every interruption. `epochs` stays the total, as in Keras. The
+        returned history covers all epochs, the ones before the interruption
+        included.
+
+    reset_early_stopping : bool
+        On resume, clear EarlyStopping's patience counter (its best value is
+        kept). Use it, together with a larger `epochs`, to carry on a run that
+        early stopping ended too soon.
+
     Returns
     -------
     keras.callbacks.History
         Pass `history.history` to save_final_trained_model and plot_history.
     """
+    if checkpoint_dir is None:
+        if resume:
+            raise ValueError("resume=True needs checkpoint_dir")
+        return model.fit(
+            train_ds,
+            validation_data=val_ds,
+            epochs=epochs,
+            callbacks=callbacks,
+            verbose=verbose,
+        )
+
+    callbacks = list(callbacks) if callbacks is not None else []
+    saver = ResumeCheckpoint(
+        checkpoint_dir, callbacks=callbacks, resume=resume,
+        reset_early_stopping=reset_early_stopping, verbose=1 if verbose else 0,
+    )
+    if saver.initial_epoch >= epochs:
+        print(
+            f"[MAGI] checkpoint already holds {saver.initial_epoch} epochs, "
+            f"epochs={epochs}: nothing to train (raise `epochs` to continue).",
+            flush=True,
+        )
+    callbacks.append(saver)
+
+    if saver.initial_epoch > 0:
+        # The flow and prior layers of a MAGI model create their variables the
+        # first time they are used, so a fresh model has fewer weights than the
+        # checkpoint of a trained one. One forward pass over a validation batch
+        # (no weight update) creates them all, before the saved values go in.
+        model.evaluate(val_ds.take(1), verbose=0)
+        model.reset_metrics()
+
     history = model.fit(
         train_ds,
         validation_data=val_ds,
         epochs=epochs,
+        initial_epoch=saver.initial_epoch,
         callbacks=callbacks,
         verbose=verbose,
     )
 
+    # saver.history holds every epoch, the resumed ones included.
+    history.history = {k: list(v) for k, v in saver.history.items()}
+    n_done = len(next(iter(saver.history.values()), []))
+    history.epoch = list(range(n_done))
     return history
 
 
@@ -191,6 +249,9 @@ def train_single_run(
     verbose=1,
     optimizer="adam",
     clipnorm=None,
+    checkpoint_dir=None,
+    resume=False,
+    reset_early_stopping=False,
 ):
     """
     Convenience wrapper for compile + fit.
@@ -221,6 +282,9 @@ def train_single_run(
     clipnorm : float or None
         Gradient clipping norm, passed to compile_model.
 
+    checkpoint_dir, resume, reset_early_stopping :
+        Resumable training, passed to fit_model.
+
     Returns
     -------
     keras.callbacks.History
@@ -243,6 +307,9 @@ def train_single_run(
         epochs=epochs,
         callbacks=callbacks,
         verbose=verbose,
+        checkpoint_dir=checkpoint_dir,
+        resume=resume,
+        reset_early_stopping=reset_early_stopping,
     )
 
     return history

@@ -1,13 +1,39 @@
-# Geant4 Primary Generator with MAGI Integration
+# Geant4 side of MAGI: tracking ball, first-entry rule and particle injector
 
-This folder holds the three source files that were added or modified in a Geant4
-application to consume MAGI as a particle source: a custom `PrimaryGeneratorAction`
-and `PrimaryGeneratorMessenger` (the integration itself), and `EventAction` (a
-sphere-centre fix needed to keep the crossing surface geometrically consistent
-between real Geant4 primaries and MAGI-injected ones). They are not a runnable
-example on their own — drop them into your own Geant4 application's `src/`/`include/`
-alongside your existing `DetectorConstruction`, `PhysicsList`, etc., and register the
-messenger the same way `PrimaryGeneratorMessenger` is used here.
+This folder holds the Geant4 sources that MAGI v1.0.0 needs on the simulation side. They are not a runnable application. They are added to the `src/` and `include/` of your own Geant4 10.4.3 application, next to its `DetectorConstruction` and `PhysicsList`. CMake globs `src/*.cc`, so no list needs editing.
+
+## What changed since v0.8.2
+
+The crossing surface used to be a thin `G4Sphere` shell placed in the mass model. A shell cuts the volumes it crosses, which gives invalid geometry in dense assemblies. v1.0.0 replaces it with the **MultiVerse ball**: a virtual sphere (centre, radius) that is not a Geant4 volume. `SteppingAction` tests every step with a ray-sphere intersection and records the entry point. Tracks whose ancestors were already inside the ball carry the flag `AncestorInside = 1` (`AncestryInfo`, `TrackingAction`), and only the **first entries** (flag 0) are used for training and for re-injection, so the sample is independent of what lies inside the ball. Against the old shell, a 4 x 250 000 muon run gave 0.00485 against 0.00484 crossings per primary, and 0 of 4 838 shell crossings missing from the ball. The full design, the checks and the lessons are in [`MULTIVERSE.md`](MULTIVERSE.md).
+
+| File | Role |
+|---|---|
+| `MultiVerseBall.{hh,cc}` | ball geometry, `SegmentEntry` (ray-sphere), the entries of the event, macro commands `/MultiVerse/radius` and `/MultiVerse/centre` |
+| `SteppingAction.{hh,cc}` | detects the entries, maintains the flag and gives it to the secondaries |
+| `TrackingAction.{hh,cc}`, `AncestryInfo.hh` | flag of the primaries |
+| `EventAction.{hh,cc}` | writes the entries (17 columns, last = `AncestorInside`), clears them at each event, reads the centre from the ball |
+| `PrimaryGeneratorAction`, `PrimaryGeneratorMessenger` | the MAGI injector: GPS, static file, automatic generation (text or binary) |
+| `PrimaryTruthInfo.hh`, `DummyHit.hh` | primary truth of the event, hit with the ancestry flag |
+| `LegacyShellSD`, `MultiVerseWorld`, `MultiVerseSD` | **optional**: the old shell as a diagnostic (`MULTIVERSE_LEGACY_SHELL`) and the parallel-world version of the ball (`MULTIVERSE_PARALLEL`); the other files include their headers, so they are compiled but unused by default |
+
+## Changes to your own application
+
+These live in project files that are not copied here because they belong to your mass model:
+
+1. `main()`: call `MultiVerseBall::CreateMessenger()` **before** `/run/initialize` and register `new TrackingAction` and `new SteppingAction`.
+2. `DetectorConstruction`: remove any shell used as crossing surface. The ball needs no volume.
+3. `PhysicsList`: build `G4ParallelWorldPhysics` only if you use the optional parallel world (`MULTIVERSE_PARALLEL`).
+4. Macro: `/MultiVerse/radius <R> mm` and `/MultiVerse/centre <x> <y> <z> mm`, equal to the `radius` and `center` stored in the metadata of the model you inject (the five IAPS Triple models use R = 105 mm, centre (0, 0, 5) mm).
+
+The output `outputDSCryoSphere.dat` has one row per first inward hit of each track, tab separated: `EventKey ParticleName E[MeV] isPrimary TrackId ParentId CreatorProcess X Y Z [mm] Vx Vy Vz PrimaryTrackId PrimaryPDG PrimaryEnergy[MeV] AncestorInside`. Keep the rows with `AncestorInside = 0` to build a training file.
+
+## Using a MAGI model as the source
+
+The five trained IAPS Triple models are in `../trained_models/IAPS_<source>/` and the notebook `../MAGI_v1_0_IAPS_Triple.ipynb` generates from them. To inject a generated file, write it with `scripts/generate_geant_source.py --format binary` (or `text`) and read it with the commands of mode 2 below, adding `/generator/generatedFormat binary` for the binary file. The ball in the injection run has to have the same radius and centre as the model, because the injected particles are recorded again as entries by the same ball.
+
+The rest of this document describes the three generation modes of the injector. The paths in the examples use the muon model of the IAPS Triple set.
+
+---
 
 This Geant4 version supports three primary particle generation modes:
 
@@ -124,14 +150,16 @@ The environment must contain:
 
 ## Required model files
 
-Example structure (using the `v0_8_2_DM1_2_500k` model shipped in this repo's
+Example structure (using the `IAPS_mu` model shipped in this repo's
 `trained_models/`):
 
 ```text
-trained_models/v0_8_2_DM1_2_500k/
-    mix_DM1_2_500k.weights.h5
-    mix_DM1_2_500k_metadata.json
-    mix_DM1_2_500k_task_weights.json
+trained_models/IAPS_mu/
+    mix_mu.weights.h5
+    mix_mu_config.json
+    mix_mu_metadata.json
+    mix_mu_task_weights.json
+    mix_mu_quantile_transformers.joblib
 ```
 
 ---
@@ -159,11 +187,11 @@ Example:
 
 /generator/mlScript /path/to/MAGI/scripts/generate_geant_source.py
 
-/generator/mlModelDir /path/to/MAGI/trained_models/v0_8_2_DM1_2_500k
+/generator/mlModelDir /path/to/MAGI/trained_models/IAPS_mu
 
-/generator/mlModelName mix_DM1_2_500k
+/generator/mlModelName mix_mu
 
-/generator/mlMetadataFile /path/to/MAGI/trained_models/v0_8_2_DM1_2_500k/mix_DM1_2_500k_metadata.json
+/generator/mlMetadataFile /path/to/MAGI/trained_models/IAPS_mu/mix_mu_metadata.json
 
 /generator/mlNumParticles 1000000
 

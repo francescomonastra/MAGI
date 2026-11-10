@@ -1,11 +1,23 @@
 from .io import (
     load_detector_table,
+    select_first_entry,
     report_basic_table_checks,
     save_detector_table,
     save_normalization_summary,
     load_normalization_summary,
     save_candidate_energy_lines,
     load_candidate_energy_lines,
+    load_primaries_table,
+    load_run_summaries,
+    DEFAULT_COLUMNS_DET_PRIMTRUTH,
+)
+
+from .primary_truth import (
+    build_multiplicity_table,
+    sample_multiplicity,
+    resample_primary_energy,
+    sample_group_types,
+    PRIMARY_JOIN_KEY_RULE,
 )
 
 from .preprocessing import (
@@ -18,6 +30,9 @@ from .preprocessing import (
     refine_peak_energy,
     print_detected_energy_lines,
     build_gate_targets,
+    add_uncollided_gate_target,
+    build_zone_probs_table,
+    primary_energy_knots_from_transformer,
     line_logsigma_from_resolution,
     measure_line_centroid,
     confirm_unresolved_candidate_lines,
@@ -37,6 +52,9 @@ from .dataset import (
     filter_particle_types_continuous_geometry,
     report_continuous_geometry_features,
 
+    # HENABICS primary truth
+    build_primary_conditioning,
+
     # shared
     split_feature_data,
     report_split_summary,
@@ -53,12 +71,22 @@ from .dataset import (
 __all__ = [
     # io
     "load_detector_table",
+    "select_first_entry",
     "save_detector_table",
     "report_basic_table_checks",
     "save_normalization_summary",
     "load_normalization_summary",
     "save_candidate_energy_lines",
     "load_candidate_energy_lines",
+    "load_primaries_table",
+    "load_run_summaries",
+    "DEFAULT_COLUMNS_DET_PRIMTRUTH",
+    "build_multiplicity_table",
+    "sample_multiplicity",
+    "resample_primary_energy",
+    "sample_group_types",
+    "PRIMARY_JOIN_KEY_RULE",
+    "build_primary_conditioning",
 
     # preprocessing
     "compute_primary_fraction",
@@ -70,6 +98,9 @@ __all__ = [
     "refine_peak_energy",
     "print_detected_energy_lines",
     "build_gate_targets",
+    "add_uncollided_gate_target",
+    "build_zone_probs_table",
+    "primary_energy_knots_from_transformer",
     "line_logsigma_from_resolution",
     "measure_line_centroid",
     "confirm_unresolved_candidate_lines",

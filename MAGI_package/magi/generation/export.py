@@ -22,6 +22,29 @@ from .reconstruction import (
 
 MAGI_BINARY_MAGIC = b"GNTBIN1\0"
 MAGI_BINARY_VERSION = 1
+# v2 (HENABICS primary truth) prefixes every record with the primary it
+# belongs to; records sharing a GroupKey are contiguous and the Geant4
+# injector fires them as the vertices of one event.
+MAGI_BINARY_VERSION_PRIMTRUTH = 2
+
+PRIMARY_TRUTH_EXPORT_COLS = ["GroupKey", "PrimaryTrackId", "PrimaryPDG", "PrimaryEnergy"]
+
+# Packed (no padding): 52 bytes, matching BinaryParticleRecordV2 in the DM1.2
+# PrimaryGeneratorAction.
+BINARY_RECORD_V2_DTYPE = np.dtype([
+    ("group_key", "<i8"),
+    ("prim_track_id", "<i4"),
+    ("prim_pdg", "<i4"),
+    ("prim_energy", "<f4"),
+    ("pdg", "<i4"),
+    ("energy", "<f4"),
+    ("x", "<f4"),
+    ("y", "<f4"),
+    ("z", "<f4"),
+    ("vx", "<f4"),
+    ("vy", "<f4"),
+    ("vz", "<f4"),
+])
 
 PARTICLE_TO_PDG = {
     "gamma": 22,
@@ -34,6 +57,20 @@ PARTICLE_TO_PDG = {
     "neutron": 2112,
     "anti_neutron": -2112,
     "alpha": 1000020040,
+    # Athena proton showers cross the ball with hadrons and light ions the DM1.2 runs did not have
+    "deuteron": 1000010020,
+    "triton": 1000010030,
+    "He3": 1000020030,
+    "pi+": 211,
+    "pi-": -211,
+    "pi0": 111,
+    "kaon+": 321,
+    "kaon-": -321,
+    "kaon0L": 130,
+    "kaon0S": 310,
+    "lambda": 3122,
+    "sigma+": 3222,
+    "sigma-": 3112,
 }
 
 NON_TRANSPORT_PARTICLES = {
@@ -183,7 +220,7 @@ def generated_physics_to_detector_dataframe(
     return df
 
 
-def _write_binary_header(filepath, n_events):
+def _write_binary_header(filepath, n_events, version=MAGI_BINARY_VERSION):
     """
     Create a binary file and write its header.
 
@@ -194,13 +231,13 @@ def _write_binary_header(filepath, n_events):
             struct.pack(
                 "<8siQ",
                 MAGI_BINARY_MAGIC,
-                MAGI_BINARY_VERSION,
+                int(version),
                 int(n_events),
             )
         )
 
 
-def _rewrite_binary_header(filepath, n_events):
+def _rewrite_binary_header(filepath, n_events, version=MAGI_BINARY_VERSION):
     """
     Rewrite only the binary header without deleting the payload.
 
@@ -213,7 +250,7 @@ def _rewrite_binary_header(filepath, n_events):
             struct.pack(
                 "<8siQ",
                 MAGI_BINARY_MAGIC,
-                MAGI_BINARY_VERSION,
+                int(version),
                 int(n_events),
             )
         )
@@ -284,6 +321,78 @@ def _append_detector_binary_chunk(
         records.tofile(f)
 
     return len(records)
+
+
+def _append_primary_truth_binary_chunk(df, filepath):
+    """
+    Append a detector chunk carrying primary truth as GNTBIN v2 records.
+
+    `df` needs the detector columns plus PRIMARY_TRUTH_EXPORT_COLS and must
+    already be filtered and group-contiguous. Returns the records written.
+    """
+    required = ["ParticleName", "Energy", "X", "Y", "Z", "Vx", "Vy", "Vz",
+                *PRIMARY_TRUTH_EXPORT_COLS]
+    for col in required:
+        if col not in df.columns:
+            raise ValueError(f"Missing required column for binary v2 export: {col}")
+    if len(df) == 0:
+        return 0
+
+    unsupported = sorted(set(df["ParticleName"].astype(str)) - set(PARTICLE_TO_PDG))
+    if unsupported:
+        raise ValueError(
+            f"Unsupported particle names for binary export: {unsupported}. "
+            f"Supported names are: {sorted(PARTICLE_TO_PDG.keys())}."
+        )
+
+    records = np.empty(len(df), dtype=BINARY_RECORD_V2_DTYPE)
+    records["group_key"] = df["GroupKey"].to_numpy(dtype=np.int64)
+    records["prim_track_id"] = df["PrimaryTrackId"].to_numpy(dtype=np.int32)
+    records["prim_pdg"] = df["PrimaryPDG"].to_numpy(dtype=np.int32)
+    records["prim_energy"] = df["PrimaryEnergy"].to_numpy(dtype=np.float32)
+    records["pdg"] = [PARTICLE_TO_PDG[str(p)] for p in df["ParticleName"]]
+    for col, name in (("Energy", "energy"), ("X", "x"), ("Y", "y"), ("Z", "z"),
+                      ("Vx", "vx"), ("Vy", "vy"), ("Vz", "vz")):
+        records[name] = df[col].to_numpy(dtype=np.float32)
+
+    with open(filepath, "ab") as f:
+        records.tofile(f)
+    return len(records)
+
+
+def read_detector_binary(filepath):
+    """
+    Read a GNTBIN file (v1 or v2) back into a structured numpy array.
+
+    Parameters
+    ----------
+    filepath : str
+        A file written by save_detector_binary, generate_detector_table_to_file
+        or generate_primary_groups.
+
+    Returns
+    -------
+    version : int
+    records : np.ndarray
+        Structured array with the v1 fields (pdg, energy, x..vz) and, for v2,
+        group_key, prim_track_id, prim_pdg, prim_energy.
+    """
+    with open(filepath, "rb") as f:
+        magic, version, n = struct.unpack("<8siQ", f.read(20))
+        if magic != MAGI_BINARY_MAGIC:
+            raise ValueError(f"{filepath}: not a GNTBIN file (magic {magic!r})")
+        if version == MAGI_BINARY_VERSION:
+            dtype = np.dtype([("pdg", "<i4")] + [
+                (c, "<f4") for c in ("energy", "x", "y", "z", "vx", "vy", "vz")
+            ])
+        elif version == MAGI_BINARY_VERSION_PRIMTRUTH:
+            dtype = BINARY_RECORD_V2_DTYPE
+        else:
+            raise ValueError(f"{filepath}: unsupported GNTBIN version {version}")
+        records = np.fromfile(f, dtype=dtype, count=int(n))
+    if len(records) != n:
+        raise ValueError(f"{filepath}: header says {n} records, found {len(records)}")
+    return int(version), records
 
 
 def save_detector_binary(
@@ -361,6 +470,7 @@ def generate_detector_table_to_file(
     excluded_particle_names=None,
     generate_until_n_written=True,
     max_empty_chunks=100,
+    max_energy_mev=None,
     verbose=1,
 ):
     """
@@ -475,6 +585,14 @@ def generate_detector_table_to_file(
     max_empty_chunks : int
         Safety stop if filtering removes entire chunks repeatedly.
 
+    max_energy_mev : float or None
+        Rejection cap. Rows with Energy above this value (MeV) are dropped and
+        redrawn, so the file still holds n_events rows. Use the largest energy
+        in the training data: the flow's tail can reach beyond it, where the
+        real data has no events. The type mix and the continuum shape below the
+        cap shift by the rejected fraction (Ra-226: about 0.2%). Report the cap
+        and the rejected fraction wherever the sample is used.
+
     verbose : int
         1 (default) reports chunk progress and the final written count.
 
@@ -506,6 +624,7 @@ def generate_detector_table_to_file(
     n_attempted = 0
     n_written = 0
     n_empty_chunks = 0
+    n_capped = 0
 
     while True:
         if generate_until_n_written:
@@ -567,6 +686,11 @@ def generate_detector_table_to_file(
 
         n_attempted += n_chunk
 
+        if max_energy_mev is not None:
+            keep = df_chunk["Energy"].to_numpy() <= float(max_energy_mev)
+            n_capped += int((~keep).sum())
+            df_chunk = df_chunk[keep]
+
         if len(df_chunk) == 0:
             n_empty_chunks += 1
             if n_empty_chunks >= max_empty_chunks:
@@ -609,6 +733,9 @@ def generate_detector_table_to_file(
         )
         print(f"[MAGI] Raw generated samples attempted: {n_attempted}")
         print(f"[MAGI] Transport particles written: {n_written}")
+        if max_energy_mev is not None:
+            print(f"[MAGI] Rejected above {max_energy_mev} MeV: {n_capped} "
+                  f"({n_capped / max(n_attempted, 1):.3%} of attempted)")
 
     return filepath
 
@@ -637,13 +764,14 @@ def generate_detector_input_file(
     output_file,
     n_events,
     radius,
-    center=(0.0, 0.0, 0.0),
+    center=(0.0, 0.0, -507.66),
     seed=42,
     chunk_size=100_000,
     energy_mode="uniform",
     output_format="text",
     excluded_particle_names=None,
     generate_until_n_written=True,
+    max_energy_mev=None,
     verbose=1,
 ):
     """
@@ -793,5 +921,6 @@ def generate_detector_input_file(
         excluded_particle_names=excluded_particle_names,
         generate_until_n_written=generate_until_n_written,
         include_event_id=False,
+        max_energy_mev=max_energy_mev,
         verbose=verbose,
     )

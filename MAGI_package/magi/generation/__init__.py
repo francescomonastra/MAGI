@@ -10,7 +10,10 @@ from .export import (
     generated_physics_to_detector_dataframe,
     generate_detector_table_to_file,
     generate_detector_input_file,
+    read_detector_binary,
 )
+from .primaries import parse_gps_macro, sample_gps_energies, generate_primary_groups
+from .latent_bank import LatentBank, build_latent_bank
 
 __all__ = [
     "sample_types",
@@ -25,4 +28,10 @@ __all__ = [
     "generated_physics_to_detector_dataframe",
     "generate_detector_table_to_file",
     "generate_detector_input_file",
+    "read_detector_binary",
+    "parse_gps_macro",
+    "sample_gps_energies",
+    "generate_primary_groups",
+    "LatentBank",
+    "build_latent_bank",
 ]

@@ -42,10 +42,10 @@ first.
 Usage
 -----
     python build_candidate_lines_from_geant4.py \
-        --gdml /path/to/Geant4-10.4.3/S1GDMLSRON_CryoSphereEmission/SRON_CCNwithXFDM_NoShield_FlowerCryoAC_fixed.gdml \
-        --fluor-dir /path/to/geant4-v10.4.3-build/data/G4EMLOW7.3/fluor_Bearden \
-        --photoevap-dir /path/to/geant4-v10.4.3-build/data/PhotonEvaporation5.2 \
-        --out-dir /path/to/MAGI/CandidateLines
+        --gdml /Volumes/X10Pro/Geant4-projects/Geant4-10.4.3/S1GDMLSRON_CryoSphereEmission/SRON_CCNwithXFDM_NoShield_FlowerCryoAC_fixed.gdml \
+        --fluor-dir /Volumes/X10Pro/Geant4-system/geant4-v10.4.3-build/data/G4EMLOW7.3/fluor_Bearden \
+        --photoevap-dir /Volumes/X10Pro/Geant4-system/geant4-v10.4.3-build/data/PhotonEvaporation5.2 \
+        --out-dir /Volumes/X10Pro/MAGI/CandidateLines
 
 Output: CandidateLines/CANDIDATE_ENERGY_LINES_<gdml basename>.json
 """

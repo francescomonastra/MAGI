@@ -1,0 +1,16 @@
+MAGI trained model summary
+===========================
+
+Model name: mix_K40
+Model class: CVAE_MixEnergy_ContPhi_TaskAdaptive
+Created at unix: 1793625978.6789756
+
+Weights: /home/jovyan/MAGI-dev/trained_models/v1_0_IAPS_K40_hubcpu_seed42_joint/mix_K40.weights.h5
+Config: /home/jovyan/MAGI-dev/trained_models/v1_0_IAPS_K40_hubcpu_seed42_joint/mix_K40_config.json
+Metadata: /home/jovyan/MAGI-dev/trained_models/v1_0_IAPS_K40_hubcpu_seed42_joint/mix_K40_metadata.json
+History: /home/jovyan/MAGI-dev/trained_models/v1_0_IAPS_K40_hubcpu_seed42_joint/mix_K40_history.json
+Task weights: /home/jovyan/MAGI-dev/trained_models/v1_0_IAPS_K40_hubcpu_seed42_joint/mix_K40_task_weights.json
+Callbacks: saved in metadata
+
+Notes:
+IAPS K40 model: v1.0 recipe on the 90-job Triple cluster run, lines from exact repeated energies.

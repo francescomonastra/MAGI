@@ -9,6 +9,22 @@ from .train import (
     train_single_run,
 )
 
+from .resume import (
+    ResumeCheckpoint,
+    find_checkpoint,
+    load_resume_state,
+)
+
+from .prior_refit import (
+    PriorRefitResult,
+    encode_posterior,
+    posterior_kl,
+    prior_posterior_auc,
+    refit_prior,
+    refit_prior_run,
+    save_refit_model,
+)
+
 from .adaptive_callbacks import (
     TaskAdaptiveLossScheduler,
     TaskAdaptiveTrainingMonitor,
@@ -26,6 +42,16 @@ from .checkpointing import (
 )
 
 __all__ = [
+    "ResumeCheckpoint",
+    "find_checkpoint",
+    "load_resume_state",
+    "PriorRefitResult",
+    "encode_posterior",
+    "posterior_kl",
+    "prior_posterior_auc",
+    "refit_prior",
+    "refit_prior_run",
+    "save_refit_model",
     "build_default_callbacks",
     "compile_model",
     "fit_model",

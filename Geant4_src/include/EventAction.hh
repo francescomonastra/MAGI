@@ -28,6 +28,7 @@ class EventAction : public G4UserEventAction
    // Hits collection index:
    G4int ACDhitsCollectionIndex;
    G4int DummyhitsCollectionIndex;
+   G4int fNOutwardEntries = 0;   // MultiVerse: entries that fail the inward check (must stay 0)
    // Timer used to measure the cpu time of events
    G4Timer timerEvent;
 

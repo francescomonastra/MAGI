@@ -70,13 +70,13 @@ args = parser.parse_args()
 
 magi.initialize_environment(seed=args.seed, cpu_only=True)
 
-TRAINING_DATA_DIR = "/path/to/MAGI/TrainingData"
+TRAINING_DATA_DIR = "/Volumes/X10Pro/MAGI/TrainingData"
 SOURCE_FILES = {
     "CR": f"{TRAINING_DATA_DIR}/alloutputDSCryoSphereCR.dat",
     "Small": f"{TRAINING_DATA_DIR}/alloutputDSCryoSphereSmall.dat",
     "Torio": f"{TRAINING_DATA_DIR}/alloutputDSCryoSphereTorio.dat",
 }
-CANDIDATE_LINES_FILE = ("/path/to/MAGI/CandidateLines/"
+CANDIDATE_LINES_FILE = ("/Volumes/X10Pro/MAGI/CandidateLines/"
     # v0.8.1: EADL energies (what Geant4 actually emitted). The Bearden table
     # this replaced put every fluorescence line 4-11 detector FWHM off.
     "CANDIDATE_ENERGY_LINES_SRON_CCNwithXFDM_NoShield_FlowerCryoAC_fixed_EADL.json")

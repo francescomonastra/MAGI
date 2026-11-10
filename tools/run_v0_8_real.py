@@ -76,7 +76,7 @@ magi.initialize_environment(seed=args.seed, cpu_only=True)
 print("magi:", magi.__file__, flush=True)
 print("visible GPUs:", tf.config.get_visible_devices("GPU"), flush=True)
 
-TRAINING_DATA_DIR = "/path/to/MAGI/TrainingData"
+TRAINING_DATA_DIR = "/Volumes/X10Pro/MAGI/TrainingData"
 SOURCE_FILES = {
     "CR": f"{TRAINING_DATA_DIR}/alloutputDSCryoSphereCR.dat",
     "Small": f"{TRAINING_DATA_DIR}/alloutputDSCryoSphereSmall.dat",
@@ -85,7 +85,7 @@ center = (0.0, 0.0, -507.66); R = 100.0
 X_IFU_RESOLUTION_EV = 4.0
 os.makedirs("Plots", exist_ok=True)
 
-CANDIDATE_LINES_FILE = ("/path/to/MAGI/CandidateLines/"
+CANDIDATE_LINES_FILE = ("/Volumes/X10Pro/MAGI/CandidateLines/"
     # v0.8.1: EADL energies (what Geant4 actually emitted). The Bearden table
     # this replaced put every fluorescence line 4-11 detector FWHM off.
     "CANDIDATE_ENERGY_LINES_SRON_CCNwithXFDM_NoShield_FlowerCryoAC_fixed_EADL.json")
@@ -275,7 +275,8 @@ for name in args.sources:
     # 0.96 cdf). See docs/v0.8_v072_comparison.md sec 6(b).
     warp_yk, warp_zk = magi.fit_cdf_warp_knots(
         ey, n_knots=256, eps=1e-4,
-        boost_ranges=WARP_BOOST_RANGES_BY_SOURCE.get(name))
+        boost_ranges=WARP_BOOST_RANGES_BY_SOURCE.get(name),
+        exclude_y=line_positions_y)
     model = magi.CVAE_MixEnergy_ContPhi_TaskAdaptive(
         n_types=dataset_pack["n_types"], line_positions_y=line_positions_y, latent_dim=8,
         hidden=(128,128,64), beta=0.2, continuum_mode="flow",

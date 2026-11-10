@@ -1,0 +1,16 @@
+MAGI trained model summary
+===========================
+
+Model name: mix_Ra226
+Model class: CVAE_MixEnergy_ContPhi_TaskAdaptive
+Created at unix: 1793018143.1937253
+
+Weights: /home/jovyan/MAGI-dev/trained_models/v1_0_IAPS_Ra226_hubcpu_seed42_joint/mix_Ra226.weights.h5
+Config: /home/jovyan/MAGI-dev/trained_models/v1_0_IAPS_Ra226_hubcpu_seed42_joint/mix_Ra226_config.json
+Metadata: /home/jovyan/MAGI-dev/trained_models/v1_0_IAPS_Ra226_hubcpu_seed42_joint/mix_Ra226_metadata.json
+History: /home/jovyan/MAGI-dev/trained_models/v1_0_IAPS_Ra226_hubcpu_seed42_joint/mix_Ra226_history.json
+Task weights: /home/jovyan/MAGI-dev/trained_models/v1_0_IAPS_Ra226_hubcpu_seed42_joint/mix_Ra226_task_weights.json
+Callbacks: saved in metadata
+
+Notes:
+IAPS Ra226 model: v1.0 recipe on the 90-job Triple cluster run, lines from exact repeated energies.

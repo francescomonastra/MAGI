@@ -9,10 +9,12 @@ abstract: >-
   transport. It is intended as a drop-in particle source that lets a long
   simulation be cut at a surface and resumed from a cheap sampler, which pays
   off when the events reaching that surface are rare for physical or
-  geometrical reasons. The v0.8 head models the energy spectrum as a gated
-  mixture of a normalizing-flow continuum and fixed-position line components
-  pinned at measured atomic transition energies, with a learned conditional
-  prior that preserves energy-geometry correlations through generation.
+  geometrical reasons. The energy head is a gated mixture of a
+  normalizing-flow continuum and fixed-position line components pinned at
+  measured atomic transition energies, with a learned conditional prior that
+  preserves energy-geometry correlations through generation. Version 1.0.0
+  adds the prior refit, primary-conditioned models, a virtual tracking ball
+  with a first-entry rule, and the Geant4 injector for the generated crossings.
 type: software
 authors:
   - given-names: Francesco
@@ -24,14 +26,10 @@ authors:
       (INAF-OAR), Agenzia Spaziale Italiana - Space Science Data Center
       (ASI-SSDC), Università degli Studi di Roma "Tor Vergata"
     orcid: "https://orcid.org/0009-0007-1675-6223"
-version: 0.8.2
-date-released: '2026-08-25'
+version: 1.0.0
+date-released: '2026-11-11'
 license: GPL-3.0-only
 repository-code: "https://github.com/francescomonastra/MAGI"
-identifiers:
-  - type: doi
-    value: "10.5281/zenodo.22099175"
-    description: "Archived release, v0.8.2"
 keywords:
   - Monte Carlo
   - Geant4

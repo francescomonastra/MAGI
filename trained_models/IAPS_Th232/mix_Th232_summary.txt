@@ -1,0 +1,16 @@
+MAGI trained model summary
+===========================
+
+Model name: mix_Th232
+Model class: CVAE_MixEnergy_ContPhi_TaskAdaptive
+Created at unix: 1793015352.2206066
+
+Weights: /home/jovyan/MAGI-dev/trained_models/v1_0_IAPS_Th232_hubcpu_seed42_joint/mix_Th232.weights.h5
+Config: /home/jovyan/MAGI-dev/trained_models/v1_0_IAPS_Th232_hubcpu_seed42_joint/mix_Th232_config.json
+Metadata: /home/jovyan/MAGI-dev/trained_models/v1_0_IAPS_Th232_hubcpu_seed42_joint/mix_Th232_metadata.json
+History: /home/jovyan/MAGI-dev/trained_models/v1_0_IAPS_Th232_hubcpu_seed42_joint/mix_Th232_history.json
+Task weights: /home/jovyan/MAGI-dev/trained_models/v1_0_IAPS_Th232_hubcpu_seed42_joint/mix_Th232_task_weights.json
+Callbacks: saved in metadata
+
+Notes:
+IAPS Th232 model: v1.0 recipe on the 90-job Triple cluster run, lines from exact repeated energies.

@@ -2,10 +2,14 @@
 Preprocessing and physical feature construction for MAGI.
 """
 
+import warnings
+
 import numpy as np
 import pandas as pd
 import sklearn.preprocessing
 from scipy.signal import find_peaks
+
+from ..core.geometry import direction_to_local
 
 
 # Default "what counts as primary" criterion per source type. Cosmic rays:
@@ -108,7 +112,7 @@ def compute_primary_fraction(df, primary_col="PrimBool", primary_value=1):
 
 def build_physical_features(
     df,
-    center=(0.0, 0.0, 0.0),
+    center=(0.0, 0.0, -507.66),
     radius=100.0,
     eps=1e-6,
     drop_invalid_energy=True,
@@ -253,6 +257,12 @@ def build_physical_features(
 
     if "PrimBool" in df.columns:
         features["PrimBool"] = df["PrimBool"].to_numpy()
+
+    # HENABICS primary truth: the join key and the primary that produced
+    # each crossing, carried untouched for build_primary_conditioning.
+    for col in ("EventId", "PrimaryTrackId", "PrimaryPDG", "PrimaryEnergy"):
+        if col in df.columns and "PrimaryPDG" in df.columns:
+            features[col] = df[col].to_numpy()
 
     if primary_col in df.columns and primary_col not in features.columns:
         features[primary_col] = df[primary_col].to_numpy()
@@ -1192,7 +1202,8 @@ def line_logsigma_from_resolution(line_energies_mev, resolution_ev, fwhm=True):
     return np.log(sigma_y).astype(np.float32)
 
 
-def fit_cdf_warp_knots(y, n_knots=256, eps=1.0e-4, min_gap=1.0e-6, boost_ranges=None):
+def fit_cdf_warp_knots(y, n_knots=256, eps=1.0e-4, min_gap=1.0e-6, boost_ranges=None,
+                       exclude_y=None, exclude_tol=1.0e-5):
     """Fit a monotone empirical-CDF -> standard-normal warp for the continuum
     flow's standardization (ConditionalRQSFlow warp_mode='cdf').
 
@@ -1231,6 +1242,22 @@ def fit_cdf_warp_knots(y, n_knots=256, eps=1.0e-4, min_gap=1.0e-6, boost_ranges=
         0.39-13.2 keV band, where every modelled fluorescence line lives and
         which has the worst per-band Wasserstein score (see
         docs/v0.8.1_line_truth.md section 10.5 / Phase 3).
+    exclude_y : array-like or None
+        y positions of the pinned line components (the model's
+        line_positions_y). Events within `exclude_tol` of any of them are
+        dropped before the fit, so the warp describes the continuum the flow
+        actually models. Pass it whenever the model has lines. A line in raw
+        Geant4 output is an exact delta, so it is an atom in the empirical CDF:
+        several quantile knots land on the same y, min_gap nudges them ~1e-6
+        apart, and the warp maps the atom's whole probability mass into that
+        sliver. The warp alone then carries a spike at the line, before the
+        flow learns anything (v0_8_2_CR_ingoingfix: 5 knots within 5e-6 of
+        511 keV spanning 1.6% of N(0,1) mass; an untrained flow put 1.9% of
+        its samples within 50 eV of 511 keV, and the generated line came out
+        ~1.5x too strong).
+    exclude_tol : float
+        Half-width in y of the exclusion window (1e-5 in log10 E is ~12 eV at
+        511 keV).
 
     Returns
     -------
@@ -1241,6 +1268,10 @@ def fit_cdf_warp_knots(y, n_knots=256, eps=1.0e-4, min_gap=1.0e-6, boost_ranges=
 
     y = np.asarray(y, dtype=np.float64).reshape(-1)
     y = y[np.isfinite(y)]
+    if exclude_y is not None:
+        ex = np.asarray(exclude_y, dtype=np.float64).reshape(-1)
+        if ex.size:
+            y = y[(np.abs(y[:, None] - ex[None, :]) > float(exclude_tol)).all(axis=1)]
     if y.size < 2:
         raise ValueError("y must have >= 2 finite values to fit a warp.")
 
@@ -1262,6 +1293,18 @@ def fit_cdf_warp_knots(y, n_knots=256, eps=1.0e-4, min_gap=1.0e-6, boost_ranges=
     z = ndtri(p)                       # standard-normal quantiles (strictly incr.)
     yk = np.quantile(y, p)             # data quantiles
 
+    # Repeated quantiles mean an atom (a delta) in y; the nudge below would
+    # turn it into a spike. Say so rather than silently building one.
+    atoms = np.unique(yk[1:][np.diff(yk) <= float(min_gap)])
+    if atoms.size:
+        warnings.warn(
+            f"fit_cdf_warp_knots: {atoms.size} atom(s) in y at {atoms[:5].tolist()} "
+            "hold several quantile knots; the warp will map their probability "
+            "mass into a ~min_gap sliver (a built-in spike). If these are line "
+            "positions, pass them as exclude_y.",
+            stacklevel=2,
+        )
+
     # Enforce strictly increasing y_knots (quantiles can repeat on flat regions).
     yk = np.maximum.accumulate(yk)
     for i in range(1, yk.size):
@@ -1269,6 +1312,172 @@ def fit_cdf_warp_knots(y, n_knots=256, eps=1.0e-4, min_gap=1.0e-6, boost_ranges=
             yk[i] = yk[i - 1] + float(min_gap)
 
     return yk.astype(np.float32), z.astype(np.float32)
+
+
+def add_uncollided_gate_target(
+    gate_targets,
+    energy_mev,
+    primary_energy_mev,
+    crossing_type_idx,
+    primary_type_idx,
+    primary_to_crossing_type,
+    rel_tol=1e-5,
+):
+    """
+    Append the uncollided-primary column to the gate targets.
+
+    A crossing is uncollided when it is the primary itself, which reaches the
+    surface unscattered: its crossing type is the type of the primary and its
+    energy equals the primary energy (to `rel_tol`, which only has to absorb
+    the rounding of the output files). Such an event belongs to the atom slot of
+    the model (`uncollided_atom=True`) and to no other, so its row of the
+    existing targets is cleared and the new last column is set to one.
+
+    Parameters
+    ----------
+    gate_targets : np.ndarray, shape (n, n_lines + 1)
+        Output of `build_gate_targets`: [continuum, line_1..line_L].
+
+    energy_mev, primary_energy_mev : np.ndarray, shape (n,)
+        Crossing energy and primary energy in MeV.
+
+    crossing_type_idx, primary_type_idx : np.ndarray, shape (n,)
+        Index of the crossing type and of the primary type of every event.
+
+    primary_to_crossing_type : array-like of int
+        For every primary type index, the crossing type index of the same
+        particle species.
+
+    rel_tol : float
+        Relative tolerance of the energy match.
+
+    Returns
+    -------
+    gate_targets_ext : np.ndarray, shape (n, n_lines + 2)
+        The targets with the uncollided column appended.
+
+    is_uncollided : np.ndarray of bool, shape (n,)
+        The events routed to the atom.
+    """
+    gt = np.asarray(gate_targets, dtype=np.float32)
+    E = np.asarray(energy_mev, dtype=np.float64)
+    Ep = np.asarray(primary_energy_mev, dtype=np.float64)
+    same_species = (
+        np.asarray(primary_to_crossing_type)[np.asarray(primary_type_idx)]
+        == np.asarray(crossing_type_idx)
+    )
+    is_unc = same_species & (np.abs(E - Ep) <= rel_tol * np.maximum(Ep, 1e-30))
+    out = np.zeros((gt.shape[0], gt.shape[1] + 1), dtype=np.float32)
+    out[:, :-1] = gt
+    out[is_unc, :-1] = 0.0
+    out[:, -1] = is_unc.astype(np.float32)
+    return out, is_unc
+
+
+def primary_energy_knots_from_transformer(qt):
+    """
+    Knots of the inverse of the primary-energy quantile transform.
+
+    The uncollided-primary atom of the model sits at log10(E_prim), which it
+    recovers from the quantile-transformed conditioning column by inverting the
+    transform exactly: the transformer is a piecewise-linear map between its
+    quantiles followed by the normal quantile function, so its `references_`
+    and `quantiles_` are all that the inverse needs.
+
+    Parameters
+    ----------
+    qt : sklearn.preprocessing.QuantileTransformer
+        The fitted `qt_primary_energy`, fitted on log10(E_prim) with
+        `output_distribution="normal"`.
+
+    Returns
+    -------
+    tuple of np.ndarray
+        `(u, y)`: the uniform reference grid on [0, 1] and the log10(E_prim)
+        quantiles. Pass as `primary_energy_knots`.
+    """
+    if qt.output_distribution != "normal":
+        raise ValueError("the primary-energy transformer must have output_distribution='normal'")
+    return (np.asarray(qt.references_, dtype=np.float64),
+            np.asarray(qt.quantiles_[:, 0], dtype=np.float64))
+
+
+def build_zone_probs_table(
+    zone_columns,
+    crossing_type_idx,
+    primary_type_idx,
+    primary_energy_q,
+    n_types,
+    n_primary_types,
+    n_energy_bins=8,
+    min_count=30,
+):
+    """
+    Zone table of the primary-conditioned model: one row per (crossing type,
+    primary type, primary-energy bin).
+
+    The per-type table of the model draws the zone of a crossing from its type
+    alone. For a gamma crossing that mixes the gamma primaries, 55 % of whose
+    crossings are the uncollided primary itself, with the muon primaries, none of
+    whose gamma crossings are, and the generated fraction is the average. The
+    zone is drawn from the group of the event instead.
+
+    Parameters
+    ----------
+    zone_columns : np.ndarray, shape (n, n_zones)
+        Zone one-hot of every event (the gate-target columns).
+
+    crossing_type_idx, primary_type_idx : np.ndarray, shape (n,)
+        Crossing type and primary type indices.
+
+    primary_energy_q : np.ndarray, shape (n,)
+        The quantile-transformed primary energy (last cond column).
+
+    n_types, n_primary_types : int
+        Sizes of the two one-hot blocks.
+
+    n_energy_bins : int
+        Number of primary-energy bins, equal-probability in the standard-normal
+        space of `primary_energy_q`.
+
+    min_count : int
+        Groups with fewer events take the row of their (type, primary type) pair.
+
+    Returns
+    -------
+    table : np.ndarray, shape (n_types * n_primary_types * n_energy_bins, n_zones)
+        Zone probabilities, row-major over (type, primary type, energy bin).
+
+    edges : np.ndarray, shape (n_energy_bins - 1,)
+        Interior edges of the energy bins, to pass as `zone_primary_energy_edges`.
+    """
+    from scipy.special import ndtri
+
+    z = np.asarray(zone_columns, dtype=np.float64)
+    n_zones = z.shape[1]
+    edges = ndtri(np.arange(1, n_energy_bins) / n_energy_bins).astype(np.float32)
+    b = np.searchsorted(edges, np.asarray(primary_energy_q), side="right")
+    t = np.asarray(crossing_type_idx)
+    p = np.asarray(primary_type_idx)
+    pair = np.zeros((n_types, n_primary_types, n_zones))
+    for ti in range(n_types):
+        for pi in range(n_primary_types):
+            m = (t == ti) & (p == pi)
+            if m.any():
+                pair[ti, pi] = z[m].sum(axis=0)
+    type_only = np.array([z[t == ti].sum(axis=0) for ti in range(n_types)])
+    table = np.zeros((n_types, n_primary_types, n_energy_bins, n_zones))
+    for ti in range(n_types):
+        for pi in range(n_primary_types):
+            for bi in range(n_energy_bins):
+                m = (t == ti) & (p == pi) & (b == bi)
+                row = z[m].sum(axis=0) if m.sum() >= min_count else pair[ti, pi]
+                if row.sum() == 0:
+                    row = type_only[ti]
+                if row.sum() == 0:
+                    row = np.eye(n_zones)[0]
+                table[ti, pi, bi] = row / row.sum()
+    return table.reshape(-1, n_zones).astype(np.float32), edges
 
 
 def build_gate_targets(
@@ -1499,6 +1708,7 @@ def _fit_quantile_column(
     qt = sklearn.preprocessing.QuantileTransformer(
         n_quantiles=min(int(n_quantiles), len(values)),
         output_distribution=output_distribution,
+        subsample=len(values),  # sklearn default 10000 leaves ~1 row per quantile
         random_state=random_state,
     )
 
@@ -1593,6 +1803,16 @@ def build_feature_dataframe(
             Continuous variables:
             u_r_q, u_v_q, phi_r_q, phi_v_q
 
+        - "quantile_u_r_mu_phi_r_psi":
+            v1.0 mode (A3). The direction is taken in the local frame of the
+            crossing point: mu = -r_hat.v, the cosine to the inward normal,
+            and psi, the azimuth around it. Crossings with mu <= 0 point out
+            of the sphere and are dropped, so the quantile transform of mu
+            only spans inward values and its inverse keeps every generated
+            direction inward. Continuous variables, in the same column
+            positions as the v0.7.2 mode:
+            u_r_q, mu_q, phi_r_q, psi_q
+
     n_quantiles : int
         Number of quantiles for QuantileTransformer.
 
@@ -1640,6 +1860,24 @@ def build_feature_dataframe(
 
     if e_max_cut is not None:
         mask_energy &= (E <= e_max_cut)
+
+    n_outward_dropped = 0
+    if str(geometry_transform) == "quantile_u_r_mu_phi_r_psi":
+        # A3: an outward crossing cannot enter the detector from the source
+        # surface. It is dropped here, as a first-entry table drops the
+        # returning ones, so the model never learns to generate it.
+        mu_all, _ = direction_to_local(
+            feat0["u_r"].to_numpy(dtype=np.float64),
+            feat0["phi_r"].to_numpy(dtype=np.float64),
+            feat0["u_v"].to_numpy(dtype=np.float64),
+            feat0["phi_v"].to_numpy(dtype=np.float64),
+        )
+        n_outward_dropped = int(np.sum(mask_energy & ~(mu_all > 0.0)))
+        mask_energy &= (mu_all > 0.0)
+        print(
+            f"[MAGI] local direction frame: dropped {n_outward_dropped:,} "
+            f"non-inward crossings (mu <= 0) of {len(E):,}"
+        )
 
     df = df.loc[mask_energy].reset_index(drop=True)
     feat0 = feat0.loc[mask_energy].reset_index(drop=True)
@@ -1781,10 +2019,51 @@ def build_feature_dataframe(
             ],
         })
 
+    elif geometry_transform == "quantile_u_r_mu_phi_r_psi":
+        mu, psi = direction_to_local(
+            feat0["u_r"].to_numpy(dtype=np.float64),
+            feat0["phi_r"].to_numpy(dtype=np.float64),
+            feat0["u_v"].to_numpy(dtype=np.float64),
+            feat0["phi_v"].to_numpy(dtype=np.float64),
+        )
+
+        cols, quantile_transformers = {}, {}
+        for name, values in (
+            ("u_r", feat0["u_r"].to_numpy(dtype=np.float64)),
+            ("mu", mu),
+            ("phi_r", feat0["phi_r"].to_numpy(dtype=np.float64)),
+            ("psi", psi),
+        ):
+            cols[f"{name}_q"], quantile_transformers[f"qt_{name}"] = _fit_quantile_column(
+                values,
+                n_quantiles=n_quantiles,
+                random_state=random_state,
+                output_distribution="normal",
+            )
+
+        geom_cols = cols
+
+        geometry_metadata.update({
+            "quantile_output_distribution": "normal",
+            "quantile_n_quantiles": min(int(n_quantiles), len(feat0)),
+            "random_state": random_state,
+            "phi_domain": "[-pi, pi]",
+            "phi_periodic": True,
+            "phi_shift_applied": False,
+            "direction_frame": "local",
+            "n_outward_dropped": n_outward_dropped,
+            "X_cont_cols": [
+                "u_r_q",
+                "mu_q",
+                "phi_r_q",
+                "psi_q",
+            ],
+        })
+
     else:
         raise ValueError(
-            "Invalid geometry_transform. Use "
-            "'arctanh_uv_discrete', 'quantile_u_r_u_v', or 'quantile_u_r_u_v_phi_r_phi_v'."
+            "Invalid geometry_transform. Use 'arctanh_uv_discrete', 'quantile_u_r_u_v', "
+            "'quantile_u_r_u_v_phi_r_phi_v' or 'quantile_u_r_mu_phi_r_psi'."
         )
 
     energy_cols = {}
@@ -1831,6 +2110,10 @@ def build_feature_dataframe(
 
     if "PrimBool" in feat0.columns:
         feat_dict["PrimBool"] = feat0["PrimBool"].to_numpy()
+
+    for col in ("EventId", "PrimaryTrackId", "PrimaryPDG", "PrimaryEnergy"):
+        if col in feat0.columns:
+            feat_dict[col] = feat0[col].to_numpy()
 
     normalization = prep.get("normalization")
     primary_col = normalization.get("primary_col") if normalization else None

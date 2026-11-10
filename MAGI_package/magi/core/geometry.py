@@ -2,6 +2,7 @@
 Geometry utilities for MAGI.
 """
 
+import numpy as np
 import tensorflow as tf
 from .losses import normalize_2d_pair
 
@@ -173,3 +174,58 @@ def xyz_from_ur_phi(u_r, phi_pair, sphere_R, center_z=0.0):
     z = center_z + sphere_R * u_r
 
     return x, y, z
+
+# ==========================================================
+# v1.0 local direction frame (A3)
+# ==========================================================
+def local_frame(u_r, phi_r):
+    """
+    Outward normal r_hat and tangent basis (e_theta, e_phi) at the crossing
+    point (u_r, phi_r) of the sphere, in numpy.
+
+    The basis stays orthonormal at the poles (sin(theta) = 0), so the local
+    azimuth is defined for every crossing. Same frame as AR-Flow's
+    `arflow.transforms.local_frame`.
+    """
+    u_r = np.asarray(u_r, dtype=np.float64)
+    phi_r = np.asarray(phi_r, dtype=np.float64)
+    s = np.sqrt(np.clip(1.0 - u_r * u_r, 0.0, None))
+    c, n = np.cos(phi_r), np.sin(phi_r)
+    r_hat = np.stack([s * c, s * n, u_r], -1)
+    e_th = np.stack([u_r * c, u_r * n, -s], -1)
+    e_ph = np.stack([-n, c, np.zeros_like(c)], -1)
+    return r_hat, e_th, e_ph
+
+
+def direction_to_local(u_r, phi_r, u_v, phi_v):
+    """
+    Global direction (u_v, phi_v) -> local (mu, psi) at the crossing point.
+
+    mu = -r_hat . v is the cosine to the inward normal (> 0 for an inward
+    crossing) and psi the azimuth of v around it, in [-pi, pi]. In this frame
+    the inward condition is mu > 0 at every point of the sphere, which the
+    global u_v (the cosine to the z axis) cannot express.
+    """
+    r_hat, e_th, e_ph = local_frame(u_r, phi_r)
+    u_v = np.asarray(u_v, dtype=np.float64)
+    phi_v = np.asarray(phi_v, dtype=np.float64)
+    s = np.sqrt(np.clip(1.0 - u_v * u_v, 0.0, None))
+    v = np.stack([s * np.cos(phi_v), s * np.sin(phi_v), u_v], -1)
+    mu = -np.einsum("ij,ij->i", r_hat, v)
+    psi = np.arctan2(np.einsum("ij,ij->i", v, e_ph), np.einsum("ij,ij->i", v, e_th))
+    return mu, psi
+
+
+def local_to_direction(u_r, phi_r, mu, psi):
+    """
+    Inverse of direction_to_local: the unit direction vector, shape (n, 3).
+
+    mu is clipped to [0, 1], so the returned direction never points out of
+    the sphere.
+    """
+    r_hat, e_th, e_ph = local_frame(u_r, phi_r)
+    mu = np.clip(np.asarray(mu, dtype=np.float64), 0.0, 1.0)[:, None]
+    psi = np.asarray(psi, dtype=np.float64)[:, None]
+    t = np.sqrt(1.0 - mu * mu)
+    v = -mu * r_hat + t * (np.cos(psi) * e_th + np.sin(psi) * e_ph)
+    return v / np.linalg.norm(v, axis=1, keepdims=True)

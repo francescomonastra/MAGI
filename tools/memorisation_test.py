@@ -52,12 +52,12 @@ from sklearn.neighbors import NearestNeighbors
 # Dataset selected by argv[1]; defaults to DM1.2 (the 17/08 result).
 DATASETS = {
     "dm12": dict(
-        real="/path/to/Geant4-10.4.3/S1GDML_DM1.2/allDSCryoSphere_DM1_2_500k_nonu.dat",
-        gen="/path/to/tmp/magi_dm12_memtest.txt",
+        real="/Volumes/X10Pro/Geant4-projects/Geant4-10.4.3/S1GDML_DM1.2/allDSCryoSphere_DM1_2_500k_nonu.dat",
+        gen="/Volumes/X10Pro/tmp/magi_dm12_memtest.txt",
         center=[0.0, 0.0, 5.0], label="DM1.2, v0.8.2 checkpoint"),
     "cr": dict(
-        real="/path/to/MAGI/TrainingData/alloutputDSCryoSphereCR_ingoingfix.dat",
-        gen="/path/to/tmp/magi_cr_memtest.txt",
+        real="/Volumes/X10Pro/MAGI/TrainingData/alloutputDSCryoSphereCR_ingoingfix.dat",
+        gen="/Volumes/X10Pro/tmp/magi_cr_memtest.txt",
         center=[0.0, 0.0, -507.66], label="CR, v0_8_2_CR_ingoingfix (corrected training set)"),
 }
 _KEY = sys.argv[1] if len(sys.argv) > 1 else "dm12"
@@ -67,7 +67,7 @@ CENTER = np.array(_D["center"])
 N_REF = 150_000                              # reference set size
 N_Q = 60_000                                 # queries per arm
 RNG = np.random.default_rng(20260817)
-KDS_PY = "/path/to/KDSource/python"
+KDS_PY = "/Volumes/X10Pro/Old-Simulations/Sim/KDSource/python"
 
 
 def featurise(P, U, E):

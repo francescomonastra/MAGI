@@ -11,12 +11,17 @@ fully-commented walkthrough on synthetic data is at
 [`../Example_Usage.ipynb`](../Example_Usage.ipynb). The long-form reference is the
 user manual, [`../docs/manual/magi_manual.pdf`](../docs/manual/magi_manual.pdf).
 
-> **v0.8.2 is a beta.** It reproduces the joint phase-space distribution
-> (energy–position–direction correlations) and the energy continuum to within its
-> acceptance bars, on three seeds and two reference sources. It does **not** yet
-> reproduce spectral-line *intensities*: measured per-line recovery runs 0.7×–4.9× and
-> is unstable across seeds. Line *positions* are reliable to ≤0.5 eV. See
-> [Accuracy you can rely on](docs/USAGE.md#accuracy-you-can-rely-on) before quoting any
+> **v1.0.0.** The joint phase-space distribution (energy–position–direction
+> correlations) and the energy continuum are reproduced to within the acceptance bars, on
+> three seeds and two reference sources; that record was measured on v0.8.2 and v1.0.0
+> improves on it (prior refit, 511 keV warp fix). v1.0.0 adds primary-conditioned models
+> with grouped generation, first-entry crossings for surfaces that cut passive volumes,
+> and, for the primary-conditioned models, the uncollided-primary atom, the energy loss
+> flow and the latent bank. Spectral-line *intensities* are still not reproduced: the
+> per-line recovery measured on v0.8.2 runs 0.7×–4.9× and is unstable across seeds, and it
+> has not been remeasured. Line *positions* are reliable to ≤0.5 eV. See
+> [Validating a model](docs/USAGE.md#8-validating-a-model) and
+> [Accuracy and known limits](docs/USAGE.md#9-accuracy-and-known-limits) before quoting any
 > number derived from a generated source.
 
 ## Installation
@@ -34,7 +39,7 @@ magi.initialize_environment(seed=42)
 
 ## Tests
 
-135 tests covering the pieces that fail silently rather than loudly: flow/prior
+238 tests covering the pieces that fail silently rather than loudly: flow/prior
 round-trip identity, line-integral recovery on synthetic spectra, the coupling
 prior actually fitting an injected coupling, prior zone-conditioning, gate-target
 construction, the checkpoint config-match guard, the Geant4 export script
@@ -42,7 +47,7 @@ end-to-end, the two visualization tools' HTML/JS generation, and public-API
 docstring coverage. CPU only, ~3 minutes.
 
 ```bash
-pip install pytest
+pip install -e "MAGI_package[dev]"
 pytest MAGI_package/tests/
 ```
 
@@ -99,9 +104,13 @@ interactive HTML file for inspecting a trained run in a browser: the gate's per-
 routing, and how heavily every unit in the network is used per particle type (Expected
 Conductance), with a per-layer absolute-magnitude panel for asking whether a layer is
 wider than it needs to be. See
-[Inspecting a trained model](docs/USAGE.md#inspecting-a-trained-model) in the usage guide,
+[Inspecting a trained model](docs/USAGE.md#10-inspecting-a-trained-model) in the usage guide,
 which also covers what the usage metric does and does not license you to conclude.
+
+## Licence and citation
+
+MAGI is released under the GPL-3.0 licence ([`LICENSE`](../LICENSE)). Cite it through [`CITATION.cff`](../CITATION.cff). Trained checkpoints and the Geant4 training data are not distributed with the repository.
 
 ## Author
 
-Francesco Monastra ([INAF](https://www.inaf.it), [ORCID](https://orcid.org/0009-0007-1675-6223)) — `francesco.monastra@inaf.it`
+Francesco Monastra (INAF) — `francesco.monastra@inaf.it`

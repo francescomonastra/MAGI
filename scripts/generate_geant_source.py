@@ -13,6 +13,81 @@ def load_json(path):
         return json.load(f)
 
 
+SPECIES_PDG = {"mu": 13, "mu-": 13, "gamma": 22, "e-": 11, "electron": 11}
+
+
+def generate_groups(args, model_config, preprocessing, idx_to_type,
+                    quantile_transformers, geometry_metadata, energy_bins,
+                    energy_head_mode, energy_transform, qt_energy,
+                    center, radius):
+    """Group mode: whole showers of each primary, tagged with the primary's
+    key, PDG and energy (magi.generate_primary_groups). With --species, one
+    species; without, every species the --primary-spectra macro fires, in
+    the macro's own intensity ratios (multi-species GPS, e.g. the SRON CR)."""
+    if "multiplicity_table" not in preprocessing:
+        raise ValueError(
+            "--n-primaries needs a primary-conditioned checkpoint (trained with "
+            "tools/train_dm12_primtruth.py); this metadata has no multiplicity_table"
+        )
+    pdg = None
+    if args.species is not None:
+        species = args.species.lower()
+        pdg = SPECIES_PDG[species] if species in SPECIES_PDG else int(species)
+
+    gps_macro = args.primary_spectra
+    if gps_macro is None and pdg is not None:
+        gps_macro = preprocessing.get("gps_macros", {}).get(str(pdg))
+    if gps_macro is None:
+        raise ValueError(
+            "group mode needs --primary-spectra (the GPS macro to draw primaries "
+            "from), or --species of a single-species training run"
+        )
+
+    primary_type_to_idx = {
+        int(p): int(i) for i, p in preprocessing["idx_to_primary_type"].items()
+    }
+    model = magi.load_task_adaptive_model_for_generation(
+        save_dir=args.save_dir,
+        model_name=args.model_name,
+        model_config=model_config,
+        energy_bins=energy_bins,
+        n_types=int(preprocessing["n_types"]),
+        type_weights=preprocessing.get("type_weights", None),
+        radius=radius,
+        verbose=1,
+    )
+    if args.latent_bank is not None:
+        model.latent_bank = magi.LatentBank.load(args.latent_bank, seed=args.seed)
+        print(f"[MAGI] z from the latent bank {args.latent_bank} "
+              f"({len(model.latent_bank.z_mean):,} training events, "
+              f"K = {model.latent_bank.k_neighbours}), not the learned prior", flush=True)
+    output_format = args.format
+    magi.generate_primary_groups(
+        model=model,
+        filepath=args.output_file,
+        species_pdg=pdg,
+        n_primaries=args.n_primaries,
+        gps_macro=gps_macro,
+        multiplicity_table=preprocessing["multiplicity_table"],
+        idx_to_type=idx_to_type,
+        primary_type_to_idx=primary_type_to_idx,
+        qt_primary_energy=quantile_transformers["qt_primary_energy"],
+        center=center,
+        radius=radius,
+        geometry_metadata=geometry_metadata,
+        energy_head_mode=energy_head_mode,
+        energy_transform=energy_transform,
+        qt_energy=qt_energy,
+        output_format=output_format,
+        seed=args.seed,
+        key_offset=args.key_offset,
+        verbose=1,
+    )
+    if args.latent_bank is not None:
+        print(f"[MAGI] latent bank: {model.latent_bank.n_fallback} rows with no bank entry "
+              f"took z from the prior", flush=True)
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Generate a Geant4 input particle file using a trained MAGI model."
@@ -25,16 +100,52 @@ def main():
 
     parser.add_argument("--transformers-file", default=None)
 
-    parser.add_argument("--n-events", type=int, required=True)
+    count = parser.add_mutually_exclusive_group(required=True)
+    count.add_argument("--n-events", type=int,
+                       help="independent crossings, one per Geant4 event")
+    count.add_argument("--n-primaries", type=int,
+                       help="HENABICS group mode (primary-conditioned models): "
+                            "throw this many primaries and write each one's "
+                            "crossings as one tagged group")
+    parser.add_argument("--species", default=None,
+                        help="group mode: primary PDG code, or mu/gamma/e-; "
+                             "default: every species in --primary-spectra")
+    parser.add_argument("--primary-spectra", default=None,
+                        help="group mode: GPS macro the primary energies are drawn "
+                             "from (default: the one the training run used), or the "
+                             "run_summary.json of a full Athena run, whose thrown "
+                             "histogram is then the E_prim spectrum")
+    parser.add_argument("--primary-hist", dest="primary_spectra", default=None,
+                        help="alias of --primary-spectra for a run_summary.json")
+    parser.add_argument("--key-offset", type=int, default=0,
+                        help="group mode: first GroupKey, to keep keys unique "
+                             "across files")
+    parser.add_argument("--latent-bank", default=None,
+                        help="group mode: .npz written by tools/build_latent_bank.py; z is "
+                             "drawn from the encoded training events instead of the prior")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--chunk-size", type=int, default=100000)
     parser.add_argument("--format", choices=["text", "binary"], default="binary")
+    parser.add_argument("--max-energy-mev", type=float, default=None,
+                        help="independent-crossing mode: reject and redraw crossings above this "
+                             "energy (MeV), normally the largest energy in the training data; "
+                             "the rejected fraction is printed")
+    parser.add_argument("--line-sampling", choices=["gaussian", "delta"], default=None,
+                        help="override the checkpoint's line_sampling: 'delta' emits "
+                             "line-routed events at exactly the line energy")
 
     args = parser.parse_args()
 
     metadata = load_json(args.metadata_file)
     preprocessing = metadata["preprocessing_metadata"]
     model_config = metadata["model_config"]
+    crossing_rule = preprocessing.get("crossing_rule")
+    if crossing_rule == "first_entry":
+        print("[MAGI] crossing_rule = first_entry: this model was trained on the first entries of the "
+              "tracking sphere (Track G). Inject the sample into a run that simulates the whole interior "
+              "of the sphere, at the same radius (see USAGE.md, 'first-entry crossings').", flush=True)
+    if args.line_sampling is not None:
+        model_config["line_sampling"] = args.line_sampling
 
     idx_to_type = preprocessing["idx_to_type"]
     if isinstance(idx_to_type, dict):
@@ -80,6 +191,7 @@ def main():
     quantile_geometry = geometry_transform in [
         "quantile_u_r_u_v",
         "quantile_u_r_u_v_phi_r_phi_v",
+        "quantile_u_r_mu_phi_r_psi",
     ]
     quantile_energy = (energy_transform == "quantile")
 
@@ -168,6 +280,17 @@ def main():
               "preprocessing_metadata['center'] and ['radius'] at training time.",
               flush=True)
 
+    if args.max_energy_mev is not None and args.n_primaries is not None:
+        parser.error("--max-energy-mev is implemented for --n-events mode only")
+    if args.latent_bank is not None and args.n_primaries is None:
+        parser.error("--latent-bank is implemented for group mode (--n-primaries) only")
+    if args.n_primaries is not None:
+        generate_groups(args, model_config, preprocessing, idx_to_type,
+                        quantile_transformers, geometry_metadata, energy_bins,
+                        energy_head_mode, energy_transform, qt_energy,
+                        center, radius)
+        return
+
     magi.generate_detector_input_file(
         save_dir=args.save_dir,
         model_name=args.model_name,
@@ -191,6 +314,7 @@ def main():
         seed=args.seed,
         chunk_size=args.chunk_size,
         output_format=args.format,
+        max_energy_mev=args.max_energy_mev,
         verbose=1,
     )
 

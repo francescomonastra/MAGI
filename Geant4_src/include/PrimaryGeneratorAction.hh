@@ -25,6 +25,14 @@ struct GeneratedParticle {
   G4double energy;
   G4ThreeVector position;
   G4ThreeVector direction;
+
+  // Primary truth (HENABICS). groupKey < 0 means a legacy file without it:
+  // one particle per event, as before. Otherwise all consecutive records that
+  // share groupKey are injected together as the vertices of one event.
+  G4long groupKey = -1;
+  G4int primTrackId = 0;
+  G4int primPDG = 0;
+  G4double primEnergy = 0.;
 };
 
 class PrimaryGeneratorAction : public G4VUserPrimaryGeneratorAction
@@ -60,6 +68,11 @@ private:
   GeneratedParticle GetNextBinaryParticle();
   GeneratedParticle GetNextGeneratedParticle();
 
+  // Group mode: look at the next record without consuming it and without
+  // rewinding. Returns false once the file is exhausted.
+  G4bool PeekNextGeneratedParticle(GeneratedParticle& p);
+  void AddGeneratedVertex(G4Event* anEvent, const GeneratedParticle& p);
+
 private:
   G4GeneralParticleSource* particleGun;
   PrimaryGeneratorMessenger* fMessenger;
@@ -79,6 +92,12 @@ private:
   std::vector<GeneratedParticle> fBinaryBuffer;
   std::size_t fBinaryBufferIndex;
   std::size_t fBinaryBufferSize;
+  int32_t fBinaryVersion;
+
+  // Group mode: set on the first record carrying a group key. Once the file is
+  // exhausted the run is aborted instead of rewound, so no key is replayed.
+  G4bool fGroupMode;
+  G4bool fGeneratedExhausted;
 
   // Auto ML generated file setup variables
   G4bool fAutoGenerateMLInput;

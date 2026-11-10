@@ -55,7 +55,7 @@ args = parser.parse_args()
 
 magi.initialize_environment(seed=42, cpu_only=True)
 
-TRAINING_DATA_DIR = "/path/to/MAGI/TrainingData"
+TRAINING_DATA_DIR = "/Volumes/X10Pro/MAGI/TrainingData"
 SOURCE_FILES = {
     "CR": f"{TRAINING_DATA_DIR}/alloutputDSCryoSphereCR.dat",
     "Small": f"{TRAINING_DATA_DIR}/alloutputDSCryoSphereSmall.dat",
@@ -70,7 +70,7 @@ for item in (args.checkpoint_dir or []):
     checkpoint_overrides[src] = path
 
 MODEL_NAME = "task_adaptive_cvae_energy_contphi"
-CANDIDATE_LINES_FILE = ("/path/to/MAGI/CandidateLines/"
+CANDIDATE_LINES_FILE = ("/Volumes/X10Pro/MAGI/CandidateLines/"
     "CANDIDATE_ENERGY_LINES_SRON_CCNwithXFDM_NoShield_FlowerCryoAC_fixed_EADL.json")
 center = (0.0, 0.0, -507.66); R = 100.0
 
