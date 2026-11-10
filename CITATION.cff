@@ -29,7 +29,12 @@ authors:
 version: 1.0.0
 date-released: '2026-11-11'
 license: GPL-3.0-only
+doi: 10.5281/zenodo.24119082
 repository-code: "https://github.com/francescomonastra/MAGI"
+identifiers:
+  - type: doi
+    value: "10.5281/zenodo.24119082"
+    description: "Archived release, v1.0.0"
 keywords:
   - Monte Carlo
   - Geant4

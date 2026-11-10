@@ -4,6 +4,7 @@
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue.svg)](MAGI_package/setup.py)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.24119082.svg)](https://doi.org/10.5281/zenodo.24119082)
 
 A Conditional Variational Autoencoder (CVAE) that learns the joint phase-space
 distribution of particles crossing a surface in a Geant4 Monte Carlo simulation,
@@ -213,7 +214,8 @@ on CPU.
 ## Citing MAGI
 
 See [`CITATION.cff`](CITATION.cff) (GitHub's "Cite this repository" button reads
-this directly), or cite the repository URL with the version tag you used. The
+this directly), or cite the archived release, v1.0.0, through its DOI
+[10.5281/zenodo.24119082](https://doi.org/10.5281/zenodo.24119082). The
 proceedings paper will be linked here once it is on arXiv.
 
 ## License
