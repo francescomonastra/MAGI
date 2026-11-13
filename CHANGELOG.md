@@ -15,6 +15,9 @@ Added
 - Geant4 binary export (GNTBIN) and text export.
 - `save_routing_circuit` and `save_full_circuit`: interactive HTML of unit usage.
 
+Documentation
+- README and `CITATION.cff` link the ML4ASTRO3 proceedings paper, arXiv:2611.14710.
+
 Known limits (fixes planned for 1.0.1)
 - Th232 and mu `_qtfull` 5x closures, SRON swap, K-40 delta and seeds 8 and 9 are open.
 - Sources in passive material (G4) and the Athena mass model (G5) are not covered.

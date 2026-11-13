@@ -5,6 +5,7 @@
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue.svg)](MAGI_package/setup.py)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.24119082.svg)](https://doi.org/10.5281/zenodo.24119082)
+[![arXiv](https://img.shields.io/badge/arXiv-2611.14710-b31b1b.svg)](https://arxiv.org/abs/2611.14710)
 
 A Conditional Variational Autoencoder (CVAE) that learns the joint phase-space
 distribution of particles crossing a surface in a Geant4 Monte Carlo simulation,
@@ -117,8 +118,8 @@ crossings takes 46 s on one thread, and training takes 10 to 24 core-hours.
 Rare, heavily attenuated sources gain most (K-40, S = 122 to 247), while the
 penetrating sources gain least (γ, μ and cosmic rays, S = 2.1 to 10.8).
 
-The numbers of this section are those of the proceedings paper (arXiv link to be
-added). The manual gives the full validation record, including the open points below.
+The numbers of this section are those of the proceedings paper,
+[arXiv:2611.14710](https://arxiv.org/abs/2611.14710). The manual gives the full validation record, including the open points below.
 
 ## Current limitations
 
@@ -213,10 +214,24 @@ on CPU.
 
 ## Citing MAGI
 
-See [`CITATION.cff`](CITATION.cff) (GitHub's "Cite this repository" button reads
-this directly), or cite the archived release, v1.0.0, through its DOI
-[10.5281/zenodo.24119082](https://doi.org/10.5281/zenodo.24119082). The
-proceedings paper will be linked here once it is on arXiv.
+Cite the proceedings paper, [arXiv:2611.14710](https://arxiv.org/abs/2611.14710)
+(F. Monastra, M. Pietrosanto, G. Angora, S. Cavuoti, F. Fenu, S. Lotti and
+M. Perri, 2026, astro-ph.IM), and the archived release, v1.0.0, through its DOI
+[10.5281/zenodo.24119082](https://doi.org/10.5281/zenodo.24119082). GitHub's
+"Cite this repository" button reads [`CITATION.cff`](CITATION.cff) directly.
+
+```bibtex
+@misc{monastra2026magi,
+  title         = {MAGI (Multivariate Autoencoder for particle Generative Inference): a generative Machine Learning framework for accelerated multi-stage particle simulations},
+  author        = {Monastra, Francesco and Pietrosanto, Marco and Angora, Giuseppe and Cavuoti, Stefano and Fenu, Francesco and Lotti, Simone and Perri, Matteo},
+  year          = {2026},
+  eprint        = {2611.14710},
+  archivePrefix = {arXiv},
+  primaryClass  = {astro-ph.IM},
+  doi           = {10.48550/arXiv.2611.14710},
+  url           = {https://arxiv.org/abs/2611.14710}
+}
+```
 
 ## License
 

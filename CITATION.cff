@@ -35,6 +35,25 @@ identifiers:
   - type: doi
     value: "10.5281/zenodo.24119082"
     description: "Archived release, v1.0.0"
+preferred-citation:
+  type: article
+  title: "MAGI (Multivariate Autoencoder for particle Generative Inference): a generative Machine Learning framework for accelerated multi-stage particle simulations"
+  authors:
+    - {given-names: Francesco, family-names: Monastra, orcid: "https://orcid.org/0009-0007-1675-6223"}
+    - {given-names: Marco, family-names: Pietrosanto, orcid: "https://orcid.org/0000-0001-5129-6065"}
+    - {given-names: Giuseppe, family-names: Angora, orcid: "https://orcid.org/0000-0002-0316-6562"}
+    - {given-names: Stefano, family-names: Cavuoti, orcid: "https://orcid.org/0000-0002-3787-4196"}
+    - {given-names: Francesco, family-names: Fenu, orcid: "https://orcid.org/0000-0002-0313-8852"}
+    - {given-names: Simone, family-names: Lotti, orcid: "https://orcid.org/0000-0002-3088-1561"}
+    - {given-names: Matteo, family-names: Perri, orcid: "https://orcid.org/0000-0003-3613-4409"}
+  year: 2026
+  collection-title: "Proceedings of the International Conference on Machine Learning for Astrophysics, 3rd Ed. (ML4ASTRO3)"
+  url: "https://arxiv.org/abs/2611.14710"
+  identifiers:
+    - type: doi
+      value: "10.48550/arXiv.2611.14710"
+    - type: other
+      value: "arXiv:2611.14710"
 keywords:
   - Monte Carlo
   - Geant4
